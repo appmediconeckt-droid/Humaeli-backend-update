@@ -1,4 +1,4 @@
-import firebaseMessaging from "../config/firebaseAdmin.js";
+import { messaging } from "../config/firebaseAdmin.js";
 
 export const sendPushNotification = async ({
   token,
@@ -32,7 +32,11 @@ export const sendPushNotification = async ({
       },
     };
 
-    const response = await firebaseMessaging.send(message);
+    if (!messaging) {
+      throw new Error('Firebase Admin is not configured on the backend');
+    }
+
+    const response = await messaging.send(message);
 
     console.log('✅ Push notification sent successfully:');
     console.log(response);

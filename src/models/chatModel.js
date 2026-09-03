@@ -13,6 +13,15 @@ const chatSchema = new mongoose.Schema(
     },
     userMessage: String,
     aiResponse: String,
+    responseType: {
+      type: String,
+      enum: ["answer", "consultant_recommendation"],
+      default: "answer",
+    },
+    consultants: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
   },
   { timestamps: true },
 );

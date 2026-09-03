@@ -307,6 +307,8 @@ export const videoCallController = {
               status: "pending",
               expiresAt,
             },
+            pushDataOnly: true,
+            pushType: "INCOMING_CALL",
             actionUrl: "/calls",
           });
 
@@ -478,6 +480,8 @@ export const videoCallController = {
         title: `Incoming ${callType === "voice" || callType === "audio" ? "voice" : "video"} call request`,
         message: `${initiatorDetails.fullName} wants to start a ${callType === "voice" || callType === "audio" ? "voice" : "video"} call.`,
         data: { callId, roomId, callType, status: "pending", expiresAt },
+        pushDataOnly: true,
+        pushType: "INCOMING_CALL",
         actionUrl: "/calls",
       });
 
@@ -1539,6 +1543,8 @@ export const videoCallController = {
           status: "pending",
           expiresAt,
         },
+        pushDataOnly: true,
+        pushType: "INCOMING_CALL",
         actionUrl: "/calls",
       });
 

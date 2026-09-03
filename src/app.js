@@ -479,7 +479,6 @@ app.use('/api/auth', forgotPasswordRoutes);
 app.use('/api/translate', translateRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/ai/realtime", aiRealtimeRoute);
-
 // Remove unresolved appointments only after their scheduled date/time has
 // passed. The request-time cleanup in getAppointments is a second safeguard.
 const appointmentCleanupInterval = setInterval(() => {

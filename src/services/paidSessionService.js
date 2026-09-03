@@ -200,9 +200,33 @@ export const stopTimedChatUsage = async (chat, { endedAt = Date.now() } = {}) =>
   }
 
   const segmentStartedAt = new Date(session.activeSegmentStartedAt);
+  const segmentUserMessageCount = Number(
+    session.metadata?.billingSegmentUserMessageCount || 0,
+  );
+  const segmentCounselorMessageCount = Number(
+    session.metadata?.billingSegmentCounselorMessageCount || 0,
+  );
   // Clear first so repeated stop/unmount requests cannot charge the same segment.
   session.activeSegmentStartedAt = null;
+  session.metadata = {
+    ...(session.metadata || {}),
+    billingSegmentUserMessageCount: 0,
+    billingSegmentCounselorMessageCount: 0,
+  };
+  session.markModified("metadata");
   await session.save();
+
+  // A charge represents an actively continued two-way conversation. A lone
+  // user message, or any number of one-sided counselor messages, is free.
+  if (segmentUserMessageCount < 2 || segmentCounselorMessageCount < 1) {
+    const user = await User.findById(session.userId).select("walletBalance");
+    return {
+      session,
+      charged: 0,
+      walletBalance: user?.walletBalance || 0,
+      reason: "no_confirmed_two_way_activity",
+    };
+  }
 
   const lastSeenAt = session.lastBilledAt
     ? new Date(session.lastBilledAt).getTime()
@@ -393,10 +417,32 @@ export const requestTimedChatStop = async (chat) => {
   };
 };
 
-export const recordTimedChatActivity = async (chat) => {
+export const recordTimedChatActivity = async (chat, { actorRole } = {}) => {
   if (!isPaidSessionsEnabled() || !chat?.paidSessionId) return null;
+
+  const normalizedRole = actorRole === "counsellor" ? "counsellor" : actorRole;
+
+  // Counselor messages alone must never start or prolong a billable segment.
+  // They only prove two-way participation inside a segment started by a user.
+  if (normalizedRole === "counsellor") {
+    const session = await ChatSession.findById(chat.paidSessionId);
+    if (!session?.activeSegmentStartedAt || session.sessionType !== "chat") {
+      return { active: false, billable: false };
+    }
+    await ChatSession.updateOne(
+      { _id: session._id, activeSegmentStartedAt: { $ne: null } },
+      { $inc: { "metadata.billingSegmentCounselorMessageCount": 1 } },
+    );
+    return { active: true, billable: false };
+  }
+
+  if (normalizedRole !== "user") return null;
   const started = await startTimedChatUsage(chat);
   if (!started?.startedAt) return started;
+  await ChatSession.updateOne(
+    { _id: chat.paidSessionId, activeSegmentStartedAt: { $ne: null } },
+    { $inc: { "metadata.billingSegmentUserMessageCount": 1 } },
+  );
   await touchTimedChatUsage(chat);
   return requestTimedChatStop(chat);
 };

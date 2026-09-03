@@ -3069,6 +3069,7 @@ export const logout = async (req, res) => {
   try {
     // Get userId from request (set by auth middleware)
     let userId = req.userId || req.user?._id;
+    const sessionId = req.sessionId;
     const refreshToken = req.cookies?.refreshToken;
 
     // console.log("🔓 Logout - UserId from request:", userId);
@@ -3099,8 +3100,8 @@ export const logout = async (req, res) => {
 
         if (result.modifiedCount === 0) {
           // If no specific session found, invalidate all active sessions for this user
-          const allResult = await Session.updateMany(
-            { userId, isActive: true },
+          const allResult = await Session.updateOne(
+            { _id: sessionId, userId, isActive: true },
             { isActive: false, logoutAt: new Date() },
           );
           console.log(
@@ -3111,8 +3112,8 @@ export const logout = async (req, res) => {
         }
       } else {
         // No refresh token provided, invalidate ALL active sessions
-        const result = await Session.updateMany(
-          { userId, isActive: true },
+        const result = await Session.updateOne(
+          { _id: sessionId, userId, isActive: true },
           { isActive: false, logoutAt: new Date() },
         );
         console.log(

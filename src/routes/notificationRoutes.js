@@ -1,23 +1,30 @@
-import express from "express";
-import { authenticateToken } from "../middleware/auth.js";
+import express from 'express';
+
 import {
   deleteNotification,
   getNotifications,
-  getUnreadCount,
-  markAllAsRead,
-  markAsRead,
-  saveFCMToken,
-} from "../controllers/notificationController.js";
-import { testNotification } from "../controllers/pushNotificationController.js";
+  getUnreadNotificationCount,
+  markAllNotificationsRead,
+  markNotificationRead,
+  registerFCMToken,
+} from '../controllers/notificationController.js';
+import { authMiddleware } from '../middleware/authMiddleware.js';
+import { testNotification } from '../controllers/pushNotificationController.js';
 
 const router = express.Router();
 
-router.get("/", authenticateToken, getNotifications);
-router.get("/unread-count", authenticateToken, getUnreadCount);
-router.put("/token", authenticateToken, saveFCMToken);
-router.post("/test", authenticateToken, testNotification);
-router.patch("/read-all", authenticateToken, markAllAsRead);
-router.patch("/:id/read", authenticateToken, markAsRead);
-router.delete("/:id", authenticateToken, deleteNotification);
+router.post(
+  '/register-token',
+  authMiddleware,
+  registerFCMToken,
+);
+router.put('/token', authMiddleware, registerFCMToken);
+router.post('/test', authMiddleware, testNotification);
+
+router.get('/', authMiddleware, getNotifications);
+router.get('/unread-count', authMiddleware, getUnreadNotificationCount);
+router.patch('/read-all', authMiddleware, markAllNotificationsRead);
+router.patch('/:id/read', authMiddleware, markNotificationRead);
+router.delete('/:id', authMiddleware, deleteNotification);
 
 export default router;

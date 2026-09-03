@@ -1281,9 +1281,40 @@ export const sendMessage = async (req, res) => {
       global.io.to(`counselor_${chat.counselorId}`).emit("chat-list-update", chatListUpdate);
     }
 
-    // Billing follows real conversation activity, not React renders or every
-    // individual message. Each message extends one inactivity-window session.
-    recordTimedChatActivity(chat).catch((billingError) => {
+    // Socket events only reach a running app. Persist a notification and send
+    // an FCM push as well so the recipient is notified while the app is in the
+    // background or has been swiped away.
+    const recipientId =
+      req.user.role === "user" ? chat.counselorId : chat.userId;
+    const senderName = populatedMessage.senderId?.fullName ||
+      (req.user.role === "user" ? "A user" : "Your consultant");
+    await createNotificationSafely({
+      recipientId,
+      actorId: req.user._id,
+      type: "message",
+      title: `New message from ${senderName}`,
+      message: hasAttachment
+        ? isImageAttachment
+          ? "Sent you a photo"
+          : `Sent you ${messagePayload.attachmentName || "a file"}`
+        : messageContent,
+      data: {
+        chatId: chat._id,
+        publicChatId: chat.chatId,
+        messageId: message._id,
+      },
+      actionUrl: `/chat/${chat._id}`,
+      // Include a visible FCM notification payload. Android/iOS can display
+      // this even when the React Native process has been killed; data-only
+      // pushes are not guaranteed to wake a terminated/background-restricted
+      // app.
+      pushDataOnly: false,
+      pushType: "CHAT_MESSAGE",
+    });
+
+    // Billing requires confirmed two-way participation. The actor role keeps
+    // one-sided counselor messages from starting or extending user billing.
+    recordTimedChatActivity(chat, { actorRole: req.user.role }).catch((billingError) => {
       console.error("Chat activity billing update failed:", billingError.message);
     });
 
