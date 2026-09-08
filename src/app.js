@@ -286,6 +286,7 @@ import aiRoutes from "./routes/aiRoutes.js";
 import aiRealtimeRoute from "./routes/aiRealtimeRoute.js"
 import { expirePendingPaidChatRequests } from "./services/paidSessionService.js";
 import { getEmailDeliveryDiagnostics } from "./services/otpService.js";
+import { startGreetingNotificationJob } from "./services/greetingNotificationService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -511,6 +512,9 @@ expirePendingPaidChatRequests().catch((error) => {
   console.error("Initial paid chat expiry cleanup failed:", error.message);
 });
 
+if (process.env.NODE_ENV !== "test") {
+  startGreetingNotificationJob();
+}
 
 // ---------------------------
 // 5. HTTP & Socket.IO server
