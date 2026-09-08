@@ -4,6 +4,11 @@ import Message from "../models/Message.js";
 import User from "../models/userModel.js";
 import { createNotificationSafely } from "../services/notificationService.js";
 import {
+  ANONYMOUS_USER_NAME,
+  getAnonymousUserName,
+  sanitizeUserForCounselor,
+} from "../utils/anonymousUser.js";
+import {
   activatePaidSession,
   startTimedChatUsage,
   stopTimedChatUsage,
@@ -111,6 +116,13 @@ const serializeChatPerson = (user, fallbackId = null) => {
   };
 };
 
+const serializeChatPersonForRole = (user, fallbackId, viewerRole) => {
+  if (viewerRole === "counsellor") {
+    return sanitizeUserForCounselor(user, fallbackId);
+  }
+  return serializeChatPerson(user, fallbackId);
+};
+
 const buildChatNotificationData = ({
   chat,
   sender,
@@ -121,8 +133,11 @@ const buildChatNotificationData = ({
   extra = {},
 }) => {
   const senderId = sender?._id || sender?.id || extra.senderId || null;
-  const senderName = sender?.fullName || sender?.name || sender?.anonymous || "";
-  const senderPhoto = getUserPhotoUrl(sender);
+  const senderIsUser = senderRole === "user";
+  const senderName = senderIsUser
+    ? getAnonymousUserName(sender)
+    : sender?.fullName || sender?.name || "";
+  const senderPhoto = senderIsUser ? null : getUserPhotoUrl(sender);
 
   return {
     type: "CHAT_MESSAGE",
@@ -313,7 +328,7 @@ export const startChat = async (req, res) => {
           actorId: req.user._id,
           type: "message",
           title: "New chat request",
-          message: `${req.user.fullName || "A user"} wants to start a conversation.`,
+          message: `${getAnonymousUserName(req.user)} wants to start a conversation.`,
           data: buildChatNotificationData({
             chat: existingChat,
             sender: req.user,
@@ -321,7 +336,7 @@ export const startChat = async (req, res) => {
             recipientRole: "counsellor",
             extra: {
               request: true,
-              userName: req.user.fullName || req.user.anonymous || "",
+              userName: getAnonymousUserName(req.user),
             },
           }),
           actionUrl: `/chat/${existingChat._id}`,
@@ -349,9 +364,9 @@ export const startChat = async (req, res) => {
             },
             user: {
               id: populatedChat.userId._id,
-              name: populatedChat.userId.fullName,
+              name: populatedChat.userId.anonymous || ANONYMOUS_USER_NAME,
               anonymous: populatedChat.userId.anonymous,
-              email: populatedChat.userId.email,
+              email: "",
             },
             startedAt: populatedChat.startedAt,
             paymentStatus: populatedChat.paymentStatus,
@@ -397,7 +412,7 @@ export const startChat = async (req, res) => {
       actorId: req.user._id,
       type: "message",
       title: "New chat request",
-      message: `${req.user.fullName || "A user"} wants to start a conversation.`,
+      message: `${getAnonymousUserName(req.user)} wants to start a conversation.`,
       data: buildChatNotificationData({
         chat,
         sender: req.user,
@@ -405,7 +420,7 @@ export const startChat = async (req, res) => {
         recipientRole: "counsellor",
         extra: {
           request: true,
-          userName: req.user.fullName || req.user.anonymous || "",
+          userName: getAnonymousUserName(req.user),
         },
       }),
       actionUrl: `/chat/${chat._id}`,
@@ -433,9 +448,9 @@ export const startChat = async (req, res) => {
         },
         user: {
           id: populatedChat.userId._id,
-          name: populatedChat.userId.fullName,
+          name: populatedChat.userId.anonymous || ANONYMOUS_USER_NAME,
           anonymous: populatedChat.userId.anonymous,
-          email: populatedChat.userId.email,
+          email: "",
         },
         startedAt: populatedChat.startedAt,
         paymentStatus: populatedChat.paymentStatus,
@@ -503,7 +518,7 @@ export const startChat = async (req, res) => {
           actorId: req.user._id,
           type: "message",
           title: "New chat request",
-          message: `${req.user.fullName || "A user"} sent a new chat request.`,
+          message: `${getAnonymousUserName(req.user)} sent a new chat request.`,
           data: buildChatNotificationData({
             chat: existingChat,
             sender: req.user,
@@ -511,7 +526,7 @@ export const startChat = async (req, res) => {
             recipientRole: "counsellor",
             extra: {
               request: true,
-              userName: req.user.fullName || req.user.anonymous || "",
+              userName: getAnonymousUserName(req.user),
             },
           }),
           actionUrl: `/chat/${existingChat._id}`,
@@ -539,9 +554,9 @@ export const startChat = async (req, res) => {
             },
             user: {
               id: populatedChat.userId._id,
-              name: populatedChat.userId.fullName,
+              name: populatedChat.userId.anonymous || ANONYMOUS_USER_NAME,
               anonymous: populatedChat.userId.anonymous,
-              email: populatedChat.userId.email,
+              email: "",
             },
             startedAt: populatedChat.startedAt,
             paymentStatus: populatedChat.paymentStatus,
@@ -710,10 +725,10 @@ export const acceptChat = async (req, res) => {
         amount: populatedChat.amount,
         user: {
           id: populatedChat.userId._id,
-          name: populatedChat.userId.fullName,
+          name: populatedChat.userId.anonymous || ANONYMOUS_USER_NAME,
           anonymous: populatedChat.userId.anonymous,
-          email: populatedChat.userId.email,
-          avatar: populatedChat.userId.profilePhoto?.url || null,
+          email: "",
+          avatar: null,
           isOnline: populatedChat.userId.isActive,
         },
         counselor: {
@@ -893,10 +908,10 @@ export const getPendingRequests = async (req, res) => {
         chatId: chat.chatId,
         user: {
           id: user._id || null,
-          name: user.fullName || "Unknown User",
+          name: user.anonymous || ANONYMOUS_USER_NAME,
           anonymous: user.anonymous || "",
-          email: user.email || "",
-          Image: user.profilePhoto?.url || null,
+          email: "",
+          Image: null,
         },
         requestMessage: messageMap[chat._id.toString()] || "No message",
         requestedAt: chat.startedAt,
@@ -981,6 +996,15 @@ export const getChats = async (req, res) => {
           return null;
         }
 
+        const isCounselorViewingUser =
+          req.user.role === "counsellor" && chat.userId?._id?.toString() === otherParty._id.toString();
+        const otherPartyName = isCounselorViewingUser
+          ? getAnonymousUserName(otherParty)
+          : otherParty.fullName;
+        const otherPartyAvatar = isCounselorViewingUser
+          ? null
+          : otherParty.profilePhoto?.url || null;
+
         return {
           id: chat._id,
           chatId: chat.chatId,
@@ -991,9 +1015,9 @@ export const getChats = async (req, res) => {
               : Boolean(chat.archivedByCounselor),
           otherParty: {
             id: otherParty._id,
-            name: otherParty.fullName,
+            name: otherPartyName,
             anonymous: otherParty.anonymous,
-            avatar: otherParty.profilePhoto?.url || null,
+            avatar: otherPartyAvatar,
             age: otherParty.age ?? null,
             gender: otherParty.gender || null,
             dateOfBirth: otherParty.dateOfBirth || null,
@@ -1220,7 +1244,11 @@ export const getChatMessages = async (req, res) => {
             status: populatedChat.status,
             userId: String(populatedChat.userId?._id || populatedChat.userId),
             counselorId: String(populatedChat.counselorId?._id || populatedChat.counselorId),
-            user: serializeChatPerson(populatedChat.userId, chat.userId),
+            user: serializeChatPersonForRole(
+              populatedChat.userId,
+              chat.userId,
+              req.user.role,
+            ),
             counselor: serializeChatPerson(populatedChat.counselorId, chat.counselorId),
           }
         : {
@@ -1355,8 +1383,16 @@ export const sendMessage = async (req, res) => {
     // Populate the message with sender info
     const populatedMessage = await Message.findById(message._id).populate(
       "senderId",
-      "fullName profilePhoto",
+      "fullName profilePhoto anonymous",
     );
+
+    const senderIsUser = req.user.role === "user";
+    const displaySenderName = senderIsUser
+      ? getAnonymousUserName(populatedMessage.senderId || req.user)
+      : populatedMessage.senderId?.fullName || req.user.fullName || "";
+    const displaySenderPhoto = senderIsUser
+      ? null
+      : getUserPhotoUrl(populatedMessage.senderId);
 
     const messagePayloadForSocket = {
       id: populatedMessage._id,
@@ -1365,7 +1401,7 @@ export const sendMessage = async (req, res) => {
       publicChatId: chat.chatId,
       content: populatedMessage.content,
       senderRole: populatedMessage.senderRole,
-      senderName: populatedMessage.senderId?.fullName,
+      senderName: displaySenderName,
       senderId: populatedMessage.senderId?._id,
       contentType: populatedMessage.contentType,
       attachmentUrl: populatedMessage.attachmentUrl,
@@ -1413,7 +1449,7 @@ export const sendMessage = async (req, res) => {
       recipientId,
       actorId: req.user._id,
       type: "message",
-      title: populatedMessage.senderId?.fullName || "New message",
+      title: displaySenderName || "New message",
       message: hasAttachment ? chat.lastMessage : messageContent,
       data: buildChatNotificationData({
         chat,
@@ -1423,10 +1459,10 @@ export const sendMessage = async (req, res) => {
         messageId: populatedMessage.messageId || populatedMessage._id,
         contentType: populatedMessage.contentType,
         extra: req.user.role === "user"
-          ? { userName: populatedMessage.senderId?.fullName || req.user.fullName || "" }
+          ? { userName: displaySenderName }
           : {
               counselorName: populatedMessage.senderId?.fullName || req.user.fullName || "",
-              counselorPhoto: getUserPhotoUrl(populatedMessage.senderId),
+              counselorPhoto: displaySenderPhoto,
             },
       }),
       actionUrl: `/chat/${chat._id}`,

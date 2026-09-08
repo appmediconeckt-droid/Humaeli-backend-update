@@ -5,6 +5,7 @@ import Call from "../models/Call.js";
 import mongoose from "mongoose";
 import { createNotificationSafely } from "../services/notificationService.js";
 import { recordTimedChatActivity } from "../services/paidSessionService.js";
+import { getAnonymousUserName } from "../utils/anonymousUser.js";
 
 const getUserPhotoUrl = (user) => {
   const photo = user?.profilePhoto || user?.avatar || null;
@@ -23,8 +24,11 @@ const buildChatNotificationData = ({
   extra = {},
 }) => {
   const senderId = sender?._id || sender?.id || extra.senderId || null;
-  const senderName = sender?.fullName || sender?.name || sender?.anonymous || "";
-  const senderPhoto = getUserPhotoUrl(sender);
+  const senderIsUser = senderRole === "user";
+  const senderName = senderIsUser
+    ? getAnonymousUserName(sender)
+    : sender?.fullName || sender?.name || "";
+  const senderPhoto = senderIsUser ? null : getUserPhotoUrl(sender);
 
   return {
     type: "CHAT_MESSAGE",
@@ -436,7 +440,7 @@ class SocketHandler {
       const chat = await this.findChatByIdentifier(chatId);
 
       if (chat) {
-        await chat.populate("userId", "fullName email profilePhoto");
+        await chat.populate("userId", "fullName email profilePhoto anonymous");
         await chat.populate(
           "counselorId",
           "fullName specialization profilePhoto rating",
@@ -520,7 +524,7 @@ class SocketHandler {
         senderId: message.senderId,
         senderName:
           socket.userRole === "user"
-            ? populatedChat.userId?.fullName
+            ? getAnonymousUserName(populatedChat.userId)
             : populatedChat.counselorId?.fullName,
         contentType: message.contentType,
         createdAt: message.createdAt,
@@ -555,7 +559,7 @@ class SocketHandler {
         ? populatedChat.counselorId._id
         : populatedChat.userId._id;
       const senderName = senderIsUser
-        ? populatedChat.userId?.fullName
+        ? getAnonymousUserName(populatedChat.userId)
         : populatedChat.counselorId?.fullName;
 
       await createNotificationSafely({
