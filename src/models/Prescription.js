@@ -31,6 +31,8 @@ const prescriptionSchema = new mongoose.Schema({
     name: { type: String, required: true },
     qualification: { type: String, default: "" },
     specialization: [{ type: String }],
+    prescriptionSignature: { type: String, default: "" },
+    prescriptionSeal: { type: String, default: "" },
   },
   problem: { type: String, required: true, trim: true, maxlength: 2000 },
   medicines: {

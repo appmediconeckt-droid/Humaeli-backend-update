@@ -271,6 +271,18 @@ const userSchema = new mongoose.Schema({
         format: String,
         bytes: Number
     },
+    prescriptionSignature: {
+        url: { type: String, default: "" },
+        publicId: { type: String, default: null },
+        format: { type: String, default: null },
+        bytes: { type: Number, default: null }
+    },
+    prescriptionSeal: {
+        url: { type: String, default: "" },
+        publicId: { type: String, default: null },
+        format: { type: String, default: null },
+        bytes: { type: Number, default: null }
+    },
     profilePhotoPublicId: {
         type: String,
         default: null

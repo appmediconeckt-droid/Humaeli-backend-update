@@ -6,6 +6,44 @@ import mongoose from "mongoose";
 import { createNotificationSafely } from "../services/notificationService.js";
 import { recordTimedChatActivity } from "../services/paidSessionService.js";
 
+const getUserPhotoUrl = (user) => {
+  const photo = user?.profilePhoto || user?.avatar || null;
+  if (!photo) return null;
+  if (typeof photo === "string") return photo;
+  return photo.secure_url || photo.url || photo.path || null;
+};
+
+const buildChatNotificationData = ({
+  chat,
+  sender,
+  senderRole,
+  recipientRole,
+  messageId = null,
+  contentType = "TEXT",
+  extra = {},
+}) => {
+  const senderId = sender?._id || sender?.id || extra.senderId || null;
+  const senderName = sender?.fullName || sender?.name || sender?.anonymous || "";
+  const senderPhoto = getUserPhotoUrl(sender);
+
+  return {
+    type: "CHAT_MESSAGE",
+    chatId: chat._id,
+    mongoChatId: chat._id,
+    publicChatId: chat.chatId,
+    userId: chat.userId?._id || chat.userId,
+    counselorId: chat.counselorId?._id || chat.counselorId,
+    senderId,
+    senderRole,
+    senderName,
+    senderPhoto,
+    recipientRole,
+    messageId,
+    contentType,
+    ...extra,
+  };
+};
+
 class SocketHandler {
   constructor(io) {
     this.io = io;
@@ -526,17 +564,20 @@ class SocketHandler {
         type: "message",
         title: senderName || "New message",
         message: trimmedContent,
-        data: {
-          type: "CHAT_MESSAGE",
-          chatId: populatedChat._id,
-          publicChatId: populatedChat.chatId,
-          senderId: socket.userId,
+        data: buildChatNotificationData({
+          chat: populatedChat,
+          sender: senderIsUser ? populatedChat.userId : populatedChat.counselorId,
           senderRole: socket.userRole,
-          senderName: senderName || "",
           recipientRole: senderIsUser ? "counsellor" : "user",
           messageId: message.messageId || message._id,
           contentType: message.contentType,
-        },
+          extra: senderIsUser
+            ? { userName: senderName || "" }
+            : {
+                counselorName: senderName || "",
+                counselorPhoto: getUserPhotoUrl(populatedChat.counselorId),
+              },
+        }),
         actionUrl: `/chat/${populatedChat._id}`,
       });
 

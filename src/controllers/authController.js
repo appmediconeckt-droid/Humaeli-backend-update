@@ -554,6 +554,43 @@ export const updateUserById = async (req, res) => {
       updates.profilePhoto = null;
     }
 
+    if (currentUser.role === "counsellor") {
+      const prescriptionAssetFields = [
+        ["prescriptionSignature", "prescriptionSignatureUrl"],
+        ["prescriptionSeal", "prescriptionSealUrl"],
+      ];
+
+      for (const [field, urlField] of prescriptionAssetFields) {
+        const uploadedFile = req.files?.[field]?.[0];
+        if (uploadedFile?.path) {
+          const previousPublicId = currentUser[field]?.publicId;
+          if (
+            process.env.CLOUDINARY_CLOUD_NAME &&
+            process.env.CLOUDINARY_API_KEY &&
+            process.env.CLOUDINARY_API_SECRET &&
+            previousPublicId
+          ) {
+            try {
+              await cloudinary.uploader.destroy(previousPublicId);
+            } catch (err) {
+              console.error(`Error deleting old ${field}:`, err);
+            }
+          }
+          updates[field] = {
+            url: uploadedFile.path,
+            publicId: uploadedFile.filename,
+            format: uploadedFile.format || null,
+            bytes: uploadedFile.bytes || uploadedFile.size || null,
+          };
+        } else if (typeof req.body[urlField] === "string" && req.body[urlField].trim()) {
+          updates[field] = {
+            ...(currentUser[field]?.toObject?.() || currentUser[field] || {}),
+            url: req.body[urlField].trim(),
+          };
+        }
+      }
+    }
+
     // 2. Handle Certifications - FIXED: Properly handle document URLs and DELETION
     let processedCertifications = [];
 
@@ -1248,6 +1285,10 @@ export const updateUserById = async (req, res) => {
         totalSessions: updatedUser.totalSessions,
         activeClients: updatedUser.activeClients,
         uniqueCode: updatedUser.uniqueCode,
+        prescriptionSignature: updatedUser.prescriptionSignature,
+        prescriptionSignatureUrl: updatedUser.prescriptionSignature?.url || "",
+        prescriptionSeal: updatedUser.prescriptionSeal,
+        prescriptionSealUrl: updatedUser.prescriptionSeal?.url || "",
       });
     }
 
@@ -3454,6 +3495,10 @@ export const getMyProfile = async (req, res) => {
       formattedProfile.rating = user.rating || 0;
       formattedProfile.totalSessions = user.totalSessions || 0;
       formattedProfile.activeClients = user.activeClients || 0;
+      formattedProfile.prescriptionSignature = user.prescriptionSignature;
+      formattedProfile.prescriptionSignatureUrl = user.prescriptionSignature?.url || "";
+      formattedProfile.prescriptionSeal = user.prescriptionSeal;
+      formattedProfile.prescriptionSealUrl = user.prescriptionSeal?.url || "";
     }
 
     return res.status(200).json({

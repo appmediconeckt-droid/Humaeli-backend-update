@@ -68,6 +68,12 @@ const getPhotoUrl = (user) => {
   return typeof photo === "string" ? photo : photo?.url || photo?.secure_url || "";
 };
 
+const getImageUrl = (value) => {
+  if (!value) return "";
+  if (typeof value === "string") return value.trim();
+  return value.secure_url || value.url || value.path || value.uri || "";
+};
+
 const toResponse = (record) => ({
   id: record._id,
   problem: record.problem,
@@ -77,6 +83,10 @@ const toResponse = (record) => ({
   issuedAt: record.issuedAt,
   patient: { id: record.patientId, ...record.patientSnapshot },
   psychiatrist: { id: record.psychiatristId, ...record.psychiatristSnapshot },
+  prescriptionSignatureUrl: record.psychiatristSnapshot?.prescriptionSignature || "",
+  prescriptionSealUrl: record.psychiatristSnapshot?.prescriptionSeal || "",
+  signatureUrl: record.psychiatristSnapshot?.prescriptionSignature || "",
+  sealUrl: record.psychiatristSnapshot?.prescriptionSeal || "",
   fileName: record.pdf.name,
   fileUrl: record.pdf.url,
   fileSize: record.pdf.size,
@@ -112,6 +122,20 @@ export const issuePrescription = async (req, res) => {
     const medicines = parseMedicines(req.body.medicines);
     const patient = await User.findById(chat.userId).lean();
     if (!patient) return res.status(404).json({ success: false, error: "Patient not found" });
+    const prescriptionSignature =
+      getImageUrl(req.body.prescriptionSignatureUrl) ||
+      getImageUrl(req.body.signatureUrl) ||
+      getImageUrl(psychiatrist.prescriptionSignature) ||
+      getImageUrl(psychiatrist.signature) ||
+      getImageUrl(psychiatrist.signatureImage) ||
+      getImageUrl(psychiatrist.doctorSignature);
+    const prescriptionSeal =
+      getImageUrl(req.body.prescriptionSealUrl) ||
+      getImageUrl(req.body.sealUrl) ||
+      getImageUrl(psychiatrist.prescriptionSeal) ||
+      getImageUrl(psychiatrist.seal) ||
+      getImageUrl(psychiatrist.stamp) ||
+      getImageUrl(psychiatrist.clinicSeal);
 
     const record = await Prescription.create({
       chatId: chat._id,
@@ -125,6 +149,8 @@ export const issuePrescription = async (req, res) => {
         name: psychiatrist.fullName || psychiatrist.name || "Psychiatrist",
         qualification: psychiatrist.qualification || "",
         specialization: normalizeSpecializations(psychiatrist),
+        prescriptionSignature,
+        prescriptionSeal,
       },
       problem,
       medicines,
@@ -278,6 +304,17 @@ export const reviewPatientPhoto = async (req, res) => {
     if (!record.patientPhoto?.mimeType) return res.status(400).json({ success: false, error: "Patient photo has not been uploaded" });
     const reason = String(req.body.reason || "").trim();
     if (action === "reject" && !reason) return res.status(400).json({ success: false, error: "Rejection reason is required" });
+    const psychiatrist = await User.findById(req.user._id).lean();
+    const prescriptionSignature =
+      getImageUrl(req.body.prescriptionSignatureUrl) ||
+      getImageUrl(req.body.signatureUrl) ||
+      getImageUrl(psychiatrist?.prescriptionSignature);
+    const prescriptionSeal =
+      getImageUrl(req.body.prescriptionSealUrl) ||
+      getImageUrl(req.body.sealUrl) ||
+      getImageUrl(psychiatrist?.prescriptionSeal);
+    if (prescriptionSignature) record.psychiatristSnapshot.prescriptionSignature = prescriptionSignature;
+    if (prescriptionSeal) record.psychiatristSnapshot.prescriptionSeal = prescriptionSeal;
     record.identityVerification = {
       status: action === "approve" ? "verified" : "rejected",
       reviewedBy: req.user._id,
@@ -285,7 +322,11 @@ export const reviewPatientPhoto = async (req, res) => {
       rejectionReason: action === "reject" ? reason : "",
     };
     await record.save();
-    return res.json({ success: true, verificationStatus: record.identityVerification.status });
+    return res.json({
+      success: true,
+      verificationStatus: record.identityVerification.status,
+      prescription: toResponse(record),
+    });
   } catch {
     return res.status(500).json({ success: false, error: "Unable to review patient photo" });
   }
