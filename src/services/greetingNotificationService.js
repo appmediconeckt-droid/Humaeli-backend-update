@@ -9,6 +9,20 @@ export const GREETING_NOTIFICATION_POLL_MS = Number(
   process.env.GREETING_NOTIFICATION_POLL_MS || 60 * 1000,
 );
 
+const GREETING_REPEAT_GAP_MINUTES = 2 * 60;
+
+const minuteToSlot = (minute) => {
+  const normalizedMinute = ((minute % (24 * 60)) + 24 * 60) % (24 * 60);
+  const hour = Math.floor(normalizedMinute / 60);
+  const mins = normalizedMinute % 60;
+  return `${String(hour).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+};
+
+const buildTwoHourSlots = (startMinute) => [
+  minuteToSlot(startMinute),
+  minuteToSlot(startMinute + GREETING_REPEAT_GAP_MINUTES),
+];
+
 const GREETING_WINDOWS = [
   {
     id: "morning",
@@ -16,7 +30,7 @@ const GREETING_WINDOWS = [
     message: "Good morning! Wishing you a calm and healthy start to your day.",
     startMinute: 5 * 60,
     endMinute: 12 * 60,
-    slots: ["05:00", "09:30"],
+    slots: buildTwoHourSlots(5 * 60),
   },
   {
     id: "afternoon",
@@ -24,7 +38,7 @@ const GREETING_WINDOWS = [
     message: "Good afternoon! Take a small mindful pause for yourself.",
     startMinute: 12 * 60,
     endMinute: 17 * 60,
-    slots: ["12:00", "14:30"],
+    slots: buildTwoHourSlots(12 * 60),
   },
   {
     id: "evening",
@@ -32,7 +46,7 @@ const GREETING_WINDOWS = [
     message: "Good evening! Hope your day is settling gently.",
     startMinute: 17 * 60,
     endMinute: 21 * 60,
-    slots: ["17:00", "19:00"],
+    slots: buildTwoHourSlots(17 * 60),
   },
   {
     id: "night",
@@ -40,7 +54,7 @@ const GREETING_WINDOWS = [
     message: "Good night! Rest well and take care of yourself.",
     startMinute: 21 * 60,
     endMinute: 24 * 60 + 5 * 60,
-    slots: ["21:00", "23:00"],
+    slots: buildTwoHourSlots(21 * 60),
   },
 ];
 

@@ -10,9 +10,9 @@ describe("greetingNotificationService", () => {
         ?.title,
     ).to.equal("Good Morning");
     expect(
-      getDueGreetingSlot(utcDate("2026-09-08T04:00:00.000Z"), "Asia/Kolkata")
+      getDueGreetingSlot(utcDate("2026-09-08T01:30:00.000Z"), "Asia/Kolkata")
         ?.slot,
-    ).to.equal("09:30");
+    ).to.equal("07:00");
   });
 
   it("returns afternoon, evening, and night slots", () => {
@@ -28,6 +28,25 @@ describe("greetingNotificationService", () => {
       getDueGreetingSlot(utcDate("2026-09-08T15:30:00.000Z"), "Asia/Kolkata")
         ?.title,
     ).to.equal("Good Night");
+  });
+
+  it("spaces the second greeting two hours after the first slot", () => {
+    expect(
+      getDueGreetingSlot(utcDate("2026-09-08T08:30:00.000Z"), "Asia/Kolkata")
+        ?.slot,
+    ).to.equal("14:00");
+    expect(
+      getDueGreetingSlot(utcDate("2026-09-08T11:30:00.000Z"), "Asia/Kolkata")
+        ?.slot,
+    ).to.equal("17:00");
+    expect(
+      getDueGreetingSlot(utcDate("2026-09-08T13:30:00.000Z"), "Asia/Kolkata")
+        ?.slot,
+    ).to.equal("19:00");
+    expect(
+      getDueGreetingSlot(utcDate("2026-09-08T17:30:00.000Z"), "Asia/Kolkata")
+        ?.slot,
+    ).to.equal("23:00");
   });
 
   it("does not return a greeting outside the exact send minute", () => {
