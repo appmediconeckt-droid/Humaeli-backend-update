@@ -9,6 +9,10 @@ export const GREETING_NOTIFICATION_POLL_MS = Number(
   process.env.GREETING_NOTIFICATION_POLL_MS || 60 * 1000,
 );
 
+export const GREETING_NOTIFICATION_CATCH_UP_MINUTES = Number(
+  process.env.GREETING_NOTIFICATION_CATCH_UP_MINUTES || 2 * 60,
+);
+
 const GREETING_REPEAT_GAP_MINUTES = 2 * 60;
 
 const minuteToSlot = (minute) => {
@@ -61,6 +65,12 @@ const GREETING_WINDOWS = [
 const slotToMinute = (slot) => {
   const [hour, minute] = slot.split(":").map(Number);
   return hour * 60 + minute;
+};
+
+const shiftDateKey = (dateKey, days) => {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().slice(0, 10);
 };
 
 const getLocalParts = (date, timeZone = GREETING_NOTIFICATION_TIMEZONE) => {
@@ -119,15 +129,56 @@ export const getDueGreetingSlot = (
   };
 };
 
+export const getPendingGreetingSlots = (
+  date = new Date(),
+  {
+    timeZone = GREETING_NOTIFICATION_TIMEZONE,
+    catchUpMinutes = GREETING_NOTIFICATION_CATCH_UP_MINUTES,
+  } = {},
+) => {
+  const { dateKey, minuteOfDay } = getLocalParts(date, timeZone);
+  const window = getGreetingWindowForMinute(minuteOfDay);
+  if (!window) return [];
+
+  const adjustedMinute =
+    minuteOfDay < 5 * 60 ? minuteOfDay + 24 * 60 : minuteOfDay;
+
+  const pendingSlots = window.slots
+    .map((slot) => {
+      const slotMinute = slotToMinute(slot);
+      const slotDateKey =
+        adjustedMinute >= 24 * 60 && slotMinute < 24 * 60
+          ? shiftDateKey(dateKey, -1)
+          : dateKey;
+      const elapsedMinutes = adjustedMinute - slotMinute;
+
+      return {
+        ...window,
+        slot,
+        dateKey: slotDateKey,
+        key: `${slotDateKey}:${window.id}:${slot}`,
+        elapsedMinutes,
+      };
+    })
+    .filter(
+      (slot) =>
+        slot.elapsedMinutes >= 0 &&
+        slot.elapsedMinutes <= catchUpMinutes,
+    );
+
+  return pendingSlots.length ? [pendingSlots[pendingSlots.length - 1]] : [];
+};
+
 export const sendDueGreetingNotifications = async (
   date = new Date(),
   {
     timeZone = GREETING_NOTIFICATION_TIMEZONE,
     logger = console,
+    catchUpMinutes = GREETING_NOTIFICATION_CATCH_UP_MINUTES,
   } = {},
 ) => {
-  const dueSlot = getDueGreetingSlot(date, timeZone);
-  if (!dueSlot) return { sent: 0, skipped: 0, due: null };
+  const dueSlots = getPendingGreetingSlots(date, { timeZone, catchUpMinutes });
+  if (!dueSlots.length) return { sent: 0, skipped: 0, due: null };
 
   const recipients = await User.find({
     role: { $in: ["user", "counsellor"] },
@@ -140,49 +191,52 @@ export const sendDueGreetingNotifications = async (
   let sent = 0;
   let skipped = 0;
 
-  for (const recipient of recipients) {
-    const alreadySent = await Notification.exists({
-      recipientId: recipient._id,
-      type: "system",
-      "data.greetingKey": dueSlot.key,
-    });
+  for (const dueSlot of dueSlots) {
+    for (const recipient of recipients) {
+      const alreadySent = await Notification.exists({
+        recipientId: recipient._id,
+        type: "system",
+        "data.greetingKey": dueSlot.key,
+      });
 
-    if (alreadySent) {
-      skipped += 1;
-      continue;
+      if (alreadySent) {
+        skipped += 1;
+        continue;
+      }
+
+      const notification = await createNotificationSafely({
+        recipientId: recipient._id,
+        type: "system",
+        title: dueSlot.title,
+        message: dueSlot.message,
+        data: {
+          type: "GREETING",
+          greetingPeriod: dueSlot.id,
+          greetingSlot: dueSlot.slot,
+          greetingDate: dueSlot.dateKey,
+          greetingKey: dueSlot.key,
+          recipientRole: recipient.role,
+        },
+      });
+
+      if (notification) sent += 1;
     }
-
-    const notification = await createNotificationSafely({
-      recipientId: recipient._id,
-      type: "system",
-      title: dueSlot.title,
-      message: dueSlot.message,
-      data: {
-        type: "GREETING",
-        greetingPeriod: dueSlot.id,
-        greetingSlot: dueSlot.slot,
-        greetingDate: dueSlot.dateKey,
-        greetingKey: dueSlot.key,
-        recipientRole: recipient.role,
-      },
-    });
-
-    if (notification) sent += 1;
   }
 
   if (sent || skipped) {
     logger.info?.(
-      `Greeting notification ${dueSlot.key}: sent=${sent}, skipped=${skipped}`,
+      `Greeting notifications ${dueSlots.map((slot) => slot.key).join(", ")}: sent=${sent}, skipped=${skipped}`,
     );
   }
 
-  return { sent, skipped, due: dueSlot };
+  return { sent, skipped, due: dueSlots[dueSlots.length - 1], dueSlots };
 };
 
 export const startGreetingNotificationJob = ({
   intervalMs = GREETING_NOTIFICATION_POLL_MS,
   timeZone = GREETING_NOTIFICATION_TIMEZONE,
   logger = console,
+  catchUpMinutes = GREETING_NOTIFICATION_CATCH_UP_MINUTES,
 } = {}) => {
   if (process.env.GREETING_NOTIFICATIONS_ENABLED === "false") {
     logger.info?.("Greeting notifications disabled");
@@ -195,7 +249,11 @@ export const startGreetingNotificationJob = ({
 
     isRunning = true;
     try {
-      await sendDueGreetingNotifications(new Date(), { timeZone, logger });
+      await sendDueGreetingNotifications(new Date(), {
+        timeZone,
+        logger,
+        catchUpMinutes,
+      });
     } catch (error) {
       logger.error?.("Greeting notification job failed:", error.message);
     } finally {
