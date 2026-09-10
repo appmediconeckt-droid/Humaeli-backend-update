@@ -2,16 +2,13 @@ import NotificationToken from '../models/NotificationToken.js';
 import Notification from '../models/Notification.js';
 import User from '../models/userModel.js';
 
-const getRecipientId = (req) => req.userId || req.user?._id;
+const visibleNotificationTypes = ["appointment", "payment", "message", "call", "system"];
 
 export const getNotifications = async (req, res) => {
   try {
-    const recipientId = getRecipientId(req);
-    const page = Math.max(1, Number(req.query.page) || 1);
-    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
-    const query = { recipientId };
-    if (req.query.type) query.type = req.query.type;
-    if (String(req.query.unread).toLowerCase() === 'true') query.isRead = false;
+    const userId = req.body?.userId || req.user?._id || req.user?.userId;
+    const fcmToken = req.body?.fcmToken || req.body?.token;
+    const { platform } = req.body || {};
 
     const [notifications, total, unreadCount] = await Promise.all([
       Notification.find(query)

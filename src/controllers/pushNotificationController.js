@@ -2,7 +2,7 @@ import { sendPushNotification } from "../services/pushNotificationService.js";
 
 export const testNotification = async (req, res) => {
   try {
-    const rawToken = req.body?.fcmToken;
+    const rawToken = req.body?.fcmToken || req.body?.token;
 
     console.log("================================");
     console.log("TOKEN TYPE:", typeof rawToken);

@@ -3,6 +3,7 @@ import Message from "../models/Message.js";
 import User from "../models/userModel.js";
 import Call from "../models/Call.js";
 import mongoose from "mongoose";
+import { createNotificationSafely } from "../services/notificationService.js";
 
 class SocketHandler {
   constructor(io) {
@@ -459,6 +460,10 @@ class SocketHandler {
         content: message.content,
         senderRole: message.senderRole,
         senderId: message.senderId,
+        senderName:
+          socket.userRole === "user"
+            ? populatedChat.userId?.fullName
+            : populatedChat.counselorId?.fullName,
         contentType: message.contentType,
         createdAt: message.createdAt,
         isRead: message.isRead,
@@ -486,6 +491,34 @@ class SocketHandler {
       this.io
         .to(`counselor_${populatedChat.counselorId._id}`)
         .emit("chat-list-update", chatListUpdate);
+
+      const senderIsUser = socket.userRole === "user";
+      const recipientId = senderIsUser
+        ? populatedChat.counselorId._id
+        : populatedChat.userId._id;
+      const senderName = senderIsUser
+        ? populatedChat.userId?.fullName
+        : populatedChat.counselorId?.fullName;
+
+      await createNotificationSafely({
+        recipientId,
+        actorId: socket.userId,
+        type: "message",
+        title: senderName || "New message",
+        message: content,
+        data: {
+          type: "CHAT_MESSAGE",
+          chatId: populatedChat._id,
+          publicChatId: populatedChat.chatId,
+          senderId: socket.userId,
+          senderRole: socket.userRole,
+          senderName: senderName || "",
+          recipientRole: senderIsUser ? "counsellor" : "user",
+          messageId: message.messageId || message._id,
+          contentType: message.contentType,
+        },
+        actionUrl: `/chat/${populatedChat._id}`,
+      });
 
       console.log(
         `Message sent in chat ${populatedChat._id} by ${socket.userRole}_${socket.userId}`,

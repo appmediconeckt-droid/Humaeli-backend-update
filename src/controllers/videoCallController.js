@@ -264,15 +264,15 @@ export const videoCallController = {
             }
           );
 
+          const initiatorDisplayNameForReceiver = videoCallController.getDisplayName(
+            initiatorDetails,
+            receiverId,
+            receiverTypeNormalized,
+            initiatorType,
+          );
+
           // Emit real-time notification with appropriate display name
           if (global.io) {
-            const initiatorDisplayName = videoCallController.getDisplayName(
-              initiatorDetails,
-              receiverId,
-              receiverTypeNormalized,
-              initiatorType,
-            );
-
             videoCallController.emitToParticipant(
               global.io,
               receiverId,
@@ -281,7 +281,7 @@ export const videoCallController = {
               {
                 callId: existingCall.callId,
                 roomId: existingCall.roomId,
-                from: initiatorDisplayName,
+                from: initiatorDisplayNameForReceiver,
                 fromId: initiatorId,
                 fromType: initiatorType,
                 fromProfilePhoto: initiatorDetails.profilePhoto,
@@ -301,9 +301,14 @@ export const videoCallController = {
             title: `Incoming ${callType === "voice" || callType === "audio" ? "voice" : "video"} call request`,
             message: `${initiatorDetails.fullName} sent a new call request.`,
             data: {
+              type: "INCOMING_CALL",
               callId: existingCall.callId,
               roomId: existingCall.roomId,
               callType,
+              callerName: initiatorDisplayNameForReceiver,
+              callerImage: initiatorDetails.profilePhoto || "",
+              callerId: String(initiatorId),
+              callerRole: initiatorType,
               status: "pending",
               expiresAt,
             },
@@ -425,15 +430,15 @@ export const videoCallController = {
 
       activeCalls.set(callId, callData);
 
+      const initiatorDisplayNameForReceiver = videoCallController.getDisplayName(
+        initiatorDetails,
+        receiverId,
+        receiverTypeNormalized,
+        initiatorType,
+      );
+
       // Emit real-time notification to receiver with appropriate display name
       if (global.io) {
-        const initiatorDisplayName = videoCallController.getDisplayName(
-          initiatorDetails,
-          receiverId,
-          receiverTypeNormalized,
-          initiatorType,
-        );
-
         videoCallController.emitToParticipant(
           global.io,
           receiverId,
@@ -442,7 +447,7 @@ export const videoCallController = {
           {
             callId,
             roomId,
-            from: initiatorDisplayName,
+            from: initiatorDisplayNameForReceiver,
             fromId: initiatorId,
             fromType: initiatorType,
             fromProfilePhoto: initiatorDetails.profilePhoto,
@@ -479,9 +484,18 @@ export const videoCallController = {
         type: "call",
         title: `Incoming ${callType === "voice" || callType === "audio" ? "voice" : "video"} call request`,
         message: `${initiatorDetails.fullName} wants to start a ${callType === "voice" || callType === "audio" ? "voice" : "video"} call.`,
-        data: { callId, roomId, callType, status: "pending", expiresAt },
-        pushDataOnly: true,
-        pushType: "INCOMING_CALL",
+        data: {
+          type: "INCOMING_CALL",
+          callId,
+          roomId,
+          callType,
+          callerName: initiatorDisplayNameForReceiver,
+          callerImage: initiatorDetails.profilePhoto || "",
+          callerId: String(initiatorId),
+          callerRole: initiatorType,
+          status: "pending",
+          expiresAt,
+        },
         actionUrl: "/calls",
       });
 
@@ -1537,9 +1551,14 @@ export const videoCallController = {
         title: `Incoming ${call.type === "voice" || call.type === "audio" ? "voice" : "video"} call request`,
         message: `${call.initiator.fullName} resent the call request.`,
         data: {
+          type: "INCOMING_CALL",
           callId,
           roomId: call.roomId,
           callType: call.type,
+          callerName: call.initiator.fullName || "Incoming call",
+          callerImage: call.initiator.profilePhoto || "",
+          callerId: String(call.initiator.id),
+          callerRole: call.initiator.type,
           status: "pending",
           expiresAt,
         },

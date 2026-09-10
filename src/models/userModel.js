@@ -307,6 +307,11 @@ const userSchema = new mongoose.Schema({
       type: Number,
       default: 0
     },
+    activeWalletRefundRequest: {
+      type: Boolean,
+      default: false,
+      select: false,
+    },
     fcmToken: {
   type: String,
   default: null,

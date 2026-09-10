@@ -367,9 +367,25 @@ export const getWalletData = async (req, res) => {
                 .reduce((acc, curr) => acc + curr.amount, 0)
         };
 
+        const refundRecords = await Transaction.find({
+            userId,
+            type: 'refund',
+            'metadata.refundRequest': true
+        }).sort({ createdAt: -1 }).limit(20).lean();
+        const refundRequests = refundRecords.map((item) => ({
+            _id: item._id,
+            amount: item.amount,
+            status: item.metadata?.refundStatus || item.status,
+            transactionReference: item.metadata?.transactionReference || null,
+            failureReason: item.metadata?.failureReason || null,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt
+        }));
+
         res.status(200).json({
             balance: user.walletBalance || 0,
             transactions,
+            refundRequests,
             pagination: {
                 page,
                 limit,
@@ -394,6 +410,144 @@ export const getWalletData = async (req, res) => {
         console.error('Error fetching wallet data:', error);
         res.status(500).json({ message: 'Internal server error' });
     }
+};
+
+export const requestWalletRefund = async (req, res) => {
+    const userId = req.user._id;
+    const amount = roundMoney(req.body.amount);
+    const accountName = String(req.body.accountName || '').trim();
+    const accountNumber = String(req.body.accountNumber || '').replace(/\s+/g, '');
+    const ifsc = String(req.body.ifsc || '').trim().toUpperCase();
+    const bankName = String(req.body.bankName || '').trim();
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({ success: false, message: 'Enter a valid refund amount' });
+    }
+    if (!accountName || !accountNumber || !ifsc || !bankName) {
+        return res.status(400).json({ success: false, message: 'Complete bank details are required' });
+    }
+    if (!/^\d{8,20}$/.test(accountNumber)) {
+        return res.status(400).json({ success: false, message: 'Account number must contain 8 to 20 digits' });
+    }
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
+        return res.status(400).json({ success: false, message: 'Enter a valid IFSC code' });
+    }
+
+    try {
+        const existing = await Transaction.findOne({
+            userId,
+            type: 'refund',
+            'metadata.refundRequest': true,
+            'metadata.refundStatus': { $in: ['pending', 'approved', 'processing'] }
+        }).lean();
+        if (existing) {
+            return res.status(409).json({ success: false, message: 'A refund request is already under review' });
+        }
+
+        const user = await User.findOneAndUpdate(
+            { _id: userId, walletBalance: { $gte: amount }, activeWalletRefundRequest: { $ne: true } },
+            { $inc: { walletBalance: -amount }, $set: { activeWalletRefundRequest: true } },
+            { new: true }
+        );
+        if (!user) {
+            return res.status(409).json({ success: false, message: 'Insufficient balance or a refund request is already under review' });
+        }
+
+        let transaction;
+        try {
+            transaction = await Transaction.create({
+                userId,
+                amount,
+                type: 'refund',
+                status: 'hold',
+                description: 'Wallet refund request',
+                metadata: {
+                    refundRequest: true,
+                    refundStatus: 'pending',
+                    requestedAt: new Date(),
+                    processingDeadline: new Date(Date.now() + 48 * 60 * 60 * 1000),
+                    bankDetails: { accountName, accountNumber, ifsc, bankName, last4: accountNumber.slice(-4) }
+                }
+            });
+        } catch (error) {
+            await User.updateOne({ _id: userId }, { $inc: { walletBalance: amount }, $set: { activeWalletRefundRequest: false } });
+            throw error;
+        }
+
+        await createNotificationSafely({
+            recipientId: userId,
+            type: 'payment',
+            title: 'Refund request submitted',
+            message: `Your refund request for Rs ${amount.toFixed(2)} is under admin review.`,
+            data: { transactionId: transaction._id, amount, refundStatus: 'pending' },
+            actionUrl: '/wallet'
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: 'Your refund request was sent to the admin and will be processed within 48 hours.',
+            refundRequest: { _id: transaction._id, amount, status: 'pending', createdAt: transaction.createdAt },
+            balance: user.walletBalance
+        });
+    } catch (error) {
+        console.error('Wallet refund request error:', error);
+        return res.status(500).json({ success: false, message: 'Refund request could not be submitted' });
+    }
+};
+
+export const notifyWalletRefundStatus = async (req, res) => {
+    const suppliedSecret = String(req.headers['x-admin-notification-secret'] || '');
+    if (!process.env.ADMIN_JWT_SECRET || suppliedSecret !== process.env.ADMIN_JWT_SECRET) {
+        return res.status(401).json({ success: false, message: 'Unauthorized admin notification request' });
+    }
+
+    const transactionId = String(req.body.transactionId || '');
+    const status = String(req.body.status || '').toLowerCase();
+    if (!transactionId || !['approved', 'paid', 'rejected'].includes(status)) {
+        return res.status(400).json({ success: false, message: 'Valid transaction and refund status are required' });
+    }
+
+    const transaction = await Transaction.findOne({
+        _id: transactionId,
+        type: 'refund',
+        'metadata.refundRequest': true,
+        'metadata.refundStatus': status
+    }).lean();
+    if (!transaction) {
+        return res.status(404).json({ success: false, message: 'Matching refund request not found' });
+    }
+
+    const content = {
+        approved: {
+            title: 'Refund request approved',
+            message: `Your wallet refund of Rs ${transaction.amount.toFixed(2)} was approved. The bank transfer will be completed within 48 hours.`
+        },
+        paid: {
+            title: 'Refund sent to your bank',
+            message: `Your refund of Rs ${transaction.amount.toFixed(2)} has been transferred to your bank account.`
+        },
+        rejected: {
+            title: 'Refund request declined',
+            message: `Your refund request for Rs ${transaction.amount.toFixed(2)} was declined and the amount was returned to your wallet.`
+        }
+    }[status];
+
+    const notification = await createNotificationSafely({
+        recipientId: transaction.userId,
+        type: 'payment',
+        title: content.title,
+        message: content.message,
+        data: {
+            type: 'WALLET_REFUND',
+            refundRequestId: transaction._id,
+            refundStatus: status,
+            amount: transaction.amount
+        },
+        actionUrl: '/wallet',
+        pushType: 'WALLET_REFUND'
+    });
+
+    return res.json({ success: true, notificationCreated: Boolean(notification) });
 };
 
 export const getCounselorWalletData = async (req, res) => {

@@ -1,5 +1,12 @@
 import { messaging } from "../config/firebaseAdmin.js";
 
+const isCallPush = (data = {}) => {
+  const type = String(data.type || data.notificationType || data.event || "")
+    .trim()
+    .toUpperCase();
+  return type.includes("CALL") || Boolean(data.callId || data.call_id);
+};
+
 export const sendPushNotification = async ({
   token,
   title,
@@ -17,23 +24,36 @@ export const sendPushNotification = async ({
       safeData[key] = String(data[key]);
     });
 
+    const callPush = isCallPush(safeData);
     const message = {
       token,
-      notification: {
-        title,
-        body,
-      },
       data: safeData,
       android: {
         priority: 'high',
-        notification: {
-          sound: 'default',
+        ...(callPush
+          ? {}
+          : {
+              notification: {
+                sound: 'default',
+                channelId: "humaeli-default",
+              },
+            }),
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+            ...(callPush ? { contentAvailable: true } : {}),
+          },
         },
       },
     };
 
-    if (!messaging) {
-      throw new Error('Firebase Admin is not configured on the backend');
+    if (!callPush) {
+      message.notification = {
+        title,
+        body,
+      };
     }
 
     const response = await messaging.send(message);
@@ -47,4 +67,3 @@ export const sendPushNotification = async ({
     throw error;
   }
 };
-
