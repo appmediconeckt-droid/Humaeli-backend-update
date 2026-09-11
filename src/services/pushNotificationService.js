@@ -1,6 +1,14 @@
 import { messaging } from "../config/firebaseAdmin.js";
 
 const isCallPush = (data = {}) => {
+  const presentation = String(data.presentation || data.presentAs || "")
+    .trim()
+    .toLowerCase();
+  const notificationOnly =
+    presentation === "notification_only" ||
+    String(data.notificationOnly || "").toLowerCase() === "true";
+  if (notificationOnly) return false;
+
   const type = String(data.type || data.notificationType || data.event || "")
     .trim()
     .toUpperCase();

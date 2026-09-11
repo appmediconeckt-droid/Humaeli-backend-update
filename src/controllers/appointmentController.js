@@ -2,6 +2,10 @@
 import Appointment from "../models/appointmentModel.js";
 import User from "../models/userModel.js";
 import { createNotificationSafely } from "../services/notificationService.js";
+import {
+  getAnonymousUserName,
+  sanitizeUserForCounselor,
+} from "../utils/anonymousUser.js";
 
 // Delete appointments that never became a completed/confirmed session once
 // their scheduled date/time is past. Support both American and British
@@ -111,7 +115,7 @@ export const book = async (req, res) => {
       actorId: req.user._id,
       type: "appointment",
       title: "New appointment request",
-      message: `${req.user.fullName || "A user"} requested an appointment for ${new Date(date).toLocaleString("en-IN")}.`,
+      message: `${getAnonymousUserName(req.user)} requested an appointment for ${new Date(date).toLocaleString("en-IN")}.`,
       data: { appointmentId: appointment._id, status: appointment.status, date },
       actionUrl: "/counselor/appointments",
     });
@@ -169,6 +173,18 @@ export const getAppointments = async (req, res) => {
       .populate("counselor", "fullName profilePhoto anonymous")
       .sort({ date: -1 })
       .lean();
+
+    if (req.user.role === "counsellor") {
+      return res.json(
+        appointments.map((appointment) => ({
+          ...appointment,
+          patient: sanitizeUserForCounselor(
+            appointment.patient,
+            appointment.patient?._id || appointment.patient,
+          ),
+        })),
+      );
+    }
 
     return res.json(appointments);
   } catch (err) {

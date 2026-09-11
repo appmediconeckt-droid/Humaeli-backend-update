@@ -66,14 +66,20 @@ const clampInteger = (value, fallback, min, max) => {
 const escapeRegex = (value = '') =>
     String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const MINIMUM_WALLET_TOP_UP = 100;
+
 // Create Razorpay Order
 export const createOrder = async (req, res) => {
     try {
-        const { amount } = req.body;
+        const amount = Number(req.body?.amount);
         const userId = req.user._id;
 
-        if (!amount || amount <= 0) {
-            return res.status(400).json({ message: 'Invalid amount' });
+        if (!Number.isFinite(amount) || amount < MINIMUM_WALLET_TOP_UP) {
+            return res.status(400).json({
+                success: false,
+                message: `Minimum wallet top-up amount is ₹${MINIMUM_WALLET_TOP_UP}`,
+                minimumAmount: MINIMUM_WALLET_TOP_UP,
+            });
         }
 
         const options = {

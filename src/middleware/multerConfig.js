@@ -18,6 +18,8 @@ const isCloudinaryConfigured = () =>
 
 const getUploadFolder = (file) => {
   if (file.fieldname === "profilePhoto") return "profile-photos";
+  if (file.fieldname === "prescriptionSignature") return "prescription-assets";
+  if (file.fieldname === "prescriptionSeal") return "prescription-assets";
   return "certifications";
 };
 
@@ -74,6 +76,13 @@ const dynamicStorage = new CloudinaryStorage({
         transformation: [{ width: 500, height: 500, crop: "limit" }],
       };
     }
+    if (file.fieldname === "prescriptionSignature" || file.fieldname === "prescriptionSeal") {
+      return {
+        folder: "prescription-assets",
+        allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
+        transformation: [{ width: 1000, height: 500, crop: "limit" }],
+      };
+    }
     // Check if it's a certification document (matches certifications[0][document], etc.)
     else if (
       file.fieldname.includes("certifications") &&
@@ -101,14 +110,18 @@ const dynamicStorage = new CloudinaryStorage({
 // File filter for uploaded files
 const fileFilter = (req, file, cb) => {
   // Check if it's a profile photo
-  if (file.fieldname === "profilePhoto") {
+  if (
+    file.fieldname === "profilePhoto" ||
+    file.fieldname === "prescriptionSignature" ||
+    file.fieldname === "prescriptionSeal"
+  ) {
     const allowedTypes = /jpeg|jpg|png|gif|webp/;
     if (allowedTypes.test(file.mimetype)) {
       cb(null, true);
     } else {
       cb(
         new Error(
-          "Only image files (jpeg, jpg, png, gif, webp) are allowed for profile photo",
+          "Only image files (jpeg, jpg, png, gif, webp) are allowed",
         ),
       );
     }

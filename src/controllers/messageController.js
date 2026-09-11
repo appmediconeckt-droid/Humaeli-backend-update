@@ -4,6 +4,11 @@ import Message from "../models/Message.js";
 import User from "../models/userModel.js";
 import { createNotificationSafely } from "../services/notificationService.js";
 import {
+  ANONYMOUS_USER_NAME,
+  getAnonymousUserName,
+  sanitizeUserForCounselor,
+} from "../utils/anonymousUser.js";
+import {
   activatePaidSession,
   startTimedChatUsage,
   stopTimedChatUsage,
@@ -79,6 +84,77 @@ const restoreChatForBothParticipants = (chat) => {
     chat.isActive = true;
   }
   return wasRestored;
+};
+
+const getUserPhotoUrl = (user) => {
+  const photo = user?.profilePhoto || user?.avatar || null;
+  if (!photo) return null;
+  if (typeof photo === "string") return photo;
+  return photo.secure_url || photo.url || photo.path || null;
+};
+
+const serializeChatPerson = (user, fallbackId = null) => {
+  if (!user) return fallbackId ? { id: String(fallbackId), _id: String(fallbackId) } : null;
+  const id = user._id || user.id || fallbackId;
+  return {
+    id: id ? String(id) : null,
+    _id: id ? String(id) : null,
+    name: user.fullName || user.name || user.anonymous || "User",
+    fullName: user.fullName || user.name || "",
+    anonymous: user.anonymous || "",
+    email: user.email || "",
+    gender: user.gender || "",
+    age: user.age || null,
+    specialization: user.specialization || user.specializations || "",
+    rating: user.rating || 0,
+    isOnline: Boolean(user.isOnline),
+    online: Boolean(user.isOnline),
+    phoneNumber: user.phoneNumber || "",
+    profilePhoto: getUserPhotoUrl(user),
+    avatar: getUserPhotoUrl(user),
+    avatarUrl: getUserPhotoUrl(user),
+  };
+};
+
+const serializeChatPersonForRole = (user, fallbackId, viewerRole) => {
+  if (viewerRole === "counsellor") {
+    return sanitizeUserForCounselor(user, fallbackId);
+  }
+  return serializeChatPerson(user, fallbackId);
+};
+
+const buildChatNotificationData = ({
+  chat,
+  sender,
+  senderRole,
+  recipientRole,
+  messageId = null,
+  contentType = "TEXT",
+  extra = {},
+}) => {
+  const senderId = sender?._id || sender?.id || extra.senderId || null;
+  const senderIsUser = senderRole === "user";
+  const senderName = senderIsUser
+    ? getAnonymousUserName(sender)
+    : sender?.fullName || sender?.name || "";
+  const senderPhoto = senderIsUser ? null : getUserPhotoUrl(sender);
+
+  return {
+    type: "CHAT_MESSAGE",
+    chatId: chat._id,
+    mongoChatId: chat._id,
+    publicChatId: chat.chatId,
+    userId: chat.userId,
+    counselorId: chat.counselorId,
+    senderId,
+    senderRole,
+    senderName,
+    senderPhoto,
+    recipientRole,
+    messageId,
+    contentType,
+    ...extra,
+  };
 };
 
 const visibleCounselorFilter = {
@@ -252,8 +328,17 @@ export const startChat = async (req, res) => {
           actorId: req.user._id,
           type: "message",
           title: "New chat request",
-          message: `${req.user.fullName || "A user"} wants to start a conversation.`,
-          data: { chatId: existingChat._id, publicChatId: existingChat.chatId, request: true },
+          message: `${getAnonymousUserName(req.user)} wants to start a conversation.`,
+          data: buildChatNotificationData({
+            chat: existingChat,
+            sender: req.user,
+            senderRole: "user",
+            recipientRole: "counsellor",
+            extra: {
+              request: true,
+              userName: getAnonymousUserName(req.user),
+            },
+          }),
           actionUrl: `/chat/${existingChat._id}`,
         });
 
@@ -279,9 +364,9 @@ export const startChat = async (req, res) => {
             },
             user: {
               id: populatedChat.userId._id,
-              name: populatedChat.userId.fullName,
+              name: populatedChat.userId.anonymous || ANONYMOUS_USER_NAME,
               anonymous: populatedChat.userId.anonymous,
-              email: populatedChat.userId.email,
+              email: "",
             },
             startedAt: populatedChat.startedAt,
             paymentStatus: populatedChat.paymentStatus,
@@ -327,8 +412,17 @@ export const startChat = async (req, res) => {
       actorId: req.user._id,
       type: "message",
       title: "New chat request",
-      message: `${req.user.fullName || "A user"} wants to start a conversation.`,
-      data: { chatId: chat._id, publicChatId: chat.chatId, request: true },
+      message: `${getAnonymousUserName(req.user)} wants to start a conversation.`,
+      data: buildChatNotificationData({
+        chat,
+        sender: req.user,
+        senderRole: "user",
+        recipientRole: "counsellor",
+        extra: {
+          request: true,
+          userName: getAnonymousUserName(req.user),
+        },
+      }),
       actionUrl: `/chat/${chat._id}`,
     });
 
@@ -354,9 +448,9 @@ export const startChat = async (req, res) => {
         },
         user: {
           id: populatedChat.userId._id,
-          name: populatedChat.userId.fullName,
+          name: populatedChat.userId.anonymous || ANONYMOUS_USER_NAME,
           anonymous: populatedChat.userId.anonymous,
-          email: populatedChat.userId.email,
+          email: "",
         },
         startedAt: populatedChat.startedAt,
         paymentStatus: populatedChat.paymentStatus,
@@ -424,8 +518,17 @@ export const startChat = async (req, res) => {
           actorId: req.user._id,
           type: "message",
           title: "New chat request",
-          message: `${req.user.fullName || "A user"} sent a new chat request.`,
-          data: { chatId: existingChat._id, publicChatId: existingChat.chatId, request: true },
+          message: `${getAnonymousUserName(req.user)} sent a new chat request.`,
+          data: buildChatNotificationData({
+            chat: existingChat,
+            sender: req.user,
+            senderRole: "user",
+            recipientRole: "counsellor",
+            extra: {
+              request: true,
+              userName: getAnonymousUserName(req.user),
+            },
+          }),
           actionUrl: `/chat/${existingChat._id}`,
         });
 
@@ -451,9 +554,9 @@ export const startChat = async (req, res) => {
             },
             user: {
               id: populatedChat.userId._id,
-              name: populatedChat.userId.fullName,
+              name: populatedChat.userId.anonymous || ANONYMOUS_USER_NAME,
               anonymous: populatedChat.userId.anonymous,
-              email: populatedChat.userId.email,
+              email: "",
             },
             startedAt: populatedChat.startedAt,
             paymentStatus: populatedChat.paymentStatus,
@@ -561,12 +664,19 @@ export const acceptChat = async (req, res) => {
       type: "message",
       title: "Chat request accepted",
       message: `${populatedChat.counselorId?.fullName || "Your counselor"} accepted your chat request.`,
-      data: {
-        chatId: chat._id,
-        publicChatId: chat.chatId,
-        accepted: true,
-        counselorId: chat.counselorId,
-      },
+      data: buildChatNotificationData({
+        chat,
+        sender: populatedChat.counselorId,
+        senderRole: "counsellor",
+        recipientRole: "user",
+        messageId: acceptMsg.messageId || acceptMsg._id,
+        contentType: acceptMsg.contentType,
+        extra: {
+          accepted: true,
+          counselorName: populatedChat.counselorId?.fullName || "",
+          counselorPhoto: getUserPhotoUrl(populatedChat.counselorId),
+        },
+      }),
       actionUrl: `/chat/${chat._id}`,
     });
 
@@ -584,6 +694,7 @@ export const acceptChat = async (req, res) => {
       // Notify user that chat was accepted
       global.io.to(`user_${chat.userId}`).emit("chat-status-update", {
         chatId: chat._id,
+        publicChatId: chat.chatId,
         status: "accepted",
         acceptedAt: chat.acceptedAt,
       });
@@ -592,6 +703,7 @@ export const acceptChat = async (req, res) => {
         id: acceptMsg._id,
         messageId: acceptMsg.messageId,
         chatId: chat._id,
+        publicChatId: chat.chatId,
         content: acceptMsg.content,
         senderRole: acceptMsg.senderRole,
         senderId: req.user._id,
@@ -613,10 +725,10 @@ export const acceptChat = async (req, res) => {
         amount: populatedChat.amount,
         user: {
           id: populatedChat.userId._id,
-          name: populatedChat.userId.fullName,
+          name: populatedChat.userId.anonymous || ANONYMOUS_USER_NAME,
           anonymous: populatedChat.userId.anonymous,
-          email: populatedChat.userId.email,
-          avatar: populatedChat.userId.profilePhoto?.url || null,
+          email: "",
+          avatar: null,
           isOnline: populatedChat.userId.isActive,
         },
         counselor: {
@@ -700,6 +812,7 @@ export const rejectChat = async (req, res) => {
       const chatRoom = `chat_${chat.chatId}`;
       global.io.to(`user_${chat.userId}`).emit("chat-status-update", {
         chatId: chat._id,
+        publicChatId: chat.chatId,
         status: "rejected",
         rejectedAt: chat.rejectedAt,
       });
@@ -707,6 +820,7 @@ export const rejectChat = async (req, res) => {
         id: rejectMsg._id,
         messageId: rejectMsg.messageId,
         chatId: chat._id,
+        publicChatId: chat.chatId,
         content: rejectMsg.content,
         senderRole: rejectMsg.senderRole,
         senderId: req.user._id,
@@ -794,10 +908,10 @@ export const getPendingRequests = async (req, res) => {
         chatId: chat.chatId,
         user: {
           id: user._id || null,
-          name: user.fullName || "Unknown User",
+          name: user.anonymous || ANONYMOUS_USER_NAME,
           anonymous: user.anonymous || "",
-          email: user.email || "",
-          Image: user.profilePhoto?.url || null,
+          email: "",
+          Image: null,
         },
         requestMessage: messageMap[chat._id.toString()] || "No message",
         requestedAt: chat.startedAt,
@@ -882,6 +996,15 @@ export const getChats = async (req, res) => {
           return null;
         }
 
+        const isCounselorViewingUser =
+          req.user.role === "counsellor" && chat.userId?._id?.toString() === otherParty._id.toString();
+        const otherPartyName = isCounselorViewingUser
+          ? getAnonymousUserName(otherParty)
+          : otherParty.fullName;
+        const otherPartyAvatar = isCounselorViewingUser
+          ? null
+          : otherParty.profilePhoto?.url || null;
+
         return {
           id: chat._id,
           chatId: chat.chatId,
@@ -892,9 +1015,9 @@ export const getChats = async (req, res) => {
               : Boolean(chat.archivedByCounselor),
           otherParty: {
             id: otherParty._id,
-            name: otherParty.fullName,
+            name: otherPartyName,
             anonymous: otherParty.anonymous,
-            avatar: otherParty.profilePhoto?.url || null,
+            avatar: otherPartyAvatar,
             age: otherParty.age ?? null,
             gender: otherParty.gender || null,
             dateOfBirth: otherParty.dateOfBirth || null,
@@ -1103,8 +1226,39 @@ export const getChatMessages = async (req, res) => {
       });
     }
 
+    const populatedChat = await Chat.findById(chat._id)
+      .populate("userId", "fullName email profilePhoto anonymous age gender isOnline")
+      .populate(
+        "counselorId",
+        "fullName specialization specializations profilePhoto rating isOnline phoneNumber",
+      )
+      .lean();
+
     res.json({
       chatStatus: chat.status,
+      chat: populatedChat
+        ? {
+            id: String(populatedChat._id),
+            _id: String(populatedChat._id),
+            chatId: populatedChat.chatId,
+            status: populatedChat.status,
+            userId: String(populatedChat.userId?._id || populatedChat.userId),
+            counselorId: String(populatedChat.counselorId?._id || populatedChat.counselorId),
+            user: serializeChatPersonForRole(
+              populatedChat.userId,
+              chat.userId,
+              req.user.role,
+            ),
+            counselor: serializeChatPerson(populatedChat.counselorId, chat.counselorId),
+          }
+        : {
+            id: String(chat._id),
+            _id: String(chat._id),
+            chatId: chat.chatId,
+            status: chat.status,
+            userId: String(chat.userId),
+            counselorId: String(chat.counselorId),
+          },
       messages: messages.map((msg) => ({
         id: msg._id,
         messageId: msg.messageId,
@@ -1229,8 +1383,16 @@ export const sendMessage = async (req, res) => {
     // Populate the message with sender info
     const populatedMessage = await Message.findById(message._id).populate(
       "senderId",
-      "fullName profilePhoto",
+      "fullName profilePhoto anonymous",
     );
+
+    const senderIsUser = req.user.role === "user";
+    const displaySenderName = senderIsUser
+      ? getAnonymousUserName(populatedMessage.senderId || req.user)
+      : populatedMessage.senderId?.fullName || req.user.fullName || "";
+    const displaySenderPhoto = senderIsUser
+      ? null
+      : getUserPhotoUrl(populatedMessage.senderId);
 
     const messagePayloadForSocket = {
       id: populatedMessage._id,
@@ -1239,7 +1401,7 @@ export const sendMessage = async (req, res) => {
       publicChatId: chat.chatId,
       content: populatedMessage.content,
       senderRole: populatedMessage.senderRole,
-      senderName: populatedMessage.senderId?.fullName,
+      senderName: displaySenderName,
       senderId: populatedMessage.senderId?._id,
       contentType: populatedMessage.contentType,
       attachmentUrl: populatedMessage.attachmentUrl,
@@ -1287,25 +1449,28 @@ export const sendMessage = async (req, res) => {
       recipientId,
       actorId: req.user._id,
       type: "message",
-      title: populatedMessage.senderId?.fullName || "New message",
+      title: displaySenderName || "New message",
       message: hasAttachment ? chat.lastMessage : messageContent,
-      data: {
-        type: "CHAT_MESSAGE",
-        chatId: chat._id,
-        publicChatId: chat.chatId,
-        senderId: req.user._id,
+      data: buildChatNotificationData({
+        chat,
+        sender: populatedMessage.senderId || req.user,
         senderRole: req.user.role,
-        senderName: populatedMessage.senderId?.fullName || "",
         recipientRole,
         messageId: populatedMessage.messageId || populatedMessage._id,
         contentType: populatedMessage.contentType,
-      },
+        extra: req.user.role === "user"
+          ? { userName: displaySenderName }
+          : {
+              counselorName: populatedMessage.senderId?.fullName || req.user.fullName || "",
+              counselorPhoto: displaySenderPhoto,
+            },
+      }),
       actionUrl: `/chat/${chat._id}`,
     });
 
     // Billing follows real conversation activity, not React renders or every
     // individual message. Each message extends one inactivity-window session.
-    recordTimedChatActivity(chat).catch((billingError) => {
+    recordTimedChatActivity(chat, { actorRole: req.user.role }).catch((billingError) => {
       console.error("Chat activity billing update failed:", billingError.message);
     });
 

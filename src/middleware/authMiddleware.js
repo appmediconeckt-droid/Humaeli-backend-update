@@ -1,6 +1,7 @@
 // middleware/authMiddleware.js
 import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
+import { markUserOnlineAndNotify } from "../services/onlinePresenceService.js";
 import Session from "../models/sessionModel.js";
 import { generateAccessToken, generateRefreshToken } from "../utils/token.js";
 import mongoose from "mongoose";
@@ -60,10 +61,7 @@ const tryRefreshAndContinue = async (req, res, next, incomingRefreshToken) => {
     }
 
     if (!user.isOnline || user.lastSeen) {
-      await User.updateOne(
-        { _id: user._id },
-        { $set: { isOnline: true, lastSeen: null } },
-      );
+      await markUserOnlineAndNotify(user._id);
       user.isOnline = true;
       user.lastSeen = null;
     }
@@ -213,10 +211,7 @@ export const authMiddleware = async (req, res, next) => {
 
     // ── 5. Attach user to request ──
     if (!user.isOnline || user.lastSeen) {
-      await User.updateOne(
-        { _id: user._id },
-        { $set: { isOnline: true, lastSeen: null } },
-      );
+      await markUserOnlineAndNotify(user._id);
       user.isOnline = true;
       user.lastSeen = null;
     }

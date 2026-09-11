@@ -26,6 +26,193 @@ const normalizeParticipantType = (type) => {
 
 const TERMINAL_CALL_STATUSES = ["ended", "rejected", "missed", "cancelled"];
 
+const normalizeCallMediaType = (callType = "video") =>
+  callType === "voice" || callType === "audio" ? "voice" : "video";
+
+const isParticipantLiveOnline = async (userId) => {
+  if (!userId) return false;
+
+  const liveSocketOnline = global.socketHandler?.isUserOnline?.(String(userId));
+  if (typeof liveSocketOnline === "boolean") {
+    return liveSocketOnline;
+  }
+
+  const user = await User.findById(userId).select("isOnline").lean();
+  return Boolean(user?.isOnline);
+};
+
+const buildNotificationOnlyCallData = ({
+  callId,
+  roomId,
+  callType,
+  initiatorId,
+  initiatorType,
+  initiatorDetails,
+  receiverId,
+  receiverType,
+  receiverDetails,
+  initiatorDisplayNameForReceiver,
+  receiverDisplayNameForInitiator,
+  reason,
+  createdAt,
+}) => ({
+  id: callId,
+  callId,
+  roomId,
+  type: normalizeCallMediaType(callType),
+  callType: normalizeCallMediaType(callType),
+  status: "notification_only",
+  presentation: "notification_only",
+  notificationOnly: true,
+  reason,
+  initiator: {
+    id: initiatorId,
+    displayName: initiatorDisplayNameForReceiver,
+    fullName: initiatorDetails.fullName,
+    isAnonymous: initiatorDetails.anonymous,
+    type: initiatorType,
+    profilePhoto: initiatorDetails.profilePhoto,
+  },
+  receiver: {
+    id: receiverId,
+    displayName: receiverDisplayNameForInitiator,
+    fullName: receiverDetails.fullName,
+    isAnonymous: receiverDetails.anonymous,
+    type: receiverType,
+    profilePhoto: receiverDetails.profilePhoto,
+  },
+  createdAt,
+});
+
+const createNotificationOnlyCallRequest = async ({
+  callType,
+  initiatorId,
+  initiatorType,
+  initiatorDetails,
+  receiverId,
+  receiverType,
+  receiverDetails,
+  initiatorOnline,
+  receiverOnline,
+}) => {
+  const callId = uuidv4();
+  const roomId = uuidv4();
+  const createdAt = new Date();
+  const normalizedCallType = normalizeCallMediaType(callType);
+  const offlineReason = !initiatorOnline
+    ? "initiator_offline"
+    : "receiver_offline";
+
+  const initiatorDisplayNameForReceiver = videoCallController.getDisplayName(
+    initiatorDetails,
+    receiverId,
+    receiverType,
+    initiatorType,
+  );
+  const receiverDisplayNameForInitiator = videoCallController.getDisplayName(
+    receiverDetails,
+    initiatorId,
+    initiatorType,
+    receiverType,
+  );
+
+  await Call.create({
+    callId,
+    roomId,
+    callType: normalizedCallType,
+    status: "missed",
+    callerId: initiatorId,
+    initiatorType,
+    receiverId,
+    receiverType,
+    callerName: initiatorDetails.fullName,
+    receiverName: receiverDetails.fullName,
+    callerAvatar: initiatorDetails.profilePhoto,
+    receiverAvatar: receiverDetails.profilePhoto,
+    isActive: false,
+    endedAt: createdAt,
+    cancelledAt: createdAt,
+    expiresAt: createdAt,
+  });
+
+  const basePushData = {
+    type: "CALL_REQUEST_NOTIFICATION",
+    presentation: "notification_only",
+    notificationOnly: "true",
+    callId,
+    roomId,
+    callType: normalizedCallType,
+    status: "notification_only",
+    reason: offlineReason,
+    requestedAt: createdAt,
+  };
+
+  await createNotificationSafely({
+    recipientId: receiverId,
+    actorId: initiatorId,
+    type: "call",
+    title: `${normalizedCallType === "voice" ? "Voice" : "Video"} call request`,
+    message: `${initiatorDisplayNameForReceiver} sent a call request. Open the app to come online before calling.`,
+    data: {
+      ...basePushData,
+      callerName: initiatorDisplayNameForReceiver,
+      callerImage: initiatorDetails.profilePhoto || "",
+      callerId: String(initiatorId),
+      callerRole: initiatorType,
+    },
+    actionUrl: "/calls",
+  });
+
+  await createNotificationSafely({
+    recipientId: initiatorId,
+    actorId: receiverId,
+    type: "call",
+    title: "Call request sent as notification",
+    message: !initiatorOnline
+      ? "You need to be online before starting a call. We sent a notification instead."
+      : `${receiverDisplayNameForInitiator} is offline. We sent a notification instead of starting the call.`,
+    data: {
+      ...basePushData,
+      receiverName: receiverDisplayNameForInitiator,
+      receiverImage: receiverDetails.profilePhoto || "",
+      receiverId: String(receiverId),
+      receiverRole: receiverType,
+    },
+    actionUrl: "/calls",
+  });
+
+  const callData = buildNotificationOnlyCallData({
+    callId,
+    roomId,
+    callType,
+    initiatorId,
+    initiatorType,
+    initiatorDetails,
+    receiverId,
+    receiverType,
+    receiverDetails,
+    initiatorDisplayNameForReceiver,
+    receiverDisplayNameForInitiator,
+    reason: offlineReason,
+    createdAt,
+  });
+
+  return {
+    success: true,
+    queued: true,
+    notificationOnly: true,
+    receiverOffline: !receiverOnline,
+    initiatorOffline: !initiatorOnline,
+    message: !initiatorOnline
+      ? "You need to be online before starting a call. A notification was sent instead."
+      : `${receiverDisplayNameForInitiator} is offline. Call was not started; notification has been sent.`,
+    callId,
+    roomId,
+    status: "notification_only",
+    callData,
+  };
+};
+
 export const videoCallController = {
   emitToParticipant(io, participantId, participantType, eventName, payload) {
     if (!io || !participantId) return;
@@ -212,6 +399,44 @@ export const videoCallController = {
           existingCall = call;
           break;
         }
+      }
+
+      const [initiatorOnline, receiverOnline] = await Promise.all([
+        isParticipantLiveOnline(initiatorId),
+        isParticipantLiveOnline(receiverId),
+      ]);
+
+      if (!initiatorOnline || !receiverOnline) {
+        if (existingCall?.callId) {
+          existingCall.status = "cancelled";
+          existingCall.isActive = false;
+          existingCall.cancelledAt = new Date();
+          activeCalls.delete(existingCall.callId);
+
+          await Call.findOneAndUpdate(
+            { callId: existingCall.callId },
+            {
+              status: "cancelled",
+              cancelledAt: existingCall.cancelledAt,
+              isActive: false,
+            },
+          );
+        }
+
+        const notificationOnlyResponse =
+          await createNotificationOnlyCallRequest({
+            callType,
+            initiatorId,
+            initiatorType,
+            initiatorDetails,
+            receiverId,
+            receiverType: receiverTypeNormalized,
+            receiverDetails,
+            initiatorOnline,
+            receiverOnline,
+          });
+
+        return res.status(200).json(notificationOnlyResponse);
       }
 
       const callId = uuidv4();
@@ -1280,16 +1505,28 @@ export const videoCallController = {
         normalizeParticipantType(call.initiator.type) === "user";
       const receiverIsUser =
         normalizeParticipantType(call.receiver.type) === "user";
-      const billing = !wasPendingRequest && (initiatorIsUser || receiverIsUser)
-        ? await chargeCallByDuration({
+      let billing = null;
+      let billingError = null;
+      if (!wasPendingRequest && (initiatorIsUser || receiverIsUser)) {
+        try {
+          billing = await chargeCallByDuration({
             callId,
             userId: initiatorIsUser ? call.initiator.id : call.receiver.id,
             counselorId: initiatorIsUser ? call.receiver.id : call.initiator.id,
             sessionType:
               call.type === "voice" || call.type === "audio" ? "voice" : "video",
             durationSeconds: duration,
-          })
-        : null;
+          });
+        } catch (error) {
+          billingError = {
+            message: error.message,
+            statusCode: error.statusCode || 500,
+            walletBalance: error.walletBalance,
+            requiredAmount: error.requiredAmount,
+          };
+          console.error("Call billing failed:", billingError);
+        }
+      }
 
       const endedBy =
         String(call.initiator.id) === String(userId) ? call.initiator : call.receiver;
@@ -1329,7 +1566,11 @@ export const videoCallController = {
           endedBy: endedBy.id,
           paymentTransactionId: billing?.transaction?._id || null,
           paymentAmount: billing?.amount || 0,
-          paymentStatus: billing?.transaction ? "paid" : "unpaid",
+          paymentStatus: billing?.transaction
+            ? "paid"
+            : billingError
+              ? "failed"
+              : "unpaid",
         },
       );
 
@@ -1441,6 +1682,7 @@ export const videoCallController = {
           endedBy: endedBy.fullName,
           billedAmount: billing?.amount || 0,
           walletBalance: billing?.walletBalance,
+          billingError,
         },
       });
     } catch (error) {

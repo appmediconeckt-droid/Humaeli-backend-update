@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import User from "../models/userModel.js";
+import { markUserOnlineAndNotify } from "../services/onlinePresenceService.js";
 import Chat from "../models/Chat.js";
 import Message from "../models/Message.js";
 import OTP from "../models/otpModel.js";
@@ -332,9 +333,7 @@ const markUserOnline = async (userOrId) => {
   const userId = userOrId?._id || userOrId;
   if (!userId) return;
 
-  await User.findByIdAndUpdate(userId, {
-    $set: { isOnline: true, lastSeen: null },
-  });
+  await markUserOnlineAndNotify(userId);
 
   if (userOrId?._id) {
     userOrId.isOnline = true;
@@ -552,6 +551,43 @@ export const updateUserById = async (req, res) => {
         }
       }
       updates.profilePhoto = null;
+    }
+
+    if (currentUser.role === "counsellor") {
+      const prescriptionAssetFields = [
+        ["prescriptionSignature", "prescriptionSignatureUrl"],
+        ["prescriptionSeal", "prescriptionSealUrl"],
+      ];
+
+      for (const [field, urlField] of prescriptionAssetFields) {
+        const uploadedFile = req.files?.[field]?.[0];
+        if (uploadedFile?.path) {
+          const previousPublicId = currentUser[field]?.publicId;
+          if (
+            process.env.CLOUDINARY_CLOUD_NAME &&
+            process.env.CLOUDINARY_API_KEY &&
+            process.env.CLOUDINARY_API_SECRET &&
+            previousPublicId
+          ) {
+            try {
+              await cloudinary.uploader.destroy(previousPublicId);
+            } catch (err) {
+              console.error(`Error deleting old ${field}:`, err);
+            }
+          }
+          updates[field] = {
+            url: uploadedFile.path,
+            publicId: uploadedFile.filename,
+            format: uploadedFile.format || null,
+            bytes: uploadedFile.bytes || uploadedFile.size || null,
+          };
+        } else if (typeof req.body[urlField] === "string" && req.body[urlField].trim()) {
+          updates[field] = {
+            ...(currentUser[field]?.toObject?.() || currentUser[field] || {}),
+            url: req.body[urlField].trim(),
+          };
+        }
+      }
     }
 
     // 2. Handle Certifications - FIXED: Properly handle document URLs and DELETION
@@ -1248,6 +1284,10 @@ export const updateUserById = async (req, res) => {
         totalSessions: updatedUser.totalSessions,
         activeClients: updatedUser.activeClients,
         uniqueCode: updatedUser.uniqueCode,
+        prescriptionSignature: updatedUser.prescriptionSignature,
+        prescriptionSignatureUrl: updatedUser.prescriptionSignature?.url || "",
+        prescriptionSeal: updatedUser.prescriptionSeal,
+        prescriptionSealUrl: updatedUser.prescriptionSeal?.url || "",
       });
     }
 
@@ -1256,6 +1296,10 @@ export const updateUserById = async (req, res) => {
     //   formattedUser.certifications?.length,
     // );
 
+    if (["counsellor", "counselor"].includes(updatedUser.role)) {
+      // Invalidate the public directory without broadcasting private profile data.
+      global.io?.emit("counselor-directory-updated", { counselorId: String(updatedUser._id) });
+    }
     return res.status(200).json({
       message: "User updated successfully",
       success: true,
@@ -3455,6 +3499,10 @@ export const getMyProfile = async (req, res) => {
       formattedProfile.rating = user.rating || 0;
       formattedProfile.totalSessions = user.totalSessions || 0;
       formattedProfile.activeClients = user.activeClients || 0;
+      formattedProfile.prescriptionSignature = user.prescriptionSignature;
+      formattedProfile.prescriptionSignatureUrl = user.prescriptionSignature?.url || "";
+      formattedProfile.prescriptionSeal = user.prescriptionSeal;
+      formattedProfile.prescriptionSealUrl = user.prescriptionSeal?.url || "";
     }
 
     return res.status(200).json({

@@ -61,6 +61,11 @@ export const getRequestExpiryDate = () => {
   return new Date(Date.now() + requestExpiryHours * 60 * 60 * 1000);
 };
 
+const getSessionMetadata = (session) =>
+  session?.metadata && typeof session.metadata === "object"
+    ? { ...session.metadata }
+    : {};
+
 export const createPaidSessionHold = async ({
   userId,
   counselorId,
@@ -131,23 +136,34 @@ export const activatePaidSession = async (chat) => {
   }
 
   session.sessionStatus = "active";
-  session.paymentStatus = "paid";
   session.acceptedAt = new Date();
   session.startedAt = session.acceptedAt;
   await session.save();
 
-  chat.paymentStatus = "paid";
+  chat.paymentStatus = session.amount > 0 ? "paid" : "free";
   await chat.save();
 
   return session;
 };
 
-export const startTimedChatUsage = async (chat) => {
+export const startTimedChatUsage = async (
+  chat,
+  { fromBillableActivity = false } = {},
+) => {
   if (!isPaidSessionsEnabled() || !chat?.paidSessionId) return null;
 
   let session = await ChatSession.findById(chat.paidSessionId);
   if (!session || session.sessionType !== "chat" || session.sessionStatus !== "active") {
     return session;
+  }
+  const metadata = getSessionMetadata(session);
+  if (!fromBillableActivity || !metadata.hasBillableActivity) {
+    const user = await User.findById(session.userId).select("walletBalance");
+    return {
+      active: false,
+      reason: "waiting_for_chat_activity",
+      walletBalance: user?.walletBalance || 0,
+    };
   }
   const stopKey = String(session._id);
   const pendingStop = pendingChatStops.get(stopKey);
@@ -419,14 +435,23 @@ export const requestTimedChatStop = async (chat) => {
 
 export const recordTimedChatActivity = async (chat, { actorRole } = {}) => {
   if (!isPaidSessionsEnabled() || !chat?.paidSessionId) return null;
+  const session = await ChatSession.findById(chat.paidSessionId);
+  if (!session || session.sessionType !== "chat" || session.sessionStatus !== "active") {
+    return session;
+  }
 
   const normalizedRole = actorRole === "counsellor" ? "counsellor" : actorRole;
+  const metadata = getSessionMetadata(session);
+  if (!metadata.hasBillableActivity) {
+    const now = new Date();
+    metadata.hasBillableActivity = true;
+    metadata.firstBillableMessageAt = now;
+    session.metadata = metadata;
+    await session.save();
+  }
 
-  // Counselor messages alone must never start or prolong a billable segment.
-  // They only prove two-way participation inside a segment started by a user.
   if (normalizedRole === "counsellor") {
-    const session = await ChatSession.findById(chat.paidSessionId);
-    if (!session?.activeSegmentStartedAt || session.sessionType !== "chat") {
+    if (!session.activeSegmentStartedAt) {
       return { active: false, billable: false };
     }
     await ChatSession.updateOne(
@@ -437,7 +462,7 @@ export const recordTimedChatActivity = async (chat, { actorRole } = {}) => {
   }
 
   if (normalizedRole !== "user") return null;
-  const started = await startTimedChatUsage(chat);
+  const started = await startTimedChatUsage(chat, { fromBillableActivity: true });
   if (!started?.startedAt) return started;
   await ChatSession.updateOne(
     { _id: chat.paidSessionId, activeSegmentStartedAt: { $ne: null } },
@@ -491,10 +516,13 @@ export const refundPaidSession = async (chat, reason = "request_not_accepted") =
     return session;
   }
 
+  const refundAmount = Number(session.amount || 0);
   const user = await User.findById(session.userId);
   if (user) {
-    user.walletBalance = (user.walletBalance || 0) + session.amount;
-    await user.save();
+    if (refundAmount > 0) {
+      user.walletBalance = Number(((user.walletBalance || 0) + refundAmount).toFixed(2));
+      await user.save();
+    }
   }
 
   const holdTransaction = session.paymentTransactionId
@@ -506,26 +534,28 @@ export const refundPaidSession = async (chat, reason = "request_not_accepted") =
     await holdTransaction.save();
   }
 
-  await Transaction.create({
-    userId: session.userId,
-    counselorId: session.counselorId,
-    chatId: session.chatId,
-    sessionId: session._id,
-    relatedTransactionId: holdTransaction?._id,
-    amount: session.amount,
-    status: "completed",
-    type: "refund",
-    description: `Refund for ${session.sessionType} session`,
-    metadata: { reason },
-  });
+  if (refundAmount > 0) {
+    await Transaction.create({
+      userId: session.userId,
+      counselorId: session.counselorId,
+      chatId: session.chatId,
+      sessionId: session._id,
+      relatedTransactionId: holdTransaction?._id,
+      amount: session.amount,
+      status: "completed",
+      type: "refund",
+      description: `Refund for ${session.sessionType} session`,
+      metadata: { reason },
+    });
+  }
 
-  session.paymentStatus = "refunded";
-  session.sessionStatus = "refunded";
+  session.paymentStatus = refundAmount > 0 ? "refunded" : "free";
+  session.sessionStatus = refundAmount > 0 ? "refunded" : "cancelled";
   session.refundReason = reason;
   session.endedAt = new Date();
   await session.save();
 
-  chat.paymentStatus = "refunded";
+  chat.paymentStatus = refundAmount > 0 ? "refunded" : "free";
   chat.cancelledAt = chat.cancelledAt || new Date();
   await chat.save();
 
@@ -680,6 +710,25 @@ export const completePaidSession = async (chat) => {
     session = await ChatSession.findById(chat.paidSessionId);
   }
 
+  if (Number(session.amount || 0) <= 0) {
+    session.sessionStatus = "completed";
+    session.paymentStatus = "free";
+    session.amount = 0;
+    session.commissionAmount = 0;
+    session.counselorEarning = 0;
+    session.endedAt = new Date();
+    await session.save();
+
+    chat.paymentStatus = "free";
+    chat.amount = 0;
+    chat.status = chat.status === "closed" ? chat.status : "closed";
+    chat.closedAt = chat.closedAt || new Date();
+    chat.isActive = false;
+    await chat.save();
+
+    return session;
+  }
+
   const commissionAmount = Number(
     ((session.amount * session.commissionRate) / 100).toFixed(2),
   );
@@ -730,7 +779,10 @@ export const expirePendingPaidChatRequests = async () => {
   const now = new Date();
   const expiredChats = await Chat.find({
     status: "pending",
-    paymentStatus: "hold",
+    $or: [
+      { paidSessionId: { $ne: null } },
+      { paymentStatus: { $in: ["free", "hold"] } },
+    ],
     expiresAt: { $lte: now },
     isActive: true,
   }).limit(100);

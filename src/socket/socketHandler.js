@@ -4,6 +4,50 @@ import User from "../models/userModel.js";
 import Call from "../models/Call.js";
 import mongoose from "mongoose";
 import { createNotificationSafely } from "../services/notificationService.js";
+import { markUserOnlineAndNotify } from "../services/onlinePresenceService.js";
+import { recordTimedChatActivity } from "../services/paidSessionService.js";
+import { getAnonymousUserName } from "../utils/anonymousUser.js";
+
+const getUserPhotoUrl = (user) => {
+  const photo = user?.profilePhoto || user?.avatar || null;
+  if (!photo) return null;
+  if (typeof photo === "string") return photo;
+  return photo.secure_url || photo.url || photo.path || null;
+};
+
+const buildChatNotificationData = ({
+  chat,
+  sender,
+  senderRole,
+  recipientRole,
+  messageId = null,
+  contentType = "TEXT",
+  extra = {},
+}) => {
+  const senderId = sender?._id || sender?.id || extra.senderId || null;
+  const senderIsUser = senderRole === "user";
+  const senderName = senderIsUser
+    ? getAnonymousUserName(sender)
+    : sender?.fullName || sender?.name || "";
+  const senderPhoto = senderIsUser ? null : getUserPhotoUrl(sender);
+
+  return {
+    type: "CHAT_MESSAGE",
+    chatId: chat._id,
+    mongoChatId: chat._id,
+    publicChatId: chat.chatId,
+    userId: chat.userId?._id || chat.userId,
+    counselorId: chat.counselorId?._id || chat.counselorId,
+    senderId,
+    senderRole,
+    senderName,
+    senderPhoto,
+    recipientRole,
+    messageId,
+    contentType,
+    ...extra,
+  };
+};
 
 class SocketHandler {
   constructor(io) {
@@ -84,10 +128,7 @@ class SocketHandler {
 
     if (!wasOffline) return;
 
-    await User.findByIdAndUpdate(userId, {
-      isOnline: true,
-      lastSeen: null,
-    });
+    await markUserOnlineAndNotify(userId);
 
     this.io.emit("presence-update", {
       userId,
@@ -387,10 +428,17 @@ class SocketHandler {
 
   async handleSendMessage(socket, { chatId, content, contentType = "TEXT" }) {
     try {
+      const trimmedContent =
+        typeof content === "string" ? content.trim() : "";
+      if (!trimmedContent) {
+        socket.emit("error", { message: "Message content is required" });
+        return;
+      }
+
       const chat = await this.findChatByIdentifier(chatId);
 
       if (chat) {
-        await chat.populate("userId", "fullName email profilePhoto");
+        await chat.populate("userId", "fullName email profilePhoto anonymous");
         await chat.populate(
           "counselorId",
           "fullName specialization profilePhoto rating",
@@ -415,6 +463,18 @@ class SocketHandler {
         return;
       }
 
+      if (
+        !["pending", "accepted", "active"].includes(
+          String(populatedChat.status || "").toLowerCase(),
+        )
+      ) {
+        socket.emit("error", {
+          message: `Cannot send messages. Chat is ${populatedChat.status}.`,
+          status: populatedChat.status,
+        });
+        return;
+      }
+
       // Check if admin has blocked the counselor from chatting
       const counselorForSocket = await User.findById(populatedChat.counselorId._id).lean();
       if (counselorForSocket?.chatPermission?.enabled === false) {
@@ -429,8 +489,8 @@ class SocketHandler {
       const message = await Message.create({
         chatId: populatedChat._id,
         senderId: socket.userId,
-        senderRole: socket.userRole,
-        content: content,
+        senderRole: this.isCounsellorRole(socket.userRole) ? "counsellor" : socket.userRole,
+        content: trimmedContent,
         contentType: contentType,
       });
 
@@ -443,7 +503,7 @@ class SocketHandler {
       );
       await Chat.findByIdAndUpdate(populatedChat._id, {
         $set: {
-          lastMessage: content,
+          lastMessage: trimmedContent,
           lastMessageAt: new Date(),
           updatedAt: new Date(),
           isActive: true,
@@ -462,7 +522,7 @@ class SocketHandler {
         senderId: message.senderId,
         senderName:
           socket.userRole === "user"
-            ? populatedChat.userId?.fullName
+            ? getAnonymousUserName(populatedChat.userId)
             : populatedChat.counselorId?.fullName,
         contentType: message.contentType,
         createdAt: message.createdAt,
@@ -497,7 +557,7 @@ class SocketHandler {
         ? populatedChat.counselorId._id
         : populatedChat.userId._id;
       const senderName = senderIsUser
-        ? populatedChat.userId?.fullName
+        ? getAnonymousUserName(populatedChat.userId)
         : populatedChat.counselorId?.fullName;
 
       await createNotificationSafely({
@@ -505,19 +565,26 @@ class SocketHandler {
         actorId: socket.userId,
         type: "message",
         title: senderName || "New message",
-        message: content,
-        data: {
-          type: "CHAT_MESSAGE",
-          chatId: populatedChat._id,
-          publicChatId: populatedChat.chatId,
-          senderId: socket.userId,
+        message: trimmedContent,
+        data: buildChatNotificationData({
+          chat: populatedChat,
+          sender: senderIsUser ? populatedChat.userId : populatedChat.counselorId,
           senderRole: socket.userRole,
-          senderName: senderName || "",
           recipientRole: senderIsUser ? "counsellor" : "user",
           messageId: message.messageId || message._id,
           contentType: message.contentType,
-        },
+          extra: senderIsUser
+            ? { userName: senderName || "" }
+            : {
+                counselorName: senderName || "",
+                counselorPhoto: getUserPhotoUrl(populatedChat.counselorId),
+              },
+        }),
         actionUrl: `/chat/${populatedChat._id}`,
+      });
+
+      recordTimedChatActivity(populatedChat, { actorRole: socket.userRole }).catch((billingError) => {
+        console.error("Socket chat activity billing update failed:", billingError.message);
       });
 
       console.log(

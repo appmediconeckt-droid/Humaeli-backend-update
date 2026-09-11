@@ -1,6 +1,7 @@
 import Notification from "../models/Notification.js";
 import User from "../models/userModel.js";
 import NotificationToken from "../models/NotificationToken.js";
+import CounselorOnlineSubscription from "../models/CounselorOnlineSubscription.js";
 import { sendPushNotification } from "./pushNotificationService.js";
 
 const enabledNotificationTypes = new Set([
@@ -99,6 +100,16 @@ export const createNotificationSafely = async ({
   try {
     if (!recipientId || !title || !message) return null;
 
+    const isCounselorOnline = (pushType || data?.type) === 'COUNSELOR_ONLINE';
+    const isStillSubscribed = async () => !isCounselorOnline || Boolean(
+      data?.counselorId && await CounselorOnlineSubscription.exists({
+        userId: recipientId,
+        counselorId: data.counselorId,
+      }),
+    );
+    // Recheck the exact pair, including notifications queued before bell OFF.
+    if (!await isStillSubscribed()) return null;
+
     const notification = await Notification.create({
       recipientId,
       actorId: actorId || null,
@@ -120,31 +131,53 @@ export const createNotificationSafely = async ({
     }
 
     try {
-      const registeredToken = await NotificationToken.findOne({
-        userId: recipientId,
-        active: true,
-      }).sort({ lastUpdatedAt: -1 });
+      let registeredTokens = [];
+      try {
+        registeredTokens = await NotificationToken.find({
+          userId: recipientId,
+          active: true,
+        }).select('token').lean();
+      } catch (error) {
+        console.warn('FCM token lookup failed; using user token:', error.message);
+      }
+      const tokens = new Set(registeredTokens.map((entry) => entry.token).filter(Boolean));
+      if (tokens.size === 0) {
+        const recipient = await User.findById(recipientId).select('fcmToken').lean();
+        if (recipient?.fcmToken) {
+          const owner = await NotificationToken.findOne({ token: recipient.fcmToken })
+            .select('userId active').lean();
+          if (!owner || (owner.active && String(owner.userId) === String(recipientId))) {
+            tokens.add(recipient.fcmToken);
+          }
+        }
+      }
 
-      const token = registeredToken?.token || (await User.findById(recipientId)
-        .select('fcmToken')
-        .lean())?.fcmToken;
-
-      if (token) {
-        await sendPushNotification({
-          token,
-          title,
-          body: message,
-          dataOnly: pushDataOnly,
-          data: {
-            ...data,
-            notificationId: notification._id,
-            type: pushType || type,
+      // One expired device must not stop delivery to the user's other devices.
+      await Promise.all([...tokens].map(async (token) => {
+        try {
+          if (!await isStillSubscribed()) return;
+          await sendPushNotification({
+            token,
             title,
             body: message,
-            actionUrl,
-          },
-        });
-      }
+            dataOnly: pushDataOnly,
+            data: {
+              ...data,
+              notificationId: notification._id,
+              type: pushType || data?.type || notificationTypeToPushType[type] || type,
+              title,
+              body: message,
+              actionUrl,
+            },
+          });
+        } catch (error) {
+          if (['messaging/registration-token-not-registered', 'messaging/invalid-registration-token'].includes(error.code)) {
+            await NotificationToken.updateOne({ token, userId: recipientId }, { $set: { active: false } });
+            await User.updateOne({ _id: recipientId, fcmToken: token }, { $unset: { fcmToken: '' } });
+          }
+          console.error('Push delivery failed for a device:', error.message);
+        }
+      }));
     } catch (pushError) {
       console.error('Push delivery failed:', pushError.message);
     }

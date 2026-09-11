@@ -1,14 +1,84 @@
 import NotificationToken from '../models/NotificationToken.js';
 import Notification from '../models/Notification.js';
 import User from '../models/userModel.js';
+import CounselorOnlineSubscription from '../models/CounselorOnlineSubscription.js';
+
+const counselorRoles = ['counselor', 'counsellor'];
+const getAuthenticatedUserId = (req) => req.userId || req.user?._id || req.user?.userId;
+const getRecipientId = getAuthenticatedUserId;
+
+export const subscribeToCounselorOnline = async (req, res) => {
+  try {
+    // Some clients POST the desired bell state instead of using DELETE.
+    // Never turn an explicit OFF request into an ON subscription.
+    const states = ['subscribed', 'enabled']
+      .filter((key) => Object.hasOwn(req.body || {}, key))
+      .map((key) => req.body[key]);
+    if (states.some((value) => typeof value !== 'boolean') ||
+        (states.length > 1 && states[0] !== states[1])) {
+      return res.status(400).json({ success: false, message: 'subscribed/enabled must be matching boolean values' });
+    }
+    if (states[0] === false) return unsubscribeFromCounselorOnline(req, res);
+
+    const userId = getAuthenticatedUserId(req);
+    const { counselorId } = req.params;
+    const counselor = await User.findOne({ _id: counselorId, role: { $in: counselorRoles }, isActive: true })
+      .select('_id')
+      .lean();
+
+    if (!counselor) {
+      return res.status(404).json({ success: false, message: 'Counselor not found' });
+    }
+    if (String(userId) === String(counselorId)) {
+      return res.status(400).json({ success: false, message: 'You cannot subscribe to yourself' });
+    }
+
+    await CounselorOnlineSubscription.findOneAndUpdate(
+      { userId, counselorId },
+      { $setOnInsert: { userId, counselorId } },
+      { upsert: true, new: true },
+    );
+
+    return res.json({ success: true, subscribed: true, counselorId });
+  } catch (error) {
+    console.error('Subscribe counselor online error:', error);
+    return res.status(500).json({ success: false, message: 'Unable to subscribe to counselor' });
+  }
+};
+
+export const unsubscribeFromCounselorOnline = async (req, res) => {
+  try {
+    const userId = getAuthenticatedUserId(req);
+    const { counselorId } = req.params;
+    await CounselorOnlineSubscription.deleteOne({ userId, counselorId });
+    return res.json({ success: true, subscribed: false, counselorId });
+  } catch (error) {
+    console.error('Unsubscribe counselor online error:', error);
+    return res.status(500).json({ success: false, message: 'Unable to unsubscribe from counselor' });
+  }
+};
+
+export const getCounselorOnlineSubscription = async (req, res) => {
+  try {
+    const subscribed = Boolean(await CounselorOnlineSubscription.exists({
+      userId: getAuthenticatedUserId(req),
+      counselorId: req.params.counselorId,
+    }));
+    return res.json({ success: true, subscribed, counselorId: req.params.counselorId });
+  } catch (error) {
+    console.error('Get counselor online subscription error:', error);
+    return res.status(500).json({ success: false, message: 'Unable to load subscription status' });
+  }
+};
 
 const visibleNotificationTypes = ["appointment", "payment", "message", "call", "system"];
 
 export const getNotifications = async (req, res) => {
   try {
-    const userId = req.body?.userId || req.user?._id || req.user?.userId;
-    const fcmToken = req.body?.fcmToken || req.body?.token;
-    const { platform } = req.body || {};
+    const recipientId = getRecipientId(req);
+    const page = Math.max(1, parseInt(req.query?.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query?.limit, 10) || 20));
+    const query = { recipientId, type: { $in: visibleNotificationTypes } };
 
     const [notifications, total, unreadCount] = await Promise.all([
       Notification.find(query)
@@ -122,6 +192,13 @@ export const registerFCMToken = async (
     if (!updatedUser) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
+
+    // A phone can switch accounts. Its current token must not remain a
+    // fallback delivery address for the previous account's subscriptions.
+    await User.updateMany(
+      { _id: { $ne: userId }, fcmToken: token },
+      { $unset: { fcmToken: '' } },
+    );
 
     let savedToken = null;
     try {
