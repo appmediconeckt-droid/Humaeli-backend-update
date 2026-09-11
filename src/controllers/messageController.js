@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from "../persistence/mongoose.js";
 import Chat from "../models/Chat.js";
 import Message from "../models/Message.js";
 import User from "../models/userModel.js";

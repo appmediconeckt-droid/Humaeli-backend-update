@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from "../persistence/mongoose.js";
 
 const notificationSchema = new mongoose.Schema(
   {

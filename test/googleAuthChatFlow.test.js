@@ -51,14 +51,17 @@ function makeRes() {
   return res;
 }
 
-describe("Google auth → chat request → counsellor accept (30s window)", function () {
+(process.env.MYSQL_TEST_DATABASE ? describe : describe.skip)("Google auth → chat request → counsellor accept (free chat)", function () {
   this.timeout(30000);
 
   let verifyStub;
   let counsellor;
   let uniq;
+  let previousPaidSetting;
 
   before(async () => {
+    previousPaidSetting = process.env.PAID_COUNSELOR_SESSIONS_ENABLED;
+    process.env.PAID_COUNSELOR_SESSIONS_ENABLED = "false";
     await connectDB();
   });
 
@@ -73,6 +76,7 @@ describe("Google auth → chat request → counsellor accept (30s window)", func
       googleId: `gid-counsellor-${uniq}`,
       authProvider: "google",
       role: "counsellor",
+      profileCompleted: true, qualification: "MSc Psychology", experience: 2, specialization: ["Stress"],
       isActive: true,
       locationData: {
         current: { type: "Point", coordinates: [77.5946, 12.9716] },
@@ -105,6 +109,8 @@ describe("Google auth → chat request → counsellor accept (30s window)", func
 
   after(async () => {
     await mongoose.disconnect();
+    if (previousPaidSetting === undefined) delete process.env.PAID_COUNSELOR_SESSIONS_ENABLED;
+    else process.env.PAID_COUNSELOR_SESSIONS_ENABLED = previousPaidSetting;
   });
 
   it("new Google user signs up, sends chat request, counsellor accepts — full flow works", async () => {
@@ -158,9 +164,7 @@ describe("Google auth → chat request → counsellor accept (30s window)", func
     expect(startRes.body).to.have.property("success", true);
     expect(startRes.body.chat).to.have.property("expiresAt");
 
-    const expiresAt = new Date(startRes.body.chat.expiresAt).getTime();
-    const deltaSec = (expiresAt - Date.now()) / 1000;
-    expect(deltaSec, "expiry ~30s away").to.be.greaterThan(25).and.lessThan(35);
+    expect(startRes.body.chat.expiresAt).to.equal(null);
 
     const chatId = startRes.body.chat.id;
 

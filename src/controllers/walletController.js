@@ -1,3 +1,4 @@
+import { sendWalletRefundStatusNotification } from "../services/walletRefundNotificationService.js";
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import User from '../models/userModel.js';
@@ -513,47 +514,8 @@ export const notifyWalletRefundStatus = async (req, res) => {
         return res.status(400).json({ success: false, message: 'Valid transaction and refund status are required' });
     }
 
-    const transaction = await Transaction.findOne({
-        _id: transactionId,
-        type: 'refund',
-        'metadata.refundRequest': true,
-        'metadata.refundStatus': status
-    }).lean();
-    if (!transaction) {
-        return res.status(404).json({ success: false, message: 'Matching refund request not found' });
-    }
-
-    const content = {
-        approved: {
-            title: 'Refund request approved',
-            message: `Your wallet refund of Rs ${transaction.amount.toFixed(2)} was approved. The bank transfer will be completed within 48 hours.`
-        },
-        paid: {
-            title: 'Refund sent to your bank',
-            message: `Your refund of Rs ${transaction.amount.toFixed(2)} has been transferred to your bank account.`
-        },
-        rejected: {
-            title: 'Refund request declined',
-            message: `Your refund request for Rs ${transaction.amount.toFixed(2)} was declined and the amount was returned to your wallet.`
-        }
-    }[status];
-
-    const notification = await createNotificationSafely({
-        recipientId: transaction.userId,
-        type: 'payment',
-        title: content.title,
-        message: content.message,
-        data: {
-            type: 'WALLET_REFUND',
-            refundRequestId: transaction._id,
-            refundStatus: status,
-            amount: transaction.amount
-        },
-        actionUrl: '/wallet',
-        pushType: 'WALLET_REFUND'
-    });
-
-    return res.json({ success: true, notificationCreated: Boolean(notification) });
+    const result = await sendWalletRefundStatusNotification(transactionId, status);
+    return res.status(result.success ? 200 : 404).json(result);
 };
 
 export const getCounselorWalletData = async (req, res) => {

@@ -1,5 +1,5 @@
 import express from 'express';
-import mongoose from 'mongoose';
+import mongoose from '../persistence/mongoose.js';
 
 import {
   deleteNotification,

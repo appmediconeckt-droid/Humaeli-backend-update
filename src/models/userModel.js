@@ -1,6 +1,6 @@
 
 // models/userModel.js
-import mongoose from "mongoose";
+import mongoose from "../persistence/mongoose.js";
 import { type } from "os";
 
 const userSchema = new mongoose.Schema({
@@ -21,7 +21,7 @@ const userSchema = new mongoose.Schema({
     },
     phoneNumber: {
         type: String,
-        required: function() { return !this.googleId; }
+        required: function() { return this.role !== "admin" && !this.googleId; }
     },
     phoneCountryCode: {
         type: String,
@@ -62,6 +62,14 @@ const userSchema = new mongoose.Schema({
         default: [],
         select: false
     },
+    walletAdjustmentIds: { type: [String], default: [], select: false },
+    lastActiveAt: { type: Date },
+    phone: { type: String },
+    profilePicture: { type: String },
+    hourlyRate: { type: Number },
+    sessionsDone: { type: Number, default: 0 },
+    bio: { type: String },
+    availability: { type: String },
     age: {
         type: Number,
     },

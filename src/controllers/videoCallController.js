@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from "../persistence/mongoose.js";
 import { v4 as uuidv4 } from "uuid";
 import User from "../models/userModel.js";
 import Call from "../models/Call.js";

@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from "../persistence/mongoose.js";
 import Appointment from "../models/appointmentModel.js";
 import Call from "../models/Call.js";
 import Chat from "../models/Chat.js";

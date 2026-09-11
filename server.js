@@ -1,25 +1,6 @@
-// import app from "./src/app.js";
-// import server from "./src/app.js"; 
-// import mongoose from "mongoose";
-// import dotenv from "dotenv";
-
-// dotenv.config();
-
-// mongoose.connect(process.env.MONGO_URI)
-// .then(() => {
-//     console.log("MongoDB Connected");
-
-//     app.listen(process.env.PORT, () => {
-//         console.log(`Server running on port ${process.env.PORT}`);
-//     });
-// })
-// .catch(err => console.log(err));
-
-
 // index.js or server.js
 // import server from "./src/app.js";
-// import mongoose from "mongoose";
-// import dotenv from "dotenv";
+// // import dotenv from "dotenv";
 
 
 // // Add this to your app.js or server.js temporarily
@@ -31,20 +12,18 @@
 
 // mongoose.connect(process.env.MONGO_URI)
 //   .then(() => {
-//     console.log("MongoDB Connected");
+//     console.log("MySQL Connected");
     
 //     server.listen(PORT, () => {
 //       console.log(`Server running on port ${PORT}`);
 //     });
 //   })
 //   .catch(err => {
-//     console.error("MongoDB connection error:", err);
+//     console.error("MySQL connection error:", err);
 //     process.exit(1);
 //   });
 
 // index.js or server.js
-import server from "./src/app.js";
-import mongoose from "mongoose";
 import dotenv from "dotenv";
 import dns from "node:dns";
 import connectDB from "./src/config/db.js";
@@ -57,11 +36,8 @@ if (process.env.DOTENV_PATH) {
   dotenv.config({ path: process.env.DOTENV_PATH, override: true });
 }
 
-if (!process.env.MONGO_URI) {
-  console.warn(
-    "⚠️ MONGO_URI is not defined. Ensure your .env is at project root or src/.env and contains MONGO_URI",
-  );
-}
+const { default: server } = await import("./src/app.js");
+const { startNotificationRuleScheduler } = await import("./src/admin/jobs/notificationRuleScheduler.js");
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 const TUNNEL_URL = String(process.env.TUNNEL_URL || "").trim();
@@ -102,7 +78,7 @@ async function connectWithRetry() {
       attempt += 1;
       const retryDelay = Math.min(30000, attempt * 3000);
       console.error(
-        `MongoDB unavailable (${error.name || "connection error"}). ` +
+        `MySQL unavailable (${error.name || "connection error"}). ` +
           `Retrying in ${Math.ceil(retryDelay / 1000)}s; process will stay alive.`,
       );
       await new Promise((resolve) => setTimeout(resolve, retryDelay));
@@ -110,9 +86,10 @@ async function connectWithRetry() {
   }
 }
 
-// Connect to MongoDB using cached connection
+// Connect to MySQL using cached connection
 connectWithRetry()
   .then(() => {
+    if (process.env.NODE_ENV !== "test") startNotificationRuleScheduler();
     server.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
       console.log(`📡 API URL: http://localhost:${PORT}`);
@@ -133,6 +110,6 @@ connectWithRetry()
     server.on('error', handleServerError);
   })
   .catch(err => {
-    console.error("❌ MongoDB connection error:", err);
+    console.error("❌ MySQL connection error:", err);
     process.exit(1);
   });

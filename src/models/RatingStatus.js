@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from "../persistence/mongoose.js";
 
 /**
  * RatingStatus — tracks, per (counselor, user) pair, whether/when a rating

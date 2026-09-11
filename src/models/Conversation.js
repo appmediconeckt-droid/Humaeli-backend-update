@@ -1,5 +1,5 @@
 // models/Conversation.js
-import mongoose from 'mongoose';
+import mongoose from '../persistence/mongoose.js';
 
 const conversationSchema = new mongoose.Schema({
   participants: {

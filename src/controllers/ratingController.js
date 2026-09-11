@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from "../persistence/mongoose.js";
 import Rating from "../models/Rating.js";
 import User from "../models/userModel.js";
 import RatingStatus from "../models/RatingStatus.js";

@@ -1,5 +1,5 @@
 // models/ForgotPasswordToken.js
-import mongoose from 'mongoose';
+import mongoose from '../persistence/mongoose.js';
 
 const forgotPasswordTokenSchema = new mongoose.Schema({
   email: {

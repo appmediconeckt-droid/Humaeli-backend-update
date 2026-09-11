@@ -1,7 +1,8 @@
-import mongoose from "mongoose";
+import mongoose from "../persistence/mongoose.js";
 
 const counselorEarningSchema = new mongoose.Schema(
   {
+    metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
     counselorId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

@@ -1,6 +1,10 @@
-import mongoose from 'mongoose';
+import mongoose from '../persistence/mongoose.js';
 
 const transactionSchema = new mongoose.Schema({
+    transactionId: { type: String, unique: true, sparse: true },
+    paymentMethod: { type: String },
+    platformFee: { type: Number, default: 0 },
+    counselorEarnings: { type: Number, default: 0 },
     userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',

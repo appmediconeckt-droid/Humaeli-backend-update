@@ -32,6 +32,7 @@ const ENV_KEYS = [
   "OTP_EMAIL_PROVIDER",
   "OTP_EMAIL_PROVIDER_ORDER",
   "OTP_EMAIL_FORCE_API_PROVIDER",
+  "OTP_EMAIL_PREFER_SMTP_OVER_API",
   "OTP_EMAIL_ALLOW_API_FALLBACK_AFTER_SMTP_FAILURE",
   "OTP_EMAIL_STRICT_SMTP",
   "RAILWAY_ENVIRONMENT",
@@ -58,9 +59,17 @@ const importFreshOtpService = async () =>
   import(`../src/services/otpService.js?test=${Date.now()}-${Math.random()}`);
 
 describe("OTP mail delivery", () => {
+  const originalTransport = nodemailer.createTransport;
+  beforeEach(() => {
+    // Every SMTP test must stub delivery; provider regressions must never fall
+    // through to credentials loaded from the developer's private .env.
+    nodemailer.createTransport = () => { throw new Error('Unmocked SMTP transport in OTP test'); };
+    process.env.OTP_EMAIL_PREFER_SMTP_OVER_API = "false";
+  });
   afterEach(() => {
     restoreEnv();
     sinon.restore();
+    nodemailer.createTransport = originalTransport;
     delete global.fetch;
   });
 
@@ -151,7 +160,7 @@ describe("OTP mail delivery", () => {
     expect(fetchStub.called).to.equal(false);
   });
 
-  it("prefers SMTP on live even when OTP_EMAIL_PROVIDER=brevo is set", async () => {
+  it("prefers SMTP on live when SMTP preference is explicitly enabled", async () => {
     process.env.NODE_ENV = "production";
     process.env.OTP_EMAIL_PROVIDER = "brevo";
     process.env.BREVO_API_KEY = "test-brevo-key";
@@ -159,6 +168,7 @@ describe("OTP mail delivery", () => {
     process.env.EMAIL_USER = "app.mediconeckt@gmail.com";
     process.env.EMAIL_PASSWORD = "app-password";
     delete process.env.OTP_EMAIL_FORCE_API_PROVIDER;
+    process.env.OTP_EMAIL_PREFER_SMTP_OVER_API = "true";
 
     const sendMailStub = sinon.stub().resolves({ messageId: "gmail-msg-forced-brevo" });
     const createTransportStub = sinon

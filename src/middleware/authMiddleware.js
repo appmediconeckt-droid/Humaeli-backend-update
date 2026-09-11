@@ -4,7 +4,7 @@ import User from "../models/userModel.js";
 import { markUserOnlineAndNotify } from "../services/onlinePresenceService.js";
 import Session from "../models/sessionModel.js";
 import { generateAccessToken, generateRefreshToken } from "../utils/token.js";
-import mongoose from "mongoose";
+import mongoose from "../persistence/mongoose.js";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helper: attempt silent token refresh and continue the request

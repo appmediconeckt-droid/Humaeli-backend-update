@@ -2,7 +2,7 @@ import Chat from "../models/Chat.js";
 import Message from "../models/Message.js";
 import User from "../models/userModel.js";
 import Call from "../models/Call.js";
-import mongoose from "mongoose";
+import mongoose from "../persistence/mongoose.js";
 import { createNotificationSafely } from "../services/notificationService.js";
 import { markUserOnlineAndNotify } from "../services/onlinePresenceService.js";
 import { recordTimedChatActivity } from "../services/paidSessionService.js";

@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import mongoose from "mongoose";
+import mongoose from "../src/persistence/mongoose.js";
 import bcrypt from "bcryptjs";
 import dns from "node:dns";
 import connectDB from "../src/config/db.js";

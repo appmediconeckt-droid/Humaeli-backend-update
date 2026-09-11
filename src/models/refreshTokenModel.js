@@ -1,5 +1,5 @@
 // // models/refreshTokenModel.js
-// import mongoose from "mongoose";
+// import mongoose from "../persistence/mongoose.js";
 
 // const refreshTokenSchema = new mongoose.Schema({
 //     token: {
@@ -34,7 +34,7 @@
 // Delete this file entirely if you're not using it
 // Or if you need it, fix the duplicate index:
 
-// import mongoose from "mongoose";
+// import mongoose from "../persistence/mongoose.js";
 
 // const refreshTokenSchema = new mongoose.Schema({
 //     token: {
@@ -65,7 +65,7 @@
 // refreshTokenSchema.index({ token: 1 });
 
 // export default mongoose.model("RefreshToken", refreshTokenSchema);
-import mongoose from "mongoose";
+import mongoose from "../persistence/mongoose.js";
 
 const refreshTokenSchema = new mongoose.Schema({
     token: {

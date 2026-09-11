@@ -251,7 +251,7 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 import cookieParser from "cookie-parser";
-import mongoose from "mongoose";
+import mongoose from "./persistence/mongoose.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import http from "http";
@@ -287,6 +287,20 @@ import aiRealtimeRoute from "./routes/aiRealtimeRoute.js"
 import { expirePendingPaidChatRequests } from "./services/paidSessionService.js";
 import { getEmailDeliveryDiagnostics } from "./services/otpService.js";
 import { startGreetingNotificationJob } from "./services/greetingNotificationService.js";
+import { apiFreshness } from "./middleware/apiFreshness.js";
+import adminAuthRoutes from "./admin/routes/simpleAuthRoutes.js";
+import adminUserRoutes from "./admin/routes/userRoutes.js";
+import adminCounselorRoutes from "./admin/routes/counselorRoutes.js";
+import adminDashboardRoutes from "./admin/routes/dashboardRoutes.js";
+import adminRevenueRoutes from "./admin/routes/revenueRoutes.js";
+import adminPayoutRoutes from "./admin/routes/payoutRoutes.js";
+import adminLocationRoutes from "./admin/routes/locationRoutes.js";
+import adminSettingsRoutes from "./admin/routes/settingsRoutes.js";
+import adminNotificationRoutes from "./admin/routes/notificationRoutes.js";
+import adminReviewRoutes from "./admin/routes/reviewRoutes.js";
+import adminPaymentRoutes from "./admin/routes/paymentRoutes.js";
+import adminSupportRoutes from "./admin/routes/supportRoutes.js";
+import adminRefundRoutes from "./admin/routes/refundRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -455,6 +469,8 @@ app.get("/api/health", (_req, res) => {
     },
     mail: getEmailDeliveryDiagnostics(),
     db: {
+      engine: "mysql",
+      database: mongoose.connection.name || process.env.MYSQL_DATABASE || "humaeli",
       state: dbStatus,
       readyState: dbState,
     },
@@ -482,38 +498,54 @@ app.use('/api/auth', forgotPasswordRoutes);
 app.use('/api/translate', translateRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/ai/realtime", aiRealtimeRoute);
+app.get("/api/admin/health", (_req, res) => {
+  res.json({ success: true, message: "Admin API is running" });
+});
+app.use("/api/admin/auth", adminAuthRoutes);
+app.use("/api/admin/users", adminUserRoutes);
+app.use("/api/admin/counselors", adminCounselorRoutes);
+app.use("/api/admin/dashboard", adminDashboardRoutes);
+app.use("/api/admin/revenue", adminRevenueRoutes);
+app.use("/api/admin/payouts", adminPayoutRoutes);
+app.use("/api/admin/location", adminLocationRoutes);
+app.use("/api/admin/settings", adminSettingsRoutes);
+app.use("/api/admin/notifications", adminNotificationRoutes);
+app.use("/api/admin/reviews", adminReviewRoutes);
+app.use("/api/admin/payments", adminPaymentRoutes);
+app.use("/api/admin/support", adminSupportRoutes);
+app.use("/api/admin/refunds", adminRefundRoutes);
 // Remove unresolved appointments only after their scheduled date/time has
 // passed. The request-time cleanup in getAppointments is a second safeguard.
-const appointmentCleanupInterval = setInterval(() => {
-  deleteExpiredUnresolvedAppointments().catch((error) => {
-    console.error("Appointment cleanup failed:", error.message);
-  });
-}, 60 * 1000);
-appointmentCleanupInterval.unref?.();
-const chatBillingSettlementInterval = setInterval(() => {
-  settleInactiveChatSessions().catch((error) => {
-    console.error("Inactive chat billing settlement failed:", error.message);
-  });
-}, 30 * 1000);
-chatBillingSettlementInterval.unref?.();
-settleInactiveChatSessions().catch((error) => {
-  console.error("Initial inactive chat billing settlement failed:", error.message);
-});
-deleteExpiredUnresolvedAppointments().catch((error) => {
-  console.error("Initial appointment cleanup failed:", error.message);
-});
-
-const paidChatExpiryInterval = setInterval(() => {
-  expirePendingPaidChatRequests().catch((error) => {
-    console.error("Paid chat expiry cleanup failed:", error.message);
-  });
-}, 5 * 60 * 1000);
-paidChatExpiryInterval.unref?.();
-expirePendingPaidChatRequests().catch((error) => {
-  console.error("Initial paid chat expiry cleanup failed:", error.message);
-});
-
 if (process.env.NODE_ENV !== "test") {
+  const appointmentCleanupInterval = setInterval(() => {
+    deleteExpiredUnresolvedAppointments().catch((error) => {
+      console.error("Appointment cleanup failed:", error.message);
+    });
+  }, 60 * 1000);
+  appointmentCleanupInterval.unref?.();
+  const chatBillingSettlementInterval = setInterval(() => {
+    settleInactiveChatSessions().catch((error) => {
+      console.error("Inactive chat billing settlement failed:", error.message);
+    });
+  }, 30 * 1000);
+  chatBillingSettlementInterval.unref?.();
+  settleInactiveChatSessions().catch((error) => {
+    console.error("Initial inactive chat billing settlement failed:", error.message);
+  });
+  deleteExpiredUnresolvedAppointments().catch((error) => {
+    console.error("Initial appointment cleanup failed:", error.message);
+  });
+
+  const paidChatExpiryInterval = setInterval(() => {
+    expirePendingPaidChatRequests().catch((error) => {
+      console.error("Paid chat expiry cleanup failed:", error.message);
+    });
+  }, 5 * 60 * 1000);
+  paidChatExpiryInterval.unref?.();
+  expirePendingPaidChatRequests().catch((error) => {
+    console.error("Initial paid chat expiry cleanup failed:", error.message);
+  });
+
   startGreetingNotificationJob();
 }
 
@@ -564,7 +596,7 @@ socketHandler.initialize();
 global.socketHandler = socketHandler;
 
 // Reset all users to offline on startup
-resetAllUsersPresence().catch(err => {
+if (process.env.NODE_ENV !== "test") resetAllUsersPresence().catch(err => {
   console.error("Failed to reset presence on startup:", err);
 });
 

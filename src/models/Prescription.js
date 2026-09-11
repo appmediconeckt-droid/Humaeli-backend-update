@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from "../persistence/mongoose.js";
 
 const medicineSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, maxlength: 200 },

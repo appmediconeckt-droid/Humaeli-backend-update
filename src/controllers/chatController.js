@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import mongoose from "mongoose";
+import mongoose from "../persistence/mongoose.js";
 import OpenAI from "openai";
 import Chat from "../models/chatModel.js";
 import User from "../models/userModel.js";

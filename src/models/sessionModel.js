@@ -1,6 +1,6 @@
 
 
-import mongoose from "mongoose";
+import mongoose from "../persistence/mongoose.js";
 
 const sessionSchema = new mongoose.Schema({
     userId: {

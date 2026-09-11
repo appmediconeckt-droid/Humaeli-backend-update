@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from "../persistence/mongoose.js";
 
 // One rating a user leaves for a counselor after a session. A user can rate a
 // given chat session only once — enforced by the unique (userId, chatId) index.
