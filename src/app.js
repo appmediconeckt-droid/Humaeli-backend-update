@@ -287,7 +287,6 @@ import aiRealtimeRoute from "./routes/aiRealtimeRoute.js"
 import { expirePendingPaidChatRequests } from "./services/paidSessionService.js";
 import { getEmailDeliveryDiagnostics } from "./services/otpService.js";
 import { startGreetingNotificationJob } from "./services/greetingNotificationService.js";
-import { apiFreshness } from "./middleware/apiFreshness.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
