@@ -165,7 +165,11 @@ const primarySenderEmail =
     ? SMTP_MAIL_FROM_EMAIL
     : "none";
 
-console.log("✅ Primary sender email configured:", primarySenderEmail);
+if (primaryProvider) {
+  console.log("✅ Primary sender email configured:", primarySenderEmail);
+} else {
+  console.warn("OTP email provider is not configured. Set SMTP or email API credentials in the deployment environment.");
+}
 
 if (LEGACY_EMAIL_PROVIDER && !EXPLICIT_OTP_EMAIL_PROVIDER) {
   console.warn(

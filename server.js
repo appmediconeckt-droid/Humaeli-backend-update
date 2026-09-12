@@ -27,6 +27,7 @@
 import dotenv from "dotenv";
 import dns from "node:dns";
 import connectDB from "./src/config/db.js";
+import { databaseFailureDetails } from "./src/config/databaseStartup.js";
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 // IMPORTANT: Load environment variables FIRST
@@ -36,7 +37,7 @@ if (process.env.DOTENV_PATH) {
   dotenv.config({ path: process.env.DOTENV_PATH, override: true });
 }
 
-const { default: server } = await import("./src/app.js");
+const { default: server, startDatabaseJobs } = await import("./src/app.js");
 const { startNotificationRuleScheduler } = await import("./src/admin/jobs/notificationRuleScheduler.js");
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
@@ -78,7 +79,7 @@ async function connectWithRetry() {
       attempt += 1;
       const retryDelay = Math.min(30000, attempt * 3000);
       console.error(
-        `MySQL unavailable (${error.name || "connection error"}). ` +
+        `MySQL unavailable (${databaseFailureDetails(error)}). ` +
           `Retrying in ${Math.ceil(retryDelay / 1000)}s; process will stay alive.`,
       );
       await new Promise((resolve) => setTimeout(resolve, retryDelay));
@@ -88,7 +89,8 @@ async function connectWithRetry() {
 
 // Connect to MySQL using cached connection
 connectWithRetry()
-  .then(() => {
+  .then(async () => {
+    await startDatabaseJobs();
     if (process.env.NODE_ENV !== "test") startNotificationRuleScheduler();
     server.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);

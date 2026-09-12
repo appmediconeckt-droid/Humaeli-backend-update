@@ -26,12 +26,21 @@ function identifier(name) {
 }
 
 export function mysqlConfig(env = process.env) {
+  let url;
+  if (env.MYSQL_URL) {
+    try {
+      url = new URL(env.MYSQL_URL);
+      if (url.protocol !== 'mysql:') throw new Error();
+    } catch {
+      throw new Error('Invalid MYSQL_URL; expected mysql://user:password@host:port/database');
+    }
+  }
   const config = {
-    host: env.MYSQL_HOST || '127.0.0.1',
-    port: Number(env.MYSQL_PORT || 3306),
-    user: env.MYSQL_USER || 'root',
-    password: env.MYSQL_PASSWORD || '',
-    database: env.MYSQL_DATABASE || 'humaeli',
+    host: env.MYSQL_HOST || env.MYSQLHOST || url?.hostname || '127.0.0.1',
+    port: Number(env.MYSQL_PORT || env.MYSQLPORT || url?.port || 3306),
+    user: env.MYSQL_USER || env.MYSQLUSER || (url && decodeURIComponent(url.username)) || 'root',
+    password: env.MYSQL_PASSWORD ?? env.MYSQLPASSWORD ?? (url ? decodeURIComponent(url.password) : ''),
+    database: env.MYSQL_DATABASE || env.MYSQLDATABASE || (url && decodeURIComponent(url.pathname.slice(1))) || 'humaeli',
     connectionLimit: Number(env.MYSQL_CONNECTION_LIMIT || 10),
     connectTimeout: 10000,
     charset: 'utf8mb4',

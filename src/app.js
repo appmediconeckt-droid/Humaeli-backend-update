@@ -252,6 +252,7 @@ import helmet from "helmet";
 import compression from "compression";
 import cookieParser from "cookie-parser";
 import mongoose from "./persistence/mongoose.js";
+import { createDatabaseStartup } from "./config/databaseStartup.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import http from "http";
@@ -516,14 +517,18 @@ app.use("/api/admin/support", adminSupportRoutes);
 app.use("/api/admin/refunds", adminRefundRoutes);
 // Remove unresolved appointments only after their scheduled date/time has
 // passed. The request-time cleanup in getAppointments is a second safeguard.
-if (process.env.NODE_ENV !== "test") {
+export const startDatabaseJobs = createDatabaseStartup(mongoose.connection, async () => {
+  if (process.env.NODE_ENV === "test") return;
+  await resetAllUsersPresence();
   const appointmentCleanupInterval = setInterval(() => {
+    if (mongoose.connection.readyState !== 1) return;
     deleteExpiredUnresolvedAppointments().catch((error) => {
       console.error("Appointment cleanup failed:", error.message);
     });
   }, 60 * 1000);
   appointmentCleanupInterval.unref?.();
   const chatBillingSettlementInterval = setInterval(() => {
+    if (mongoose.connection.readyState !== 1) return;
     settleInactiveChatSessions().catch((error) => {
       console.error("Inactive chat billing settlement failed:", error.message);
     });
@@ -537,6 +542,7 @@ if (process.env.NODE_ENV !== "test") {
   });
 
   const paidChatExpiryInterval = setInterval(() => {
+    if (mongoose.connection.readyState !== 1) return;
     expirePendingPaidChatRequests().catch((error) => {
       console.error("Paid chat expiry cleanup failed:", error.message);
     });
@@ -547,7 +553,7 @@ if (process.env.NODE_ENV !== "test") {
   });
 
   startGreetingNotificationJob();
-}
+});
 
 // ---------------------------
 // 5. HTTP & Socket.IO server
@@ -594,11 +600,6 @@ global.io = io;
 const socketHandler = new SocketHandler(io);
 socketHandler.initialize();
 global.socketHandler = socketHandler;
-
-// Reset all users to offline on startup
-if (process.env.NODE_ENV !== "test") resetAllUsersPresence().catch(err => {
-  console.error("Failed to reset presence on startup:", err);
-});
 
 export { app };
 export default server;
