@@ -453,10 +453,18 @@ app.get("/account-deletion.css", (_req, res) => {
 // ---------------------------
 // 4. Routes
 // ---------------------------
+app.get("/", (_req, res) => {
+  res.set('Cache-Control', 'no-store').json({
+    service: "humaeli-backend",
+    status: app.locals.databaseReady !== false && mongoose.connection.readyState === 1 ? "ready" : "database_unavailable",
+    health: "/api/health",
+  });
+});
+
 app.get("/api/health", (_req, res) => {
   const dbState = mongoose.connection.readyState;
   const dbStatus = DB_STATE_LABEL[dbState] || "unknown";
-  const isHealthy = dbState === 1;
+  const isHealthy = dbState === 1 && app.locals.databaseReady !== false;
 
   res.status(isHealthy ? 200 : 503).json({
     success: isHealthy,
@@ -475,6 +483,19 @@ app.get("/api/health", (_req, res) => {
       state: dbStatus,
       readyState: dbState,
     },
+  });
+});
+
+// The entry point enables this gate before listening; isolated app tests may
+// still supply their own model stubs without running the database bootstrap.
+const databaseUnavailable = () => app.locals.databaseReady === false ||
+  (app.locals.databaseReady === true && mongoose.connection.readyState !== 1);
+app.use('/api', (_req, res, next) => {
+  if (!databaseUnavailable()) return next();
+  res.set('Retry-After', '5').status(503).json({
+    success: false,
+    code: 'DATABASE_UNAVAILABLE',
+    message: 'Database is temporarily unavailable. Please try again shortly.',
   });
 });
 
@@ -591,6 +612,10 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e7,
 });
 
+io.use((_socket, next) => {
+  if (databaseUnavailable()) return next(new Error('Database is temporarily unavailable'));
+  next();
+});
 io.use(authenticateSocket);
 
 // Make io accessible globally for your controllers
