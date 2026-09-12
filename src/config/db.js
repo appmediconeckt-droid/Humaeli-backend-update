@@ -1,4 +1,5 @@
-import mongoose from '../persistence/mongoose.js';
+import modelStorage, { connectMySQL } from '../persistence/mongoose.js';
+import { mysqlConfig } from '../persistence/mysqlDriver.js';
 import { loadModels } from '../persistence/models.js';
 
 let connecting;
@@ -10,20 +11,23 @@ export default async function connectDB() {
     process.env.MYSQL_DATABASE = process.env.MYSQL_TEST_DATABASE;
   }
   if (connecting) return connecting;
-  if (mongoose.connection.readyState === 1) return mongoose.connection;
+  if (modelStorage.connection.readyState === 1) return modelStorage.connection;
   connecting = (async () => {
     try {
+      // Reads MYSQL_HOST/PORT/USER/PASSWORD/DATABASE, provider aliases or MYSQL_URL.
+      // connectMySQL uses the custom mysql2 driver shared by all application models.
+      const config = mysqlConfig();
       await loadModels();
-      await mongoose.connect('mysql://configured-by-environment');
+      const connection = await connectMySQL(config);
       // Install constraints before accepting requests; no background index races.
-      for (const model of Object.values(mongoose.models)) {
+      for (const model of Object.values(modelStorage.models)) {
         await model.createCollection();
         await model.createIndexes();
       }
-      console.log(`MySQL connected: ${mongoose.connection.name}`);
-      return mongoose.connection;
+      console.log(`MySQL connected: ${connection.name}`);
+      return connection;
     } catch (error) {
-      await mongoose.disconnect().catch(() => {});
+      await modelStorage.disconnect().catch(() => {});
       throw error;
     } finally { connecting = null; }
   })();
