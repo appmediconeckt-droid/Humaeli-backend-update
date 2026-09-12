@@ -40,7 +40,7 @@ if (process.env.DOTENV_PATH) {
 const { default: server, startDatabaseJobs } = await import("./src/app.js");
 const { startNotificationRuleScheduler } = await import("./src/admin/jobs/notificationRuleScheduler.js");
 
-const PORT = parseInt(process.env.PORT, 10) || 3000;
+const PORT = parseInt(process.env.PORT, 10) || 5001;
 const TUNNEL_URL = String(process.env.TUNNEL_URL || "").trim();
 const CLIENT_URL = String(process.env.CLIENT_URL || "").trim();
 
