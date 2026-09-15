@@ -45,14 +45,14 @@ export const updateGeneralSettings = async (req, res) => {
       updates.push(Settings.findOneAndUpdate(
         { key: "platform_name" },
         { $set: { value: platform_name.trim(), description: DEFAULTS.platform_name.description, type: DEFAULTS.platform_name.type, category: DEFAULTS.platform_name.category, updatedBy: req.user?.id || null } },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       ));
     }
     if (support_email !== undefined) {
       updates.push(Settings.findOneAndUpdate(
         { key: "support_email" },
         { $set: { value: support_email.trim(), description: DEFAULTS.support_email.description, type: DEFAULTS.support_email.type, category: DEFAULTS.support_email.category, updatedBy: req.user?.id || null } },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       ));
     }
 

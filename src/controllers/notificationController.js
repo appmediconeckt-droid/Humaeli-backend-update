@@ -36,7 +36,7 @@ export const subscribeToCounselorOnline = async (req, res) => {
     await CounselorOnlineSubscription.findOneAndUpdate(
       { userId, counselorId },
       { $setOnInsert: { userId, counselorId } },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: 'after' },
     );
 
     return res.json({ success: true, subscribed: true, counselorId });
@@ -121,7 +121,7 @@ export const markNotificationRead = async (req, res) => {
     const notification = await Notification.findOneAndUpdate(
       { _id: req.params.id, recipientId: getRecipientId(req) },
       { $set: { isRead: true, readAt: new Date() } },
-      { new: true },
+      { returnDocument: 'after' },
     );
     if (!notification) {
       return res.status(404).json({ success: false, message: 'Notification not found' });
@@ -187,7 +187,7 @@ export const registerFCMToken = async (
         fcmToken: token,
         ...(platform ? { devicePlatform: platform } : {}),
       },
-    }, { new: true });
+    }, { returnDocument: 'after' });
 
     if (!updatedUser) {
       return res.status(404).json({ success: false, message: 'User not found' });
@@ -215,7 +215,7 @@ export const registerFCMToken = async (
           lastUpdatedAt: new Date(),
         },
         {
-          new: true,
+          returnDocument: 'after',
           upsert: true,
         },
       );

@@ -454,7 +454,7 @@ export const requestWalletRefund = async (req, res) => {
         const user = await User.findOneAndUpdate(
             { _id: userId, walletBalance: { $gte: amount }, activeWalletRefundRequest: { $ne: true } },
             { $inc: { walletBalance: -amount }, $set: { activeWalletRefundRequest: true } },
-            { new: true }
+            { returnDocument: 'after' }
         );
         if (!user) {
             return res.status(409).json({ success: false, message: 'Insufficient balance or a refund request is already under review' });
@@ -742,7 +742,7 @@ export const requestWithdrawal = async (req, res) => {
         const updatedCounselor = await User.findOneAndUpdate(
             withdrawalFilter,
             update,
-            { new: true }
+            { returnDocument: 'after' }
         );
         if (!updatedCounselor) {
             return res.status(409).json({ message: 'Balance or instant payout eligibility changed. Please refresh and try again.' });

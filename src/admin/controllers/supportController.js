@@ -101,7 +101,7 @@ export const getSupportTickets = async (req, res) => {
 
 export const getSupportTicket = async (req, res) => {
   try {
-    const ticket = await SupportTicket.findByIdAndUpdate(req.params.id, { unreadByAdmin: false }, { new: true }).populate("userId", "fullName email phone");
+    const ticket = await SupportTicket.findByIdAndUpdate(req.params.id, { unreadByAdmin: false }, { returnDocument: 'after' }).populate("userId", "fullName email phone");
     if (!ticket) return res.status(404).json({ success: false, message: "Ticket not found" });
     res.json({ success: true, data: ticket });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -115,7 +115,7 @@ export const updateSupportTicket = async (req, res) => {
       update.resolvedAt = update.status === "RESOLVED" ? new Date() : null;
     }
     if (req.body.priority) update.priority = req.body.priority.toUpperCase();
-    const ticket = await SupportTicket.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true });
+    const ticket = await SupportTicket.findByIdAndUpdate(req.params.id, update, { returnDocument: 'after', runValidators: true });
     if (!ticket) return res.status(404).json({ success: false, message: "Ticket not found" });
     res.json({ success: true, data: ticket });
   } catch (err) { res.status(400).json({ success: false, message: err.message }); }

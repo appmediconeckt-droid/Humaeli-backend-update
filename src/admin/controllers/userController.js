@@ -51,7 +51,7 @@ export const getUserById = async (req, res) => {
 
 export const updateUser = async (req, res) => {
   try {
-    const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const user = await User.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }

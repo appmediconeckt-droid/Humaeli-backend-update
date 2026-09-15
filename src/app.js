@@ -287,7 +287,6 @@ import aiRoutes from "./routes/aiRoutes.js";
 import aiRealtimeRoute from "./routes/aiRealtimeRoute.js"
 import { expirePendingPaidChatRequests } from "./services/paidSessionService.js";
 import { getEmailDeliveryDiagnostics } from "./services/otpService.js";
-import { startGreetingNotificationJob } from "./services/greetingNotificationService.js";
 import { apiFreshness } from "./middleware/apiFreshness.js";
 import adminAuthRoutes from "./admin/routes/simpleAuthRoutes.js";
 import adminUserRoutes from "./admin/routes/userRoutes.js";
@@ -572,8 +571,6 @@ export const startDatabaseJobs = createDatabaseStartup(mongoose.connection, asyn
   expirePendingPaidChatRequests().catch((error) => {
     console.error("Initial paid chat expiry cleanup failed:", error.message);
   });
-
-  startGreetingNotificationJob();
 });
 
 // ---------------------------

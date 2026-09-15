@@ -82,7 +82,7 @@ export const creditCapturedWalletPayment = async ({
         metadata,
       },
     },
-    { new: true },
+    { returnDocument: 'after' },
   );
 
   const user = await User.findById(transaction.userId).select("walletBalance");

@@ -245,7 +245,7 @@ export const uploadPatientPhoto = async (req, res) => {
         "identityVerification.reviewedAt": null,
         "identityVerification.rejectionReason": "",
       } },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     );
     if (!record) return res.status(404).json({ success: false, error: "Prescription not found" });
     return res.json({ success: true, hasPatientPhoto: true });

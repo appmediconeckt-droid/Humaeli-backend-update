@@ -652,7 +652,7 @@ export const chargeCallByDuration = async ({
         payoutStatus: "pending",
       },
     },
-    { upsert: true, new: true },
+    { upsert: true, returnDocument: 'after' },
   );
   await User.findByIdAndUpdate(counselorId, {
     $inc: { walletBalance: earning, totalSessions: 1 },

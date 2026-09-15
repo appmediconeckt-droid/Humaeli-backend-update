@@ -58,7 +58,7 @@ export const getCounselorById = async (req, res) => {
 
 export const updateCounselor = async (req, res) => {
   try {
-    const counselor = await User.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const counselor = await User.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
     if (!counselor) {
       return res.status(404).json({ success: false, message: "Counselor not found" });
     }

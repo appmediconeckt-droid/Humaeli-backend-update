@@ -399,7 +399,7 @@ export const refundCallDisputeExcess = async (req, res) => {
           details: "Excess call billing refund and counselor earning reversal",
         },
       },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: 'after' },
     );
 
     const [user, counselor] = await Promise.all([

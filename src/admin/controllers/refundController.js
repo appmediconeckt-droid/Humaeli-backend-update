@@ -73,7 +73,7 @@ export const approveRefundRequest = async (req, res) => {
   const tx = await Transaction.findOneAndUpdate(
     { _id: req.params.id, ...baseFilter, 'metadata.refundStatus': 'pending' },
     { $set: { status: 'hold', 'metadata.refundStatus': 'approved', 'metadata.approvedAt': new Date(), 'metadata.adminNotes': String(req.body.notes || '').trim(), 'metadata.approvedBy': req.user?.email } },
-    { new: true }
+    { returnDocument: 'after' }
   ).populate('userId', 'fullName email phone phoneNumber');
   if (!tx) return res.status(409).json({ success: false, message: 'Only pending refund requests can be approved' });
   await audit(req, tx, 'Wallet refund approved');
@@ -87,7 +87,7 @@ export const markRefundPaid = async (req, res) => {
   const tx = await Transaction.findOneAndUpdate(
     { _id: req.params.id, ...baseFilter, 'metadata.refundStatus': { $in: ['approved', 'processing'] } },
     { $set: { status: 'completed', 'metadata.refundStatus': 'paid', 'metadata.paidAt': new Date(), 'metadata.transactionReference': reference, 'metadata.processedBy': req.user?.email } },
-    { new: true }
+    { returnDocument: 'after' }
   ).populate('userId', 'fullName email phone phoneNumber');
   if (!tx) return res.status(409).json({ success: false, message: 'Only approved refunds can be marked paid' });
   await User.updateOne({ _id: tx.userId._id }, { $set: { activeWalletRefundRequest: false } });
@@ -102,7 +102,7 @@ export const rejectRefundRequest = async (req, res) => {
   const tx = await Transaction.findOneAndUpdate(
     { _id: req.params.id, ...baseFilter, 'metadata.refundStatus': { $in: ['pending', 'approved', 'processing'] } },
     { $set: { status: 'refunded', 'metadata.refundStatus': 'rejected', 'metadata.rejectedAt': new Date(), 'metadata.failureReason': reason, 'metadata.rejectedBy': req.user?.email } },
-    { new: true }
+    { returnDocument: 'after' }
   ).populate('userId', 'fullName email phone phoneNumber');
   if (!tx) return res.status(409).json({ success: false, message: 'This refund request is already finalized' });
   await User.updateOne(

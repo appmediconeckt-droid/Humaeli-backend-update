@@ -59,7 +59,7 @@ suite('MySQL storage integration', function () {
     assert.equal((await Account.findById(account._id)).balance, 1);
   });
   it('supports upserts, return metadata, arrays, positional updates and pipeline updates', async () => {
-    const first = await Account.findOneAndUpdate({ email: 'upsert' }, { $set: { balance: 4 }, $setOnInsert: { phone: '1' } }, { upsert: true, new: true, includeResultMetadata: true });
+    const first = await Account.findOneAndUpdate({ email: 'upsert' }, { $set: { balance: 4 }, $setOnInsert: { phone: '1' } }, { upsert: true, returnDocument: 'after', includeResultMetadata: true });
     assert.equal(first.value.balance, 4); assert.equal(first.lastErrorObject.updatedExisting, false);
     await Account.updateOne({ email: 'upsert' }, { $setOnInsert: { phone: '2' }, $push: { items: { name: 'x', value: 1 } }, $addToSet: { tags: 'hello' } }, { upsert: true });
     await Account.updateOne({ email: 'upsert', 'items.name': 'x' }, { $inc: { 'items.$.value': 2 } });

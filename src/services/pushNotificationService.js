@@ -25,6 +25,9 @@ export const sendPushNotification = async ({
     if (!token) {
       throw new Error('FCM token is required');
     }
+    if (!messaging) {
+      throw new Error('Firebase push notifications are not configured. Set FIREBASE_SERVICE_ACCOUNT in the server environment.');
+    }
 
     const safeData = {};
 

@@ -6,7 +6,7 @@ import { notifyCounselorSubscribersOnline } from "./counselorOnlineNotificationS
 export const markUserOnlineAndNotify = async (userId) => {
   const previous = await User.findByIdAndUpdate(userId, {
     $set: { isOnline: true, lastSeen: null },
-  }, { new: false });
+  }, { returnDocument: 'before' });
 
   if (previous && !previous.isOnline &&
       ["counsellor", "counselor"].includes(previous.role)) {

@@ -61,7 +61,7 @@ describe('counselor online bell notifications', () => {
     update.onThirdCall().resolves({ isOnline: true, role: 'counsellor' });
     await Promise.all([1, 2, 3].map(() => markUserOnlineAndNotify('counselor')));
     expect(subscriptions.calledOnce).to.equal(true);
-    expect(update.firstCall.args[2]).to.deep.equal({ new: false });
+    expect(update.firstCall.args[2]).to.deep.equal({ returnDocument: 'before' });
   });
 
   it('does not send after bell is switched off', async () => {

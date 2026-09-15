@@ -429,7 +429,7 @@ export const setNotificationRuleStatus = async (req, res) => {
     const notificationRule = await NotificationRule.findByIdAndUpdate(
       req.params.id,
       { status: nextStatus, updatedBy: getAdminAudit(req) },
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     if (!notificationRule) return res.status(404).json({ success: false, message: "Notification rule not found" });

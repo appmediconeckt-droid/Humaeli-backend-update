@@ -45,7 +45,7 @@ const updateWithdrawal = async (syntheticId, status, extra = {}) => {
   const transaction = await Transaction.findByIdAndUpdate(
     id,
     { status: payoutStatusToTransactionStatus(status), ...extra },
-    { new: true }
+    { returnDocument: 'after' }
   ).populate("userId", "fullName email");
   return transaction ? normalizeWithdrawal(transaction) : null;
 };
@@ -276,7 +276,7 @@ export const updatePayoutBankDetails = async (req, res) => {
         bankDetails,
         paymentMethod
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!payout) {
@@ -315,7 +315,7 @@ export const approvePayout = async (req, res) => {
             "metadata.approvalNotes": notes || ""
           }
         },
-        { new: true }
+        { returnDocument: 'after' }
       ).populate("userId", "fullName email");
       if (!transaction) return res.status(409).json({ success: false, error: "Only pending withdrawals can be approved" });
       await createCounselorNotification({
@@ -336,7 +336,7 @@ export const approvePayout = async (req, res) => {
         approvedAt: new Date(),
         notes
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!payout) {
@@ -379,7 +379,7 @@ export const processPayout = async (req, res) => {
             "metadata.processedBy": adminId
           }
         },
-        { new: true }
+        { returnDocument: 'after' }
       ).populate("userId", "fullName email");
       if (!transaction) return res.status(409).json({ success: false, error: "Only approved withdrawals can be marked paid" });
       await createCounselorNotification({
@@ -447,7 +447,7 @@ export const rejectPayout = async (req, res) => {
             "metadata.refundedAt": rejectedAt
           }
         },
-        { new: true }
+        { returnDocument: 'after' }
       ).populate("userId", "fullName email");
       if (!transaction) return res.status(409).json({ success: false, error: "Only pending or approved withdrawals can be rejected" });
       await User.findByIdAndUpdate(transaction.userId?._id || transaction.userId, { $inc: { walletBalance: transaction.amount } });
@@ -467,7 +467,7 @@ export const rejectPayout = async (req, res) => {
         status: "CANCELLED",
         failureReason
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!payout) {
