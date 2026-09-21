@@ -34,12 +34,23 @@ import {
   debugCounsellorByEmail,
   sessionHeartbeat,
   getLandingStats,
+  register,
+  login,
+  getUsers,
+  getUserById,
+  updateUser,
+  getProfileById,
+  updateProfileById,
+  getDoctorQRById,
+  verifyPassword,
+  recordDoctorQrScan,
+  getDoctorQrStats,
 } from "../controllers/authController.js";
 import { body } from "express-validator";
 import { authorizeRoles } from "../middleware/authorizeRoles.js";
 import { verifyOtp } from "../middleware/verifyOtp.js";
 // refreshToken middleware import removed — route uses refreshAccessTokenHandler from authController
-import { authMiddleware } from "../middleware/authMiddleware.js";
+import { authMiddleware, requireOwnUser } from "../middleware/authMiddleware.js";
 import { generateOtp } from "../utils/generateOtp.js";
 import { resendOtp } from "../utils/resendOtp.js";
 import {
@@ -57,7 +68,8 @@ authRoutes.post("/verify-phone-otp", verifyPhoneOTP);
 authRoutes.post("/complete-registration",uploadProfilePhoto,completeRegistration,);
 
 // AUTHENTICATION ROUTES
-authRoutes.post("/login", loginUser);
+authRoutes.post("/register", register);
+authRoutes.post("/login", login);
 // Google OAuth (signup + login in one endpoint — handles both new and existing users)
 authRoutes.post("/google", googleAuth);
 authRoutes.post("/google/relink", authMiddleware, relinkGoogleAccount);
@@ -100,10 +112,45 @@ authRoutes.get("/debug/counsellor", debugCounsellorByEmail);
 authRoutes.get(
   "/me",
   authMiddleware,
-  authorizeRoles("user", "counsellor"), // both allowed
+  authorizeRoles(
+    "user",
+    "counsellor",
+    "doctor",
+    "nurse",
+    "assistant",
+    "lab_technician",
+    "housekeeping",
+    "supervisor",
+    "department_manager",
+    "billing",
+  ),
   getMyProfile,
 );
 authRoutes.get("/getUser/:userId", getUser);
+
+// Compatibility user-controller routes. Patient is represented internally as
+// role `user`; doctor keeps the dedicated `doctor` role.
+authRoutes.get(
+  "/users",
+  authMiddleware,
+  authorizeRoles("doctor", "user", "counsellor", "admin"),
+  getUsers,
+);
+authRoutes.get("/doctor-qr/:id", getDoctorQRById);
+authRoutes.post("/doctor-qr/:id/scan", recordDoctorQrScan);
+authRoutes.get("/doctor-qr/:id/stats", getDoctorQrStats);
+authRoutes.get("/doctor-profile/:id", getProfileById);
+authRoutes.put(
+  "/doctor-profile/:id",
+  authMiddleware,
+  authorizeRoles("doctor"),
+  handleUserUpload,
+  updateProfileById,
+);
+authRoutes.get("/user/:id", authMiddleware, requireOwnUser, getUserById);
+authRoutes.patch("/user/:id", authMiddleware, requireOwnUser, updateUser);
+authRoutes.delete("/user/:id", authMiddleware, requireOwnUser, deleteUser);
+authRoutes.post("/verify-password", authMiddleware, verifyPassword);
 
 authRoutes.get(
   "/getAllUser",
@@ -116,6 +163,12 @@ authRoutes.get(
 authRoutes.patch(
   "/update/:userId",
   authMiddleware,
+  (req, res, next) => {
+    if (String(req.userId || req.user?._id) !== String(req.params.userId)) {
+      return res.status(403).json({ success: false, message: "You can only update your own profile" });
+    }
+    next();
+  },
   handleUserUpload,
   updateUserById,
 );

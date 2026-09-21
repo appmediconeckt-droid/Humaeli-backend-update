@@ -3,8 +3,16 @@ import sinon from 'sinon';
 import mysql from 'mysql2/promise';
 import storage, { connectMySQL } from '../src/persistence/mongoose.js';
 import { mysqlConfig } from '../src/persistence/mysqlDriver.js';
+import { fromRow, toRow } from '../src/persistence/columns.js';
 
 describe('MySQL model connection', () => {
+  it('keeps scalar JSON encoded for the storage decoder', () => {
+    assert.equal(mysqlConfig({}).jsonStrings, true);
+    const fields = [{ path: 'permanentAddress', column: 'permanentAddress', kind: 'json' }];
+    for (const value of ['Test street Indore', '', '123', 'null', '{"city":"Delhi"}', { city: 'Delhi' }]) {
+      assert.deepEqual(fromRow(toRow({ permanentAddress: value }, fields), fields), { permanentAddress: value });
+    }
+  });
   afterEach(async () => {
     await storage.disconnect();
     sinon.restore();

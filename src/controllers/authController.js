@@ -25,6 +25,10 @@ import { cleanupAccountData } from "../services/accountCleanupService.js";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 import { getStrongPasswordError } from "../utils/passwordPolicy.js";
+import { generateDoctorQrCode } from "../services/doctorQrService.js";
+import { recordDoctorAnalyticsEvent, getDoctorQuickStats } from '../services/doctorAnalyticsService.js';
+import { staffRoles } from '../utils/clinicAccess.js';
+import Appointment from '../models/appointmentModel.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -266,9 +270,51 @@ const hasCertification = (value) =>
   value.some((cert) =>
     hasText(cert?.name) && (hasText(cert?.documentUrl) || hasText(cert?.documentPublicId)),
   );
+const hasCompleteAddress = (value) => Boolean(hasText(value) || (
+  value && typeof value === "object" &&
+  ["line1", "city", "state", "pincode", "country"].every(key => hasText(value[key]))
+));
+const doctorProfileFields = (body) => {
+  const fields = {};
+  for (const [key, aliases] of Object.entries({
+    aadhaarNumber: ["aadhaarNumber", "aadharNumber", "adharNumber", "aadhaar", "aadhar", "adhar"],
+    panNumber: ["panNumber", "pan"],
+    permanentAddress: ["permanentAddress"],
+    aboutMe: ["aboutMe", "about"],
+  })) {
+    const alias = aliases.find(name => body[name] !== undefined);
+    if (!alias) continue;
+    let value = body[alias];
+    if (key === "permanentAddress") {
+      if (typeof value === "string") {
+        value = value.trim();
+        if (value.startsWith("{")) {
+          try { value = JSON.parse(value); } catch { throw new Error("permanentAddress must be a valid JSON object or address text"); }
+        }
+      }
+      if (typeof value !== "string" && (!value || typeof value !== "object" || Array.isArray(value))) throw new Error("Invalid permanentAddress");
+    } else {
+      if (typeof value !== "string") throw new Error(`${key} must be a string`);
+      value = value.trim();
+      if (key === "aadhaarNumber") value = value.replace(/[ -]/g, "");
+      if (key === "panNumber") value = value.toUpperCase();
+      if (value && key === "aadhaarNumber" && !/^\d{12}$/.test(value)) throw new Error("aadhaarNumber must contain 12 digits");
+      if (value && key === "panNumber" && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(value)) throw new Error("Invalid panNumber format");
+    }
+    fields[key] = value;
+  }
+  return fields;
+};
+const privateDoctorProfile = (user) => ({
+  aadhaarNumber: user.aadhaarNumber || "",
+  panNumber: user.panNumber || "",
+  permanentAddress: user.permanentAddress || "",
+  about: user.aboutMe || "",
+});
 const isCounsellorProfileComplete = (data) => {
   const dob = getAgeFromDateOfBirth(data?.dateOfBirth);
   const address = data?.address || {};
+  const doctor = data?.role === "doctor";
   return (
     hasText(data?.fullName) &&
     hasText(data?.email) &&
@@ -278,16 +324,12 @@ const isCounsellorProfileComplete = (data) => {
     dob.age !== null &&
     hasText(data?.gender) &&
     hasArrayItems(data?.specialization) &&
-    Number(data?.experience) > 0 &&
+    (doctor ? (data?.experience !== null && data?.experience !== undefined && data?.experience !== "" && Number.isFinite(Number(data.experience)) && Number(data.experience) >= 0) : Number(data?.experience) > 0) &&
     (hasText(data?.qualification) || hasText(data?.education)) &&
     hasText(data?.aboutMe) &&
     hasArrayItems(data?.languages) &&
     hasArrayItems(data?.consultationMode) &&
-    hasText(address.line1) &&
-    hasText(address.city) &&
-    hasText(address.state) &&
-    hasText(address.pincode) &&
-    hasText(address.country) &&
+    (doctor ? (hasCompleteAddress(data.permanentAddress) && /^\d{12}$/.test(data.aadhaarNumber || "") && /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(data.panNumber || "")) : hasCompleteAddress(address)) &&
     hasCertification(data?.certifications)
   );
 };
@@ -436,6 +478,13 @@ setInterval(
 
 export const updateUserById = async (req, res) => {
   try {
+    if (req.body?.gender !== undefined) {
+      const gender = typeof req.body.gender === 'string' ? req.body.gender.trim().toLowerCase() : '';
+      if (!['male', 'female', 'other'].includes(gender)) {
+        return res.status(400).json({ success: false, message: 'Gender must be male, female, or other', field: 'gender' });
+      }
+      req.body.gender = gender;
+    }
     const { userId } = req.params;
 
     // Removed verbose console logs for production
@@ -553,7 +602,7 @@ export const updateUserById = async (req, res) => {
       updates.profilePhoto = null;
     }
 
-    if (currentUser.role === "counsellor") {
+    if (["counsellor", "doctor"].includes(currentUser.role)) {
       const prescriptionAssetFields = [
         ["prescriptionSignature", "prescriptionSignatureUrl"],
         ["prescriptionSeal", "prescriptionSealUrl"],
@@ -936,7 +985,7 @@ export const updateUserById = async (req, res) => {
         (field) => field.includes("certifications") || field === "certificationDocuments",
       );
 
-    if (currentUser.role === "counsellor" && hasCertificationPayload) {
+    if (["counsellor", "doctor"].includes(currentUser.role) && hasCertificationPayload) {
       const existingCertificationIds = new Set(
         (currentUser.certifications || [])
           .map((cert) => cert?._id?.toString())
@@ -1148,7 +1197,7 @@ export const updateUserById = async (req, res) => {
     }
 
     // 7. Handle counsellor-specific fields
-    if (currentUser.role === "counsellor") {
+    if (["counsellor", "doctor"].includes(currentUser.role)) {
       const counsellorFields = [
         "qualification",
         "specialization",
@@ -1184,8 +1233,13 @@ export const updateUserById = async (req, res) => {
       });
     }
 
-    // 8a. Auto-set profileCompleted for counsellors when required fields are present
-    if (currentUser.role === "counsellor") {
+    if (currentUser.role === "doctor") {
+      try { Object.assign(updates, doctorProfileFields(req.body)); }
+      catch (error) { return res.status(400).json({ success: false, message: error.message }); }
+    }
+
+    // Recompute professional completion from saved fields and this update.
+    if (["counsellor", "doctor"].includes(currentUser.role)) {
       updates.profileCompleted = isCounsellorProfileComplete({
         ...currentUser.toObject(),
         ...updates,
@@ -1253,6 +1307,8 @@ export const updateUserById = async (req, res) => {
       age: updatedAgeFromDateOfBirth.age ?? updatedUser.age,
       gender: updatedUser.gender,
       role: updatedUser.role,
+      accountType: updatedUser.accountType ?? null,
+      doctorQrCode: updatedUser.accountType === "doctor" ? updatedUser.doctorQrCode ?? null : null,
       profilePhoto: updatedUser.profilePhoto,
       isActive: updatedUser.isActive,
       profileCompleted: updatedUser.profileCompleted,
@@ -1268,8 +1324,10 @@ export const updateUserById = async (req, res) => {
       insuranceInfo: updatedUser.insuranceInfo,
     };
 
+    if (updatedUser.role === "doctor") Object.assign(formattedUser, privateDoctorProfile(updatedUser));
+
     // Add counsellor fields if applicable
-    if (updatedUser.role === "counsellor") {
+    if (["counsellor", "doctor"].includes(updatedUser.role)) {
       Object.assign(formattedUser, {
         qualification: updatedUser.qualification,
         specialization: updatedUser.specialization,
@@ -1346,6 +1404,12 @@ export const updateUserById = async (req, res) => {
       });
     }
 
+    if (error?.name === 'ValidationError' || error?.name === 'CastError') {
+      return res.status(400).json({
+        success: false, message: 'Invalid profile details',
+        fields: error.errors ? Object.keys(error.errors) : [error.path].filter(Boolean),
+      });
+    }
     return res.status(500).json({
       message: "Error updating user",
       success: false,
@@ -1892,7 +1956,72 @@ export const completeRegistration = async (req, res) => {
       medicalInfo,
       insuranceInfo,
       emailVerificationToken,
+      staff_id,
+      nursing_license,
+      shift,
+      shift_time,
+      shift_start_time,
+      shift_end_time,
+      assigned_ward,
+      years_of_experience,
+      qualifications,
+      assistant_id,
+      department,
+      supervisor,
+      technician_id,
+      lab_type,
+      certifications,
+      housekeeping_staff_id,
+      assigned_area,
+      housekeeping_supervisor,
+      supervisor_id,
+      team_size,
+      responsibilities,
+      manager_id,
+      employees_under,
+      budget_responsibility: budgetResponsibility,
+      billing_id,
+      software_expertise: softwareExpertise,
     } = req.body;
+
+    const professionalTypes = ["doctor", "consultant"];
+    const staffTypes = [
+      "nurse",
+      "assistant",
+      "lab_technician",
+      "housekeeping",
+      "supervisor",
+      "department_manager",
+      "billing",
+    ];
+    const requestedRole = String(req.body.role ?? "").trim().toLowerCase();
+    const accountTypes = [req.body.accountType, req.body.accountRole]
+      .map(value => String(value ?? "").trim().toLowerCase())
+      .filter(Boolean);
+    if (professionalTypes.includes(requestedRole)) accountTypes.push(requestedRole);
+    if (staffTypes.includes(requestedRole) && accountTypes.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Staff roles cannot be combined with Doctor or Consultant accountType",
+        field: "role",
+      });
+    }
+    if (accountTypes.some(value => !professionalTypes.includes(value))) {
+      return res.status(400).json({
+        success: false,
+        message: "Account type must be Doctor or Consultant",
+        field: "accountType",
+      });
+    }
+    if (new Set(accountTypes).size > 1) {
+      return res.status(400).json({
+        success: false,
+        message: "Account type fields must agree: Doctor or Consultant",
+        field: "accountType",
+      });
+    }
+    const accountType = accountTypes[0] || "";
+    const requestedStaffRole = staffTypes.includes(requestedRole) ? requestedRole : "";
 
     const normalizedEmail = String(email || "").trim().toLowerCase();
     if (!fullName || !normalizedEmail || !phoneNumber || !password) {
@@ -2009,10 +2138,15 @@ export const completeRegistration = async (req, res) => {
       });
     }
 
-    // Auto-detect role based on counsellor fields
+    // Keep the authorization role distinct so the client can select the correct dashboard.
     const hasCounsellorFields =
       qualification && specialization && experience;
-    const role = hasCounsellorFields ? "counsellor" : "user";
+    const role = requestedStaffRole
+      || (accountType === "doctor"
+      ? "doctor"
+      : (accountType === "consultant" || normalizeRole(requestedRole) === 'counsellor' || hasCounsellorFields)
+        ? "counsellor"
+        : "user");
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const dob = getAgeFromDateOfBirth(dateOfBirth);
@@ -2036,7 +2170,8 @@ export const completeRegistration = async (req, res) => {
       age: Number.isFinite(derivedAge) ? derivedAge : null,
       gender: gender || "male",
       role,
-      profileCompleted: role !== "counsellor",
+      profileCompleted: !["counsellor", "doctor"].includes(role),
+      ...(accountType ? { accountType } : {}),
       isEmailVerified: true,
       isPhoneVerified: false,
       isActive: true,
@@ -2080,6 +2215,36 @@ export const completeRegistration = async (req, res) => {
         relationship: "",
         insuranceType: "",
       },
+      ...(requestedStaffRole ? {
+        staffId: staff_id,
+        nursingLicense: nursing_license,
+        shift,
+        shiftTime: shift_time,
+        shiftStartTime: shift_start_time,
+        shiftEndTime: shift_end_time,
+        assignedWard: assigned_ward,
+        yearsOfExperience: years_of_experience !== undefined && years_of_experience !== ""
+          ? Number(years_of_experience)
+          : undefined,
+        qualifications,
+        assistantId: assistant_id,
+        department,
+        supervisor,
+        technicianId: technician_id,
+        labType: lab_type,
+        staffCertifications: typeof certifications === 'string' ? certifications : JSON.stringify(certifications || []),
+        housekeepingStaffId: housekeeping_staff_id,
+        assignedArea: assigned_area,
+        housekeepingSupervisor: housekeeping_supervisor,
+        supervisorId: supervisor_id,
+        teamSize: team_size !== undefined && team_size !== "" ? Number(team_size) : undefined,
+        responsibilities,
+        managerId: manager_id,
+        employeesUnder: employees_under !== undefined && employees_under !== "" ? Number(employees_under) : undefined,
+        budgetResponsibility,
+        billingId: billing_id,
+        softwareExpertise,
+      } : {}),
     };
 
     // Profile photo handling.
@@ -2103,8 +2268,8 @@ export const completeRegistration = async (req, res) => {
       );
     }
 
-    // Add counsellor-specific fields ONLY if role is counsellor
-    if (role === "counsellor") {
+    // Add professional fields for both counsellors and doctors.
+    if (["counsellor", "doctor"].includes(role)) {
       userData.qualification = qualification;
       userData.specialization =
         typeof specialization === "string"
@@ -2121,9 +2286,18 @@ export const completeRegistration = async (req, res) => {
           ? languages.split(",").map((l) => l.trim())
           : languages || [];
       userData.aboutMe = aboutMe || "";
+      if (role === "doctor") {
+        try { Object.assign(userData, doctorProfileFields(req.body)); }
+        catch (error) { return res.status(400).json({ success: false, message: error.message }); }
+      }
       userData.profileCompleted = isCounsellorProfileComplete(userData);
     }
 
+    // Generate before inserting so a QR failure cannot leave a partial account.
+    if (accountType === "doctor") {
+      userData._id = new mongoose.Types.ObjectId();
+      userData.doctorQrCode = await generateDoctorQrCode(userData);
+    }
     const newUser = await User.create(userData);
 
     // Clean up verification data
@@ -2156,15 +2330,23 @@ export const completeRegistration = async (req, res) => {
     }
 
     // Rollback: Delete uploaded photo from Cloudinary if registration fails
-    if (req.file && profilePhotoData && profilePhotoData.publicId) {
+    if (req.file?.filename) {
       try {
-        await deleteFromCloudinary(profilePhotoData.publicId);
+        await deleteFromCloudinary(req.file.filename);
         console.log(
-          `Rollback: Deleted uploaded photo ${profilePhotoData.publicId}`,
+          `Rollback: Deleted uploaded photo ${req.file.filename}`,
         );
       } catch (deleteError) {
         console.error("Error rolling back photo upload:", deleteError);
       }
+    }
+
+    if (error?.name === "ValidationError") {
+      return res.status(400).json({
+        message: "Invalid registration details",
+        success: false,
+        fields: Object.keys(error.errors || {}),
+      });
     }
 
     return res.status(500).json({
@@ -2203,11 +2385,11 @@ export const loginUser = async (req, res) => {
   try {
     const email = normalizeEmail(req.body?.email);
     const { password } = req.body;
-    const role = normalizeRole(req.body?.role);
+    const role = normalizeRole(req.body?.role ?? "");
 
-    if (!email || !password || !role) {
+    if (!email || !password) {
       return res.status(400).json({
-        message: "Email, password and role are required",
+        message: "Email and password are required",
         success: false,
       });
     }
@@ -2221,7 +2403,7 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    if (normalizeRole(user.role) !== role) {
+    if (role && normalizeRole(user.role) !== role) {
       return res.status(403).json({
         message:
           normalizeRole(user.role) === "counsellor"
@@ -3274,21 +3456,19 @@ export const getMySessions = async (req, res) => {
 };
 
 // ================= GET ALL COUNSELLORS =================
+// Completion is validated when professional profiles are saved. Keep directory
+// eligibility identical for list/detail without a second, conflicting field check.
+const professionalDirectoryFilter = () => ({
+  role: { $in: ["counsellor", "doctor"] },
+  isActive: true,
+  profileCompleted: true,
+});
+
 export const getAllCounsellors = async (req, res) => {
   try {
     const { specialization, location, consultationMode, minExperience } =
       req.query;
-    let filter = {
-      role: "counsellor",
-      isActive: true,
-      profileCompleted: true,
-      "specialization.0": { $exists: true },
-      experience: { $gt: 0 },
-      $or: [
-        { qualification: { $nin: ["", null] } },
-        { education: { $nin: ["", null] } },
-      ],
-    };
+    const filter = professionalDirectoryFilter();
 
     if (specialization) filter.specialization = { $in: [specialization] };
     if (location) filter.location = { $regex: location, $options: "i" };
@@ -3296,7 +3476,7 @@ export const getAllCounsellors = async (req, res) => {
     if (minExperience) filter.experience = { $gte: Number(minExperience) };
 
     const counsellors = await User.find(filter)
-      .select("-password")
+      .select("-password -aadhaarNumber -panNumber -permanentAddress")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -3305,7 +3485,7 @@ export const getAllCounsellors = async (req, res) => {
       {
         $match: {
           senderId: { $in: counsellorIds },
-          senderRole: "counsellor",
+          senderRole: { $in: ["counsellor", "doctor"] },
         },
       },
       {
@@ -3378,16 +3558,8 @@ export const getCounsellorById = async (req, res) => {
   try {
     const { counsellorId } = req.params;
     const counsellor = await User.findOne({
+      ...professionalDirectoryFilter(),
       _id: counsellorId,
-      role: "counsellor",
-      isActive: true,
-      profileCompleted: true,
-      "specialization.0": { $exists: true },
-      experience: { $gt: 0 },
-      $or: [
-        { qualification: { $nin: ["", null] } },
-        { education: { $nin: ["", null] } },
-      ],
     });
 
     if (!counsellor) {
@@ -3440,6 +3612,21 @@ export const getMyProfile = async (req, res) => {
       age: ageFromDateOfBirth.age ?? user.age,
       gender: user.gender,
       role: user.role,
+      assignedDoctor: user.assignedDoctor ?? null,
+      ...(staffRoles.includes(user.role) ? {
+        staffId: user.staffId, nursingLicense: user.nursingLicense, shift: user.shift,
+        shiftTime: user.shiftTime, shiftStartTime: user.shiftStartTime, shiftEndTime: user.shiftEndTime,
+        assignedWard: user.assignedWard, department: user.department, supervisor: user.supervisor,
+        qualifications: user.qualifications, yearsOfExperience: user.yearsOfExperience,
+        assistantId: user.assistantId, technicianId: user.technicianId, labType: user.labType,
+        staffCertifications: user.staffCertifications, housekeepingStaffId: user.housekeepingStaffId,
+        assignedArea: user.assignedArea, housekeepingSupervisor: user.housekeepingSupervisor,
+        supervisorId: user.supervisorId, teamSize: user.teamSize, responsibilities: user.responsibilities,
+        managerId: user.managerId, employeesUnder: user.employeesUnder,
+        budgetResponsibility: user.budgetResponsibility, billingId: user.billingId, softwareExpertise: user.softwareExpertise,
+      } : {}),
+      accountType: user.accountType ?? null,
+      doctorQrCode: user.accountType === "doctor" ? user.doctorQrCode ?? null : null,
       profilePhoto: user.profilePhoto,
       isActive: user.isActive,
       profileCompleted: user.profileCompleted,
@@ -3485,8 +3672,10 @@ export const getMyProfile = async (req, res) => {
       },
     };
 
+    if (user.role === "doctor") Object.assign(formattedProfile, privateDoctorProfile(user));
+
     // Add counsellor-specific fields if user is counsellor
-    if (user.role === "counsellor") {
+    if (["counsellor", "doctor"].includes(user.role)) {
       formattedProfile.qualification = user.qualification;
       formattedProfile.specialization = user.specialization;
       formattedProfile.experience = user.experience;
@@ -3772,7 +3961,8 @@ export const verifyPasswordOtp = async (req, res) => {
 export const changePassword = async (req, res) => {
   try {
     const user = req.user;
-    const { oldPassword, newPassword } = req.body;
+    const oldPassword = req.body?.oldPassword ?? req.body?.current_password;
+    const newPassword = req.body?.newPassword ?? req.body?.new_password;
 
     if (!user) {
       return res.status(401).json({ success: false, message: "Authentication required" });
@@ -4405,4 +4595,100 @@ export const consumeVerifiedProfileChange = (userId, field, attemptedValue) => {
   }
   verifiedProfileChanges.delete(key);
   return { ok: true };
+};
+
+// Compatibility handlers for the older user-controller API. They use the
+// current Mongoose user/session models instead of the retired SQL schema.
+export const register = async (req, res) => {
+  const body = req.body || {};
+  const role = String(body.role || '').trim().toLowerCase();
+  req.body = {
+    ...body,
+    fullName: body.fullName ?? body.full_name ?? body.name,
+    phoneNumber: body.phoneNumber ?? body.contact_number ?? body.phone,
+    accountType: role === 'doctor' ? 'doctor' : body.accountType,
+  };
+  return completeRegistration(req, res);
+};
+
+export const login = async (req, res) => {
+  const body = req.body || {};
+  const role = String(body.role || '').trim().toLowerCase();
+  req.body = { ...body, role: role === 'patient' ? 'user' : role };
+  return loginUser(req, res);
+};
+
+export const getUsers = async (req, res) => {
+  try {
+    const requestedRole = String(req.query.role || '').trim().toLowerCase();
+    const role = requestedRole === 'patient' ? 'user' : requestedRole;
+    let filter = { role: { $in: ['doctor', 'counsellor'] }, isActive: true, profileCompleted: true };
+    if (req.user.role === 'admin') filter = role ? { role } : {};
+    else if (role === 'user') {
+      if (req.user.role === 'user') filter = { _id: req.userId || req.user._id };
+      else {
+        const appointments = await Appointment.find({ counselor: req.userId || req.user._id }).select('patient').lean();
+        filter = { _id: { $in: appointments.map(row => row.patient) } };
+      }
+    } else if (['doctor', 'counsellor'].includes(role)) filter.role = role;
+    const users = await User.find(filter).select('fullName role accountType profilePhoto qualification specialization experience location aboutMe profileCompleted').lean();
+    return res.json({ success: true, count: users.length, data: users, users });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const getUserById = async (req, res) => {
+  return getUser({ ...req, params: { ...req.params, userId: req.params.id } }, res);
+};
+
+export const updateUser = async (req, res) => {
+  req.params.userId = req.params.id;
+  return updateUserById(req, res);
+};
+
+export const updateProfileById = async (req, res) => {
+  if (String(req.userId || req.user?._id) !== String(req.params.id)) {
+    return res.status(403).json({ success: false, message: 'You can only update your own profile' });
+  }
+  req.params.userId = req.params.id;
+  return updateUserById(req, res);
+};
+
+export const getProfileById = async (req, res) => {
+  const user = await User.findOne({ _id: req.params.id, role: 'doctor', isActive: true, profileCompleted: true }).select('fullName role qualification specialization experience location aboutMe profilePhoto doctorQrCode').lean();
+  if (!user) return res.status(404).json({ success: false, message: 'User profile not found' });
+  await recordDoctorAnalyticsEvent({ doctorId: user._id, eventType: 'profile_view', source: req.query.source });
+  return res.json({ success: true, data: user, user });
+};
+
+export const getDoctorQRById = async (req, res) => {
+  const doctor = await User.findOne({ _id: req.params.id, role: 'doctor' }).select('fullName email role qualification specialization doctorQrCode').lean();
+  if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
+  return res.json({ success: true, message: 'Doctor QR fetched successfully', data: doctor });
+};
+
+export const recordDoctorQrScan = async (req, res) => {
+  await recordDoctorAnalyticsEvent({ doctorId: req.params.id, eventType: 'qr_scan', source: req.body?.source });
+  return res.status(201).json({ success: true, message: 'QR scan recorded successfully' });
+};
+
+export const getDoctorQrStats = async (req, res) => {
+  const doctor = await User.findOne({ _id: req.params.id, role: 'doctor' }).select('_id fullName doctorQrCode').lean();
+  if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
+  return res.json({ success: true, data: { doctorId: doctor._id, fullName: doctor.fullName, hasQrCode: Boolean(doctor.doctorQrCode), ...await getDoctorQuickStats(doctor._id) } });
+};
+
+export const verifyPassword = async (req, res) => {
+  try {
+    const userId = req.userId || req.user?._id;
+    const password = req.body?.password ?? req.body?.current_password;
+    if (!userId || !password) return res.status(400).json({ success: false, message: 'password is required' });
+    const user = await User.findById(userId).select('+password');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    const isValid = Boolean(user.password) && await bcrypt.compare(String(password), user.password);
+    return res.json({ success: true, isValid });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };

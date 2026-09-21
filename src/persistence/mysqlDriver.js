@@ -44,6 +44,9 @@ export function mysqlConfig(env = process.env) {
     connectionLimit: Number(env.MYSQL_CONNECTION_LIMIT || 10),
     connectTimeout: 10000,
     charset: 'utf8mb4',
+    // fromRow decodes EJSON itself. Keep JSON strings encoded so a scalar
+    // address is not parsed twice (and strings like "123" retain their type).
+    jsonStrings: true,
     timezone: 'Z',
     multipleStatements: false,
   };

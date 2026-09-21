@@ -301,6 +301,16 @@ import adminReviewRoutes from "./admin/routes/reviewRoutes.js";
 import adminPaymentRoutes from "./admin/routes/paymentRoutes.js";
 import adminSupportRoutes from "./admin/routes/supportRoutes.js";
 import adminRefundRoutes from "./admin/routes/refundRoutes.js";
+import availabilityRoutes from './routes/availabilityRoutes.js';
+import clinicRoutes from "./routes/clinicRoutes.js";
+import doctorBreakRoutes from "./routes/doctorBreakRoutes.js";
+import staffRoutes from './routes/staffRoutes.js';
+import walkinAppointmentRoutes from './routes/walkinAppointmentRoutes.js';
+import followupRoutes from './routes/followupRoutes.js';
+import leaveRoutes from './routes/leaveRoutes.js';
+import medicationRoutes from './routes/medicationRoutes.js';
+
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -518,6 +528,15 @@ app.use("/api/avatar", avatarRoutes); // <--- Avatar generation with OpenAI
 app.use('/api/auth', forgotPasswordRoutes);
 app.use('/api/translate', translateRoutes);
 app.use("/api/ai", aiRoutes);
+app.use('/api/availability', availabilityRoutes);
+app.use("/api/clinics", clinicRoutes);
+app.use("/api/doctor-breaks", doctorBreakRoutes);
+app.use('/api/staff', staffRoutes);
+app.use('/api/walkin-appointments', walkinAppointmentRoutes);
+app.use('/api/followups', followupRoutes);
+app.use('/api/leaves', leaveRoutes);
+app.use('/api/medications', medicationRoutes);
+
 app.use("/api/ai/realtime", aiRealtimeRoute);
 app.get("/api/admin/health", (_req, res) => {
   res.json({ success: true, message: "Admin API is running" });

@@ -1,0 +1,10 @@
+import { Router } from 'express';
+import { protect, allowRoles } from '../middleware/authMiddleware.js';
+import { addStaff, listStaff, updateStaff, removeStaff } from '../controllers/staffController.js';
+const router = Router();
+router.use(protect, allowRoles('doctor', 'admin'));
+router.post('/', addStaff);
+router.get('/', listStaff);
+router.patch('/:id', updateStaff);
+router.delete('/:id', removeStaff);
+export default router;

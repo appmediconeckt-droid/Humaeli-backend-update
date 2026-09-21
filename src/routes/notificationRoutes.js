@@ -3,6 +3,13 @@ import mongoose from '../persistence/mongoose.js';
 
 import {
   deleteNotification,
+  createNotification,
+  getUserNotifications,
+  markAsRead,
+  markAllAsRead,
+  sendPaymentNotification,
+  sendAppointmentReminder,
+  getNotificationStats,
   getNotifications,
   getUnreadNotificationCount,
   markAllNotificationsRead,
@@ -44,6 +51,18 @@ router.route([
   .post(subscribeToCounselorOnline)
   .delete(unsubscribeFromCounselorOnline);
 router.post("/test", authMiddleware, testNotification);
+
+// Legacy notification API compatibility. These handlers use the current
+// Mongo-backed Notification model and authenticate ownership from req.user.
+router.post(["/", "/notifications"], authMiddleware, createNotification);
+router.put(["/mark-all-read", "/notifications/mark-all-read"], authMiddleware, markAllAsRead);
+router.put(["/:id/read", "/notifications/:id/read"], authMiddleware, markAsRead);
+router.delete("/notifications/:id", authMiddleware, deleteNotification);
+router.post(["/payment", "/notifications/payment"], authMiddleware, sendPaymentNotification);
+router.post(["/reminder", "/notifications/reminder"], authMiddleware, sendAppointmentReminder);
+router.get(["/stats/:user_id/:user_role", "/notifications/stats/:user_id/:user_role"], authMiddleware, getNotificationStats);
+router.get(["/:user_id/:user_role", "/notifications/:user_id/:user_role"], authMiddleware, getUserNotifications);
+
 router.patch("/read-all", authMiddleware, markAllNotificationsRead);
 router.patch("/:id/read", authMiddleware, markNotificationRead);
 router.delete("/:id", authMiddleware, deleteNotification);

@@ -1,11 +1,151 @@
 import NotificationToken from '../models/NotificationToken.js';
 import Notification from '../models/Notification.js';
 import User from '../models/userModel.js';
+import Appointment from '../models/appointmentModel.js';
 import CounselorOnlineSubscription from '../models/CounselorOnlineSubscription.js';
+import { createNotificationSafely as persistNotification } from '../services/notificationService.js';
 
 const counselorRoles = ['counselor', 'counsellor'];
 const getAuthenticatedUserId = (req) => req.userId || req.user?._id || req.user?.userId;
 const getRecipientId = getAuthenticatedUserId;
+
+const isSameUser = (left, right) => String(left) === String(right);
+
+const getRequestedRecipient = (req) => {
+  const recipientId = req.body?.user_id ?? req.params?.user_id;
+  if (!recipientId || !isSameUser(recipientId, getAuthenticatedUserId(req))) {
+    return null;
+  }
+  return recipientId;
+};
+
+// Compatibility API for clients that use the older SQL notification contract.
+// It intentionally stores data in the current Notification model so all
+// notification producers and the existing bell UI share one data source.
+export const createNotification = async (req, res) => {
+  try {
+    const { user_id, title, message, type = 'system', related_id, related_type, action_url } = req.body || {};
+    if (!user_id || !title || !message) {
+      return res.status(400).json({ success: false, message: 'user_id, title and message are required' });
+    }
+    if (!isSameUser(user_id, getAuthenticatedUserId(req)) && req.user?.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'You can only create notifications for your account' });
+    }
+    const notification = await persistNotification({
+      recipientId: user_id,
+      actorId: getAuthenticatedUserId(req),
+      type: ['appointment', 'payment', 'message', 'call', 'system'].includes(type) ? type : 'system',
+      title,
+      message,
+      data: { relatedId: related_id ?? null, relatedType: related_type ?? null },
+      actionUrl: action_url || '',
+    });
+    return res.status(201).json({ success: true, message: 'Notification created successfully', notification });
+  } catch (error) {
+    console.error('Create notification error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const getUserNotifications = async (req, res) => {
+  try {
+    const recipientId = getRequestedRecipient(req);
+    if (!recipientId) return res.status(403).json({ success: false, message: 'You can only access your own notifications' });
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 50));
+    const query = { recipientId };
+    if (req.query.is_read !== undefined) query.isRead = req.query.is_read === 'true';
+    if (req.query.type) query.type = req.query.type;
+    const [notifications, unreadCount] = await Promise.all([
+      Notification.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+      Notification.countDocuments({ recipientId, isRead: false }),
+    ]);
+    return res.json({ success: true, data: notifications, notifications, unread_count: unreadCount, pagination: { page, limit } });
+  } catch (error) {
+    console.error('Get user notifications error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const markAsRead = async (req, res) => {
+  req.body = { ...(req.body || {}), user_id: getAuthenticatedUserId(req) };
+  return markNotificationRead(req, res);
+};
+
+export const markAllAsRead = async (req, res) => {
+  try {
+    const recipientId = getAuthenticatedUserId(req);
+    const result = await Notification.updateMany({ recipientId, isRead: false }, { $set: { isRead: true, readAt: new Date() } });
+    return res.json({ success: true, message: `${result.modifiedCount} notifications marked as read`, updated_count: result.modifiedCount });
+  } catch (error) {
+    console.error('Mark all notifications read error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const getNotificationStats = async (req, res) => {
+  try {
+    const recipientId = getRequestedRecipient(req);
+    if (!recipientId) return res.status(403).json({ success: false, message: 'You can only access your own notification stats' });
+    const notifications = await Notification.find({ recipientId }).select('type isRead createdAt title message data').sort({ createdAt: -1 }).lean();
+    const stats = {
+      total: notifications.length,
+      unread: notifications.filter((item) => !item.isRead).length,
+      appointment_count: notifications.filter((item) => item.type === 'appointment').length,
+      payment_count: notifications.filter((item) => item.type === 'payment').length,
+      reminder_count: notifications.filter((item) => item.data?.reminderType).length,
+      high_priority: 0,
+    };
+    return res.json({ success: true, stats, recent_notifications: notifications.slice(0, 5) });
+  } catch (error) {
+    console.error('Notification stats error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const findAppointmentForNotification = async (appointmentId) => {
+  if (!appointmentId) return null;
+  return Appointment.findById(appointmentId).populate('patient counselor', 'fullName');
+};
+
+export const sendPaymentNotification = async (req, res) => {
+  try {
+    if (req.user?.role !== 'admin') return res.status(403).json({ success: false, message: 'Payment notifications require an administrator' });
+    const { appointment_id, payment_status, amount, payment_method } = req.body || {};
+    const appointment = await findAppointmentForNotification(appointment_id);
+    if (!appointment) return res.status(404).json({ success: false, message: 'Appointment not found' });
+    const notifications = [];
+    if (payment_status === 'completed' || payment_status === 'pending') {
+      notifications.push({ recipientId: appointment.patient?._id || appointment.patient, type: 'payment', title: payment_status === 'completed' ? 'Payment Successful' : 'Payment Pending', message: payment_status === 'completed' ? `Payment of Rs ${amount ?? ''} for your appointment has been completed via ${payment_method ?? 'selected method'}.` : `Please complete payment of Rs ${amount ?? ''} for your appointment.`, data: { appointmentId: appointment._id, paymentStatus: payment_status } });
+    }
+    if (payment_status === 'completed') {
+      notifications.push({ recipientId: appointment.counselor?._id || appointment.counselor, type: 'payment', title: 'Payment Received', message: `Payment of Rs ${amount ?? ''} received for an appointment.`, data: { appointmentId: appointment._id, paymentStatus: payment_status } });
+    }
+    const inserted = await Promise.all(notifications.filter((item) => item.recipientId).map((item) => persistNotification(item)));
+    return res.status(201).json({ success: true, message: 'Payment notifications sent', notifications: inserted });
+  } catch (error) {
+    console.error('Payment notification error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const sendAppointmentReminder = async (req, res) => {
+  try {
+    const { appointment_id, reminder_type = 'now' } = req.body || {};
+    const appointment = await findAppointmentForNotification(appointment_id);
+    if (!appointment) return res.status(404).json({ success: false, message: 'Appointment not found' });
+    const ownerId = appointment.counselor?._id || appointment.counselor;
+    if (req.user?.role !== 'admin' && !isSameUser(ownerId, getAuthenticatedUserId(req))) return res.status(403).json({ success: false, message: 'Only the assigned professional can send this reminder' });
+    const appointmentDate = appointment.date ? new Date(appointment.date).toLocaleString('en-IN') : 'your scheduled time';
+    const notifications = [{ recipientId: appointment.patient?._id || appointment.patient, type: 'appointment', title: reminder_type === '24h' ? 'Appointment Tomorrow' : reminder_type === '1h' ? 'Appointment in 1 Hour' : 'Appointment Reminder', message: `Reminder: your appointment is scheduled for ${appointmentDate}.`, data: { appointmentId: appointment._id, reminderType: reminder_type } }];
+    if (reminder_type === '1h' && (appointment.counselor?._id || appointment.counselor)) notifications.push({ recipientId: appointment.counselor?._id || appointment.counselor, type: 'appointment', title: 'Patient Appointment', message: `A patient appointment is scheduled in 1 hour.`, data: { appointmentId: appointment._id, reminderType: reminder_type } });
+    const inserted = await Promise.all(notifications.map((item) => persistNotification(item)));
+    return res.status(201).json({ success: true, message: 'Appointment reminders sent', notifications: inserted });
+  } catch (error) {
+    console.error('Appointment reminder error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 export const subscribeToCounselorOnline = async (req, res) => {
   try {

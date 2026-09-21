@@ -14,6 +14,39 @@ describe("Counsellor profile update certification validation", function () {
     sandbox.restore();
   });
 
+  for (const [input, expected] of [['Male', 'male'], [' FEMALE ', 'female'], ['Other', 'other']]) {
+    it(`normalizes ${input} before persisting a profile update`, async () => {
+      sandbox.stub(User, 'findById').resolves({ _id: 'user123', role: 'user' });
+      const update = sandbox.stub(User, 'findByIdAndUpdate').returns({ select: async () => ({ _id: 'user123', role: 'user', gender: expected }) });
+      const res = { status: sinon.stub().returnsThis(), json: sinon.spy() };
+      await updateUserById({ params: { userId: 'user123' }, body: { gender: input }, files: {} }, res);
+      expect(res.status.calledWith(200)).to.equal(true);
+      expect(update.firstCall.args[1].$set.gender).to.equal(expected);
+      const document = new User({ fullName: 'Test', email: 'test@example.test', password: 'test', phoneNumber: '9876543210', gender: input });
+      await document.validate();
+      expect(document.gender).to.equal(expected);
+    });
+  }
+
+  it('rejects invalid gender with 400 before accessing storage', async () => {
+    const find = sandbox.stub(User, 'findById');
+    const res = { status: sinon.stub().returnsThis(), json: sinon.spy() };
+    await updateUserById({ params: { userId: 'user123' }, body: { gender: 'invalid' } }, res);
+    expect(res.status.calledWith(400)).to.equal(true);
+    expect(res.json.firstCall.args[0].field).to.equal('gender');
+    expect(find.called).to.equal(false);
+  });
+
+  it('returns 400 for model validation errors instead of 500', async () => {
+    sandbox.stub(User, 'findById').resolves({ _id: 'user123', role: 'user' });
+    const error = Object.assign(new Error('Invalid field'), { name: 'ValidationError', errors: { gender: {} } });
+    sandbox.stub(User, 'findByIdAndUpdate').returns({ select: async () => { throw error; } });
+    const res = { status: sinon.stub().returnsThis(), json: sinon.spy() };
+    await updateUserById({ params: { userId: 'user123' }, body: { gender: 'male' }, files: {} }, res);
+    expect(res.status.calledWith(400)).to.equal(true);
+    expect(res.json.firstCall.args[0].fields).to.deep.equal(['gender']);
+  });
+
   it("rejects profile updates when more than five certification documents are submitted", async function () {
     const currentUser = {
       _id: "user123",

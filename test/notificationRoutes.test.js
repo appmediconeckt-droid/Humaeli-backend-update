@@ -30,6 +30,25 @@ describe('notification subscription HTTP contract', () => {
   });
   afterEach(() => sandbox.restore());
 
+  for (const [method, path] of [
+    ['post', '/api/notifications'],
+    ['post', '/api/notifications/notifications'],
+    ['get', `/api/notifications/${userId}/user`],
+    ['get', `/api/notifications/notifications/${userId}/user`],
+    ['get', `/api/notifications/stats/${userId}/user`],
+    ['put', '/api/notifications/mark-all-read'],
+    ['put', `/api/notifications/${counselorId}/read`],
+    ['post', '/api/notifications/payment'],
+    ['post', '/api/notifications/reminder'],
+  ]) {
+    it(`${method.toUpperCase()} ${path} is mounted and requires authentication`, async () => {
+      await request(app)[method](path).expect(401);
+    });
+  }
+  it('routes canonical notification creation to validation instead of a 404', async () => {
+    await request(app).post('/api/notifications').set('Authorization', 'Bearer test').send({}).expect(400);
+  });
+
   for (const path of paths) {
   describe(path, () => {
   for (const key of ['subscribed', 'enabled']) {

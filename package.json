@@ -51,6 +51,7 @@
     "openai": "^6.34.0",
     "otp-generator": "^4.0.1",
     "pdfmake": "^0.3.11",
+    "qrcode": "^1.5.4",
     "razorpay": "^2.9.6",
     "resend": "^6.12.2",
     "socket.io": "^4.8.3",

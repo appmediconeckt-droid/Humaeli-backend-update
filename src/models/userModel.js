@@ -75,14 +75,52 @@ const userSchema = new mongoose.Schema({
     },
     gender: {
         type: String,
+        trim: true,
+        lowercase: true,
         enum: ["male", "female", "other"],
         default: "male"
     },
     role: {
         type: String,
-        enum: ["user", "counsellor", "admin"],
+        enum: [
+            "user", "counsellor", "doctor", "admin",
+            "nurse", "assistant", "lab_technician", "housekeeping",
+            "supervisor", "department_manager", "billing",
+        ],
         default: "user"
     },
+    accountType: {
+        type: String,
+        enum: ["doctor", "consultant"],
+    },
+    doctorQrCode: { type: String },
+    staffId: { type: String, trim: true },
+    assignedDoctor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    nursingLicense: { type: String, trim: true },
+    shift: { type: String, trim: true },
+    shiftTime: { type: String, trim: true },
+    shiftStartTime: { type: String, trim: true },
+    shiftEndTime: { type: String, trim: true },
+    assignedWard: { type: String, trim: true },
+    yearsOfExperience: { type: Number, min: 0 },
+    qualifications: { type: String, trim: true },
+    assistantId: { type: String, trim: true },
+    department: { type: String, trim: true },
+    supervisor: { type: String, trim: true },
+    technicianId: { type: String, trim: true },
+    labType: { type: String, trim: true },
+    staffCertifications: { type: String, trim: true },
+    housekeepingStaffId: { type: String, trim: true },
+    assignedArea: { type: String, trim: true },
+    housekeepingSupervisor: { type: String, trim: true },
+    supervisorId: { type: String, trim: true },
+    teamSize: { type: Number, min: 0 },
+    responsibilities: { type: String, trim: true },
+    managerId: { type: String, trim: true },
+    employeesUnder: { type: Number, min: 0 },
+    budgetResponsibility: { type: String, trim: true },
+    billingId: { type: String, trim: true },
+    softwareExpertise: { type: String, trim: true },
     profileCompleted: {
         type: Boolean,
         default: false
@@ -180,31 +218,34 @@ const userSchema = new mongoose.Schema({
     // (Google signup users complete these fields later via profile update)
     qualification: {
         type: String,
-        required: function() { return this.role === "counsellor" && !this.googleId; }
+        required: function() { return ["counsellor", "doctor"].includes(this.role) && !this.googleId; }
     },
     specialization: {
         type: [String],
-        required: function() { return this.role === "counsellor" && !this.googleId; }
+        required: function() { return ["counsellor", "doctor"].includes(this.role) && !this.googleId; }
     },
     experience: {
         type: Number,
-        required: function() { return this.role === "counsellor" && !this.googleId; }
+        required: function() { return ["counsellor", "doctor"].includes(this.role) && !this.googleId; }
     },
     location: {
         type: String,
-        required: function() { return this.role === "counsellor" && !this.googleId; }
+        required: function() { return ["counsellor", "doctor"].includes(this.role) && !this.googleId; }
     },
     consultationMode: {
         type: [String],
         enum: ["online", "offline", "both"],
         default: ["online"],
-        required: function() { return this.role === "counsellor" && !this.googleId; }
+        required: function() { return ["counsellor", "doctor"].includes(this.role) && !this.googleId; }
     },
     languages: {
         type: [String],
         default: [],
-        required: function() { return this.role === "counsellor" && !this.googleId; }
+        required: function() { return ["counsellor", "doctor"].includes(this.role) && !this.googleId; }
     },
+    aadhaarNumber: { type: String, trim: true, default: "", validate: value => !value || /^\d{12}$/.test(value) },
+    panNumber: { type: String, trim: true, uppercase: true, default: "", validate: value => !value || /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(value) },
+    permanentAddress: { type: mongoose.Schema.Types.Mixed, default: "" },
     aboutMe: {
         type: String,
         trim: true,
@@ -440,6 +481,9 @@ userSchema.methods.toJSON = function() {
         user.age = ageFromDateOfBirth;
     }
     user.hasPassword = Boolean(user.password);
+    delete user.aadhaarNumber;
+    delete user.panNumber;
+    delete user.permanentAddress;
     delete user.password;
     delete user.profilePhotoPublicId;
     delete user.emailOTP;

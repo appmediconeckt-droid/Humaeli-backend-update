@@ -1,5 +1,6 @@
 // Explicit imports work in both Node and serverless bundles.
 export async function loadModels() {
+  await import('../models/clinicModels.js');
   await import('../models/userModel.js');
   await import('../models/appointmentModel.js');
   await import('../models/Call.js');
