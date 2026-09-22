@@ -1,5 +1,4 @@
-import { v4 as uuidv4 } from "uuid";
-import mongoose from "mongoose";
+﻿import { v4 as uuidv4 } from "uuid";
 import OpenAI from "openai";
 import Chat from "../models/chatModel.js";
 import User from "../models/userModel.js";
@@ -10,6 +9,10 @@ import { detectLanguage, getLanguageGreeting, getLanguageEmergencyResponse } fro
 import { extractProfileFields, formatSituationSummary } from "../services/profileExtractor.js";
 import { evaluateSafety } from "../services/safetyGuard.js";
 import { rankCounsellors, formatRankedForPrompt } from "../services/counsellorMatcher.js";
+
+const isValidId = (id) => id != null && String(id).length >= 12;
+
+
 
 let _openaiClient = null;
 const getOpenAIClient = () => {
@@ -282,6 +285,7 @@ Be like a good, non-judgmental friend who listens, gives practical help, and kno
   • What to look for on the wrapper (expiry date, undamaged packaging)
   • General STI awareness (common ones, that testing is available at hospitals/PHCs)
   • Importance of consent, communication with partner
+
   • That sexual dysfunction (low libido, ED, pain, etc.) is common and treatable — see a doctor
   • Where to get help: gynaecologist, urologist, family doctor, sexual-health clinic
 - NOT ALLOWED, even for adults:
@@ -422,6 +426,7 @@ NEVER invent counselor names. Use ONLY names from the list above.
 ═══════════════════════════════════════════════════════════════
 
 🚫 COUNSELOR RECOMMENDATION RULES — VERY IMPORTANT:
+
 
 DEFAULT: Do NOT mention or suggest a counselor. Just give practical advice.
 
@@ -864,7 +869,7 @@ export const deleteMyChatMessage = async (req, res) => {
         .json({ success: false, message: "Authentication required" });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(chatId)) {
+    if (!isValidId(chatId)) {
       return res
         .status(400)
         .json({ success: false, message: "Invalid chat message id" });

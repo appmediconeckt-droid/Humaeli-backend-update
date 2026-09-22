@@ -3,7 +3,6 @@ import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
 import Session from "../models/sessionModel.js";
 import { generateAccessToken, generateRefreshToken } from "../utils/token.js";
-import mongoose from "mongoose";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helper: attempt silent token refresh and continue the request
@@ -22,7 +21,7 @@ const tryRefreshAndContinue = async (req, res, next, incomingRefreshToken) => {
       });
     }
 
-    if (!mongoose.isValidObjectId(decoded.sessionId)) {
+    if (!decoded.sessionId || typeof decoded.sessionId !== "string" || decoded.sessionId.length < 12) {
       return res.status(401).json({
         success: false,
         error: "Invalid session. Please log in again.",
@@ -166,7 +165,7 @@ export const authMiddleware = async (req, res, next) => {
       });
     }
 
-    if (!mongoose.isValidObjectId(decoded.sessionId)) {
+    if (!decoded.sessionId || typeof decoded.sessionId !== "string" || decoded.sessionId.length < 12) {
       return res.status(401).json({
         success: false,
         error: "Invalid session. Please log in again.",

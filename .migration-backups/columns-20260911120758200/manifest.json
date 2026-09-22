@@ -1,0 +1,5884 @@
+{
+  "database": "humaeli",
+  "backupDatabase": "humaeli_schema_backup_20260911120758200",
+  "startedAt": "2026-09-11T12:07:58.207Z",
+  "verified": true,
+  "tables": [
+    {
+      "name": "admin_notification_deliveries",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "body",
+          "column": "body",
+          "kind": "string"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "dedupeKey",
+          "column": "dedupeKey",
+          "kind": "string"
+        },
+        {
+          "path": "error",
+          "column": "error",
+          "kind": "string"
+        },
+        {
+          "path": "mainBackendStatus",
+          "column": "mainBackendStatus",
+          "kind": "number"
+        },
+        {
+          "path": "metadata",
+          "column": "metadata",
+          "kind": "json"
+        },
+        {
+          "path": "recipientId",
+          "column": "recipientId",
+          "kind": "objectId"
+        },
+        {
+          "path": "ruleId",
+          "column": "ruleId",
+          "kind": "objectId"
+        },
+        {
+          "path": "sentAt",
+          "column": "sentAt",
+          "kind": "date"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "title",
+          "column": "title",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "body",
+          "column": "body",
+          "kind": "string"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "dedupeKey",
+          "column": "dedupeKey",
+          "kind": "string"
+        },
+        {
+          "path": "error",
+          "column": "error",
+          "kind": "string"
+        },
+        {
+          "path": "mainBackendStatus",
+          "column": "mainBackendStatus",
+          "kind": "number"
+        },
+        {
+          "path": "metadata",
+          "column": "metadata",
+          "kind": "json"
+        },
+        {
+          "path": "recipientId",
+          "column": "recipientId",
+          "kind": "objectId"
+        },
+        {
+          "path": "ruleId",
+          "column": "ruleId",
+          "kind": "objectId"
+        },
+        {
+          "path": "sentAt",
+          "column": "sentAt",
+          "kind": "date"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "title",
+          "column": "title",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveOnly": false
+    },
+    {
+      "name": "aichats",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "aiResponse",
+          "column": "aiResponse",
+          "kind": "string"
+        },
+        {
+          "path": "consultants",
+          "column": "consultants",
+          "kind": "json"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "responseType",
+          "column": "responseType",
+          "kind": "string"
+        },
+        {
+          "path": "sessionId",
+          "column": "sessionId",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        },
+        {
+          "path": "userMessage",
+          "column": "userMessage",
+          "kind": "string"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "aiResponse",
+          "column": "aiResponse",
+          "kind": "string"
+        },
+        {
+          "path": "consultants",
+          "column": "consultants",
+          "kind": "json"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "responseType",
+          "column": "responseType",
+          "kind": "string"
+        },
+        {
+          "path": "sessionId",
+          "column": "sessionId",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        },
+        {
+          "path": "userMessage",
+          "column": "userMessage",
+          "kind": "string"
+        }
+      ],
+      "count": 69,
+      "sha256": "adfc1b614982fc3ed33fec0badac8f94010617785b45734546fd636262960e57",
+      "archiveOnly": false
+    },
+    {
+      "name": "appointments",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "counselor",
+          "column": "counselor",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "date",
+          "column": "date",
+          "kind": "date"
+        },
+        {
+          "path": "notes",
+          "column": "notes",
+          "kind": "string"
+        },
+        {
+          "path": "patient",
+          "column": "patient",
+          "kind": "objectId"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "counselor",
+          "column": "counselor",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "date",
+          "column": "date",
+          "kind": "date"
+        },
+        {
+          "path": "notes",
+          "column": "notes",
+          "kind": "string"
+        },
+        {
+          "path": "patient",
+          "column": "patient",
+          "kind": "objectId"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveOnly": false
+    },
+    {
+      "name": "auditlogs",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "action",
+          "column": "action",
+          "kind": "string"
+        },
+        {
+          "path": "adminEmail",
+          "column": "adminEmail",
+          "kind": "string"
+        },
+        {
+          "path": "adminId",
+          "column": "adminId",
+          "kind": "objectId"
+        },
+        {
+          "path": "changes",
+          "column": "changes",
+          "kind": "json"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "details",
+          "column": "details",
+          "kind": "string"
+        },
+        {
+          "path": "entityId",
+          "column": "entityId",
+          "kind": "objectId"
+        },
+        {
+          "path": "entityName",
+          "column": "entityName",
+          "kind": "string"
+        },
+        {
+          "path": "entityType",
+          "column": "entityType",
+          "kind": "string"
+        },
+        {
+          "path": "ipAddress",
+          "column": "ipAddress",
+          "kind": "string"
+        },
+        {
+          "path": "reason",
+          "column": "reason",
+          "kind": "string"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "action",
+          "column": "action",
+          "kind": "string"
+        },
+        {
+          "path": "adminEmail",
+          "column": "adminEmail",
+          "kind": "string"
+        },
+        {
+          "path": "adminId",
+          "column": "adminId",
+          "kind": "objectId"
+        },
+        {
+          "path": "changes",
+          "column": "changes",
+          "kind": "json"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "details",
+          "column": "details",
+          "kind": "string"
+        },
+        {
+          "path": "entityId",
+          "column": "entityId",
+          "kind": "objectId"
+        },
+        {
+          "path": "entityName",
+          "column": "entityName",
+          "kind": "string"
+        },
+        {
+          "path": "entityType",
+          "column": "entityType",
+          "kind": "string"
+        },
+        {
+          "path": "ipAddress",
+          "column": "ipAddress",
+          "kind": "string"
+        },
+        {
+          "path": "reason",
+          "column": "reason",
+          "kind": "string"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "count": 2,
+      "sha256": "70e297eb7f2f84b9c21687c9361301c32e6f78d2846d60ddcc8a24b8e5f81258",
+      "archiveOnly": false
+    },
+    {
+      "name": "calls",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "acceptedAt",
+          "column": "acceptedAt",
+          "kind": "date"
+        },
+        {
+          "path": "callerAvatar",
+          "column": "callerAvatar",
+          "kind": "string"
+        },
+        {
+          "path": "callerId",
+          "column": "callerId",
+          "kind": "objectId"
+        },
+        {
+          "path": "callerLocation",
+          "column": "callerLocation",
+          "kind": "string"
+        },
+        {
+          "path": "callerLocationData",
+          "column": "callerLocationData",
+          "kind": "json"
+        },
+        {
+          "path": "callerName",
+          "column": "callerName",
+          "kind": "string"
+        },
+        {
+          "path": "callId",
+          "column": "callId",
+          "kind": "string"
+        },
+        {
+          "path": "callQuality",
+          "column": "callQuality",
+          "kind": "string"
+        },
+        {
+          "path": "callType",
+          "column": "callType",
+          "kind": "string"
+        },
+        {
+          "path": "cancelledAt",
+          "column": "cancelledAt",
+          "kind": "date"
+        },
+        {
+          "path": "chatId",
+          "column": "chatId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "duration",
+          "column": "duration",
+          "kind": "number"
+        },
+        {
+          "path": "endedAt",
+          "column": "endedAt",
+          "kind": "date"
+        },
+        {
+          "path": "endedBy",
+          "column": "endedBy",
+          "kind": "objectId"
+        },
+        {
+          "path": "expiresAt",
+          "column": "expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "initiatorType",
+          "column": "initiatorType",
+          "kind": "string"
+        },
+        {
+          "path": "isActive",
+          "column": "isActive",
+          "kind": "boolean"
+        },
+        {
+          "path": "isMuted",
+          "column": "isMuted",
+          "kind": "boolean"
+        },
+        {
+          "path": "isOnHold",
+          "column": "isOnHold",
+          "kind": "boolean"
+        },
+        {
+          "path": "isSpeakerOn",
+          "column": "isSpeakerOn",
+          "kind": "boolean"
+        },
+        {
+          "path": "paymentAmount",
+          "column": "paymentAmount",
+          "kind": "number"
+        },
+        {
+          "path": "paymentStatus",
+          "column": "paymentStatus",
+          "kind": "string"
+        },
+        {
+          "path": "paymentTransactionId",
+          "column": "paymentTransactionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "receiverAvatar",
+          "column": "receiverAvatar",
+          "kind": "string"
+        },
+        {
+          "path": "receiverId",
+          "column": "receiverId",
+          "kind": "objectId"
+        },
+        {
+          "path": "receiverLocation",
+          "column": "receiverLocation",
+          "kind": "string"
+        },
+        {
+          "path": "receiverLocationData",
+          "column": "receiverLocationData",
+          "kind": "json"
+        },
+        {
+          "path": "receiverName",
+          "column": "receiverName",
+          "kind": "string"
+        },
+        {
+          "path": "receiverType",
+          "column": "receiverType",
+          "kind": "string"
+        },
+        {
+          "path": "recordingUrl",
+          "column": "recordingUrl",
+          "kind": "string"
+        },
+        {
+          "path": "rejectedAt",
+          "column": "rejectedAt",
+          "kind": "date"
+        },
+        {
+          "path": "roomId",
+          "column": "roomId",
+          "kind": "string"
+        },
+        {
+          "path": "startedAt",
+          "column": "startedAt",
+          "kind": "date"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "acceptedAt",
+          "column": "acceptedAt",
+          "kind": "date"
+        },
+        {
+          "path": "callerAvatar",
+          "column": "callerAvatar",
+          "kind": "string"
+        },
+        {
+          "path": "callerId",
+          "column": "callerId",
+          "kind": "objectId"
+        },
+        {
+          "path": "callerLocation",
+          "column": "callerLocation",
+          "kind": "string"
+        },
+        {
+          "path": "callerLocationData.address",
+          "column": "callerLocationData_address",
+          "kind": "string"
+        },
+        {
+          "path": "callerLocationData.capturedAt",
+          "column": "callerLocationData_capturedAt",
+          "kind": "date"
+        },
+        {
+          "path": "callerLocationData.city",
+          "column": "callerLocationData_city",
+          "kind": "string"
+        },
+        {
+          "path": "callerLocationData.coordinates",
+          "column": "callerLocationData_coordinates",
+          "kind": "json"
+        },
+        {
+          "path": "callerLocationData.country",
+          "column": "callerLocationData_country",
+          "kind": "string"
+        },
+        {
+          "path": "callerLocationData.state",
+          "column": "callerLocationData_state",
+          "kind": "string"
+        },
+        {
+          "path": "callerName",
+          "column": "callerName",
+          "kind": "string"
+        },
+        {
+          "path": "callId",
+          "column": "callId",
+          "kind": "string"
+        },
+        {
+          "path": "callQuality",
+          "column": "callQuality",
+          "kind": "string"
+        },
+        {
+          "path": "callType",
+          "column": "callType",
+          "kind": "string"
+        },
+        {
+          "path": "cancelledAt",
+          "column": "cancelledAt",
+          "kind": "date"
+        },
+        {
+          "path": "chatId",
+          "column": "chatId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "duration",
+          "column": "duration",
+          "kind": "number"
+        },
+        {
+          "path": "endedAt",
+          "column": "endedAt",
+          "kind": "date"
+        },
+        {
+          "path": "endedBy",
+          "column": "endedBy",
+          "kind": "objectId"
+        },
+        {
+          "path": "expiresAt",
+          "column": "expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "initiatorType",
+          "column": "initiatorType",
+          "kind": "string"
+        },
+        {
+          "path": "isActive",
+          "column": "isActive",
+          "kind": "boolean"
+        },
+        {
+          "path": "isMuted",
+          "column": "isMuted",
+          "kind": "boolean"
+        },
+        {
+          "path": "isOnHold",
+          "column": "isOnHold",
+          "kind": "boolean"
+        },
+        {
+          "path": "isSpeakerOn",
+          "column": "isSpeakerOn",
+          "kind": "boolean"
+        },
+        {
+          "path": "paymentAmount",
+          "column": "paymentAmount",
+          "kind": "number"
+        },
+        {
+          "path": "paymentStatus",
+          "column": "paymentStatus",
+          "kind": "string"
+        },
+        {
+          "path": "paymentTransactionId",
+          "column": "paymentTransactionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "receiverAvatar",
+          "column": "receiverAvatar",
+          "kind": "string"
+        },
+        {
+          "path": "receiverId",
+          "column": "receiverId",
+          "kind": "objectId"
+        },
+        {
+          "path": "receiverLocation",
+          "column": "receiverLocation",
+          "kind": "string"
+        },
+        {
+          "path": "receiverLocationData.address",
+          "column": "receiverLocationData_address",
+          "kind": "string"
+        },
+        {
+          "path": "receiverLocationData.capturedAt",
+          "column": "receiverLocationData_capturedAt",
+          "kind": "date"
+        },
+        {
+          "path": "receiverLocationData.city",
+          "column": "receiverLocationData_city",
+          "kind": "string"
+        },
+        {
+          "path": "receiverLocationData.coordinates",
+          "column": "receiverLocationData_coordinates",
+          "kind": "json"
+        },
+        {
+          "path": "receiverLocationData.country",
+          "column": "receiverLocationData_country",
+          "kind": "string"
+        },
+        {
+          "path": "receiverLocationData.state",
+          "column": "receiverLocationData_state",
+          "kind": "string"
+        },
+        {
+          "path": "receiverName",
+          "column": "receiverName",
+          "kind": "string"
+        },
+        {
+          "path": "receiverType",
+          "column": "receiverType",
+          "kind": "string"
+        },
+        {
+          "path": "recordingUrl",
+          "column": "recordingUrl",
+          "kind": "string"
+        },
+        {
+          "path": "rejectedAt",
+          "column": "rejectedAt",
+          "kind": "date"
+        },
+        {
+          "path": "roomId",
+          "column": "roomId",
+          "kind": "string"
+        },
+        {
+          "path": "startedAt",
+          "column": "startedAt",
+          "kind": "date"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "count": 208,
+      "sha256": "14ef951a6d1945969611b8982ddf12132d29cbbbdd37032ee9908b59312d05cb",
+      "archiveOnly": false
+    },
+    {
+      "name": "chats",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "acceptedAt",
+          "column": "acceptedAt",
+          "kind": "date"
+        },
+        {
+          "path": "amount",
+          "column": "amount",
+          "kind": "number"
+        },
+        {
+          "path": "archivedByCounselor",
+          "column": "archivedByCounselor",
+          "kind": "boolean"
+        },
+        {
+          "path": "archivedByCounselorAt",
+          "column": "archivedByCounselorAt",
+          "kind": "date"
+        },
+        {
+          "path": "archivedByUser",
+          "column": "archivedByUser",
+          "kind": "boolean"
+        },
+        {
+          "path": "archivedByUserAt",
+          "column": "archivedByUserAt",
+          "kind": "date"
+        },
+        {
+          "path": "cancelledAt",
+          "column": "cancelledAt",
+          "kind": "date"
+        },
+        {
+          "path": "chatId",
+          "column": "chatId",
+          "kind": "string"
+        },
+        {
+          "path": "closedAt",
+          "column": "closedAt",
+          "kind": "date"
+        },
+        {
+          "path": "counselorId",
+          "column": "counselorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "deletedByCounselor",
+          "column": "deletedByCounselor",
+          "kind": "boolean"
+        },
+        {
+          "path": "deletedByUser",
+          "column": "deletedByUser",
+          "kind": "boolean"
+        },
+        {
+          "path": "expiresAt",
+          "column": "expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "isActive",
+          "column": "isActive",
+          "kind": "boolean"
+        },
+        {
+          "path": "lastMessage",
+          "column": "lastMessage",
+          "kind": "string"
+        },
+        {
+          "path": "lastMessageAt",
+          "column": "lastMessageAt",
+          "kind": "date"
+        },
+        {
+          "path": "paidSessionId",
+          "column": "paidSessionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "paymentStatus",
+          "column": "paymentStatus",
+          "kind": "string"
+        },
+        {
+          "path": "paymentTransactionId",
+          "column": "paymentTransactionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "rejectedAt",
+          "column": "rejectedAt",
+          "kind": "date"
+        },
+        {
+          "path": "sessionType",
+          "column": "sessionType",
+          "kind": "string"
+        },
+        {
+          "path": "startedAt",
+          "column": "startedAt",
+          "kind": "date"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "acceptedAt",
+          "column": "acceptedAt",
+          "kind": "date"
+        },
+        {
+          "path": "amount",
+          "column": "amount",
+          "kind": "number"
+        },
+        {
+          "path": "archivedByCounselor",
+          "column": "archivedByCounselor",
+          "kind": "boolean"
+        },
+        {
+          "path": "archivedByCounselorAt",
+          "column": "archivedByCounselorAt",
+          "kind": "date"
+        },
+        {
+          "path": "archivedByUser",
+          "column": "archivedByUser",
+          "kind": "boolean"
+        },
+        {
+          "path": "archivedByUserAt",
+          "column": "archivedByUserAt",
+          "kind": "date"
+        },
+        {
+          "path": "cancelledAt",
+          "column": "cancelledAt",
+          "kind": "date"
+        },
+        {
+          "path": "chatId",
+          "column": "chatId",
+          "kind": "string"
+        },
+        {
+          "path": "closedAt",
+          "column": "closedAt",
+          "kind": "date"
+        },
+        {
+          "path": "counselorId",
+          "column": "counselorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "deletedByCounselor",
+          "column": "deletedByCounselor",
+          "kind": "boolean"
+        },
+        {
+          "path": "deletedByUser",
+          "column": "deletedByUser",
+          "kind": "boolean"
+        },
+        {
+          "path": "expiresAt",
+          "column": "expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "isActive",
+          "column": "isActive",
+          "kind": "boolean"
+        },
+        {
+          "path": "lastMessage",
+          "column": "lastMessage",
+          "kind": "string"
+        },
+        {
+          "path": "lastMessageAt",
+          "column": "lastMessageAt",
+          "kind": "date"
+        },
+        {
+          "path": "paidSessionId",
+          "column": "paidSessionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "paymentStatus",
+          "column": "paymentStatus",
+          "kind": "string"
+        },
+        {
+          "path": "paymentTransactionId",
+          "column": "paymentTransactionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "rejectedAt",
+          "column": "rejectedAt",
+          "kind": "date"
+        },
+        {
+          "path": "sessionType",
+          "column": "sessionType",
+          "kind": "string"
+        },
+        {
+          "path": "startedAt",
+          "column": "startedAt",
+          "kind": "date"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "count": 10,
+      "sha256": "3caeceba60566bccdff5fa46268da09783619594dfb72671fa7b3498b8b148a9",
+      "archiveOnly": false
+    },
+    {
+      "name": "chatsessions",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "acceptedAt",
+          "column": "acceptedAt",
+          "kind": "date"
+        },
+        {
+          "path": "activeSegmentStartedAt",
+          "column": "activeSegmentStartedAt",
+          "kind": "date"
+        },
+        {
+          "path": "amount",
+          "column": "amount",
+          "kind": "number"
+        },
+        {
+          "path": "billedMinutes",
+          "column": "billedMinutes",
+          "kind": "number"
+        },
+        {
+          "path": "billedSeconds",
+          "column": "billedSeconds",
+          "kind": "number"
+        },
+        {
+          "path": "chatId",
+          "column": "chatId",
+          "kind": "objectId"
+        },
+        {
+          "path": "commissionAmount",
+          "column": "commissionAmount",
+          "kind": "number"
+        },
+        {
+          "path": "commissionRate",
+          "column": "commissionRate",
+          "kind": "number"
+        },
+        {
+          "path": "counselorEarning",
+          "column": "counselorEarning",
+          "kind": "number"
+        },
+        {
+          "path": "counselorId",
+          "column": "counselorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "earningId",
+          "column": "earningId",
+          "kind": "objectId"
+        },
+        {
+          "path": "endedAt",
+          "column": "endedAt",
+          "kind": "date"
+        },
+        {
+          "path": "expiresAt",
+          "column": "expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "lastBilledAt",
+          "column": "lastBilledAt",
+          "kind": "date"
+        },
+        {
+          "path": "metadata",
+          "column": "metadata",
+          "kind": "json"
+        },
+        {
+          "path": "paymentStatus",
+          "column": "paymentStatus",
+          "kind": "string"
+        },
+        {
+          "path": "paymentTransactionId",
+          "column": "paymentTransactionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "rateDurationMinutes",
+          "column": "rateDurationMinutes",
+          "kind": "number"
+        },
+        {
+          "path": "ratePerMinute",
+          "column": "ratePerMinute",
+          "kind": "number"
+        },
+        {
+          "path": "refundReason",
+          "column": "refundReason",
+          "kind": "string"
+        },
+        {
+          "path": "sessionStatus",
+          "column": "sessionStatus",
+          "kind": "string"
+        },
+        {
+          "path": "sessionType",
+          "column": "sessionType",
+          "kind": "string"
+        },
+        {
+          "path": "startedAt",
+          "column": "startedAt",
+          "kind": "date"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "acceptedAt",
+          "column": "acceptedAt",
+          "kind": "date"
+        },
+        {
+          "path": "activeSegmentStartedAt",
+          "column": "activeSegmentStartedAt",
+          "kind": "date"
+        },
+        {
+          "path": "amount",
+          "column": "amount",
+          "kind": "number"
+        },
+        {
+          "path": "billedMinutes",
+          "column": "billedMinutes",
+          "kind": "number"
+        },
+        {
+          "path": "billedSeconds",
+          "column": "billedSeconds",
+          "kind": "number"
+        },
+        {
+          "path": "chatId",
+          "column": "chatId",
+          "kind": "objectId"
+        },
+        {
+          "path": "commissionAmount",
+          "column": "commissionAmount",
+          "kind": "number"
+        },
+        {
+          "path": "commissionRate",
+          "column": "commissionRate",
+          "kind": "number"
+        },
+        {
+          "path": "counselorEarning",
+          "column": "counselorEarning",
+          "kind": "number"
+        },
+        {
+          "path": "counselorId",
+          "column": "counselorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "earningId",
+          "column": "earningId",
+          "kind": "objectId"
+        },
+        {
+          "path": "endedAt",
+          "column": "endedAt",
+          "kind": "date"
+        },
+        {
+          "path": "expiresAt",
+          "column": "expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "lastBilledAt",
+          "column": "lastBilledAt",
+          "kind": "date"
+        },
+        {
+          "path": "metadata",
+          "column": "metadata",
+          "kind": "json"
+        },
+        {
+          "path": "paymentStatus",
+          "column": "paymentStatus",
+          "kind": "string"
+        },
+        {
+          "path": "paymentTransactionId",
+          "column": "paymentTransactionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "rateDurationMinutes",
+          "column": "rateDurationMinutes",
+          "kind": "number"
+        },
+        {
+          "path": "ratePerMinute",
+          "column": "ratePerMinute",
+          "kind": "number"
+        },
+        {
+          "path": "refundReason",
+          "column": "refundReason",
+          "kind": "string"
+        },
+        {
+          "path": "sessionStatus",
+          "column": "sessionStatus",
+          "kind": "string"
+        },
+        {
+          "path": "sessionType",
+          "column": "sessionType",
+          "kind": "string"
+        },
+        {
+          "path": "startedAt",
+          "column": "startedAt",
+          "kind": "date"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "count": 11,
+      "sha256": "6aeb5e0c1e9beb1047d3d6bbd93084e7a511af2128d827a2c449bbfff1cad315",
+      "archiveOnly": false
+    },
+    {
+      "name": "conversations",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "archivedAt",
+          "column": "archivedAt",
+          "kind": "date"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "lastMessage",
+          "column": "lastMessage",
+          "kind": "string"
+        },
+        {
+          "path": "lastMessageSender",
+          "column": "lastMessageSender",
+          "kind": "string"
+        },
+        {
+          "path": "lastMessageTime",
+          "column": "lastMessageTime",
+          "kind": "date"
+        },
+        {
+          "path": "participants",
+          "column": "participants",
+          "kind": "json"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "unreadCount",
+          "column": "unreadCount",
+          "kind": "json"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "archivedAt",
+          "column": "archivedAt",
+          "kind": "date"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "lastMessage",
+          "column": "lastMessage",
+          "kind": "string"
+        },
+        {
+          "path": "lastMessageSender",
+          "column": "lastMessageSender",
+          "kind": "string"
+        },
+        {
+          "path": "lastMessageTime",
+          "column": "lastMessageTime",
+          "kind": "date"
+        },
+        {
+          "path": "participants.counsellor",
+          "column": "participants_counsellor",
+          "kind": "objectId"
+        },
+        {
+          "path": "participants.user",
+          "column": "participants_user",
+          "kind": "objectId"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "unreadCount.counsellor",
+          "column": "unreadCount_counsellor",
+          "kind": "number"
+        },
+        {
+          "path": "unreadCount.user",
+          "column": "unreadCount_user",
+          "kind": "number"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveOnly": false
+    },
+    {
+      "name": "counselorearnings",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "callId",
+          "column": "callId",
+          "kind": "string"
+        },
+        {
+          "path": "chatId",
+          "column": "chatId",
+          "kind": "objectId"
+        },
+        {
+          "path": "commission",
+          "column": "commission",
+          "kind": "number"
+        },
+        {
+          "path": "counselorId",
+          "column": "counselorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "earningAmount",
+          "column": "earningAmount",
+          "kind": "number"
+        },
+        {
+          "path": "earningStatus",
+          "column": "earningStatus",
+          "kind": "string"
+        },
+        {
+          "path": "metadata",
+          "column": "metadata",
+          "kind": "json"
+        },
+        {
+          "path": "paidAt",
+          "column": "paidAt",
+          "kind": "date"
+        },
+        {
+          "path": "payoutStatus",
+          "column": "payoutStatus",
+          "kind": "string"
+        },
+        {
+          "path": "sessionId",
+          "column": "sessionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "sessionType",
+          "column": "sessionType",
+          "kind": "string"
+        },
+        {
+          "path": "totalAmount",
+          "column": "totalAmount",
+          "kind": "number"
+        },
+        {
+          "path": "transactionId",
+          "column": "transactionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "callId",
+          "column": "callId",
+          "kind": "string"
+        },
+        {
+          "path": "chatId",
+          "column": "chatId",
+          "kind": "objectId"
+        },
+        {
+          "path": "commission",
+          "column": "commission",
+          "kind": "number"
+        },
+        {
+          "path": "counselorId",
+          "column": "counselorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "earningAmount",
+          "column": "earningAmount",
+          "kind": "number"
+        },
+        {
+          "path": "earningStatus",
+          "column": "earningStatus",
+          "kind": "string"
+        },
+        {
+          "path": "metadata",
+          "column": "metadata",
+          "kind": "json"
+        },
+        {
+          "path": "paidAt",
+          "column": "paidAt",
+          "kind": "date"
+        },
+        {
+          "path": "payoutStatus",
+          "column": "payoutStatus",
+          "kind": "string"
+        },
+        {
+          "path": "sessionId",
+          "column": "sessionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "sessionType",
+          "column": "sessionType",
+          "kind": "string"
+        },
+        {
+          "path": "totalAmount",
+          "column": "totalAmount",
+          "kind": "number"
+        },
+        {
+          "path": "transactionId",
+          "column": "transactionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "count": 53,
+      "sha256": "5ead17dbe1b6ab91f814fe853a9c11732f933ddb843acf6fd1e0536a00e3b4d6",
+      "archiveOnly": false
+    },
+    {
+      "name": "counseloronlinesubscriptions",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "counselorId",
+          "column": "counselorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "counselorId",
+          "column": "counselorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "count": 2,
+      "sha256": "9aaeb7b936246420e80cf2daf2542b2fe3ae4a7130bccbee11e05c57e6aa5e20",
+      "archiveOnly": false
+    },
+    {
+      "name": "forgotpasswordtokens",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "email",
+          "column": "email",
+          "kind": "string"
+        },
+        {
+          "path": "expiresAt",
+          "column": "expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "isUsed",
+          "column": "isUsed",
+          "kind": "boolean"
+        },
+        {
+          "path": "otp",
+          "column": "otp",
+          "kind": "string"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "email",
+          "column": "email",
+          "kind": "string"
+        },
+        {
+          "path": "expiresAt",
+          "column": "expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "isUsed",
+          "column": "isUsed",
+          "kind": "boolean"
+        },
+        {
+          "path": "otp",
+          "column": "otp",
+          "kind": "string"
+        }
+      ],
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveOnly": false
+    },
+    {
+      "name": "loginotps",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "email",
+          "column": "email",
+          "kind": "string"
+        },
+        {
+          "path": "expiresAt",
+          "column": "expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "otp",
+          "column": "otp",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "email",
+          "column": "email",
+          "kind": "string"
+        },
+        {
+          "path": "expiresAt",
+          "column": "expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "otp",
+          "column": "otp",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveOnly": false
+    },
+    {
+      "name": "messages",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "attachmentMimeType",
+          "column": "attachmentMimeType",
+          "kind": "string"
+        },
+        {
+          "path": "attachmentName",
+          "column": "attachmentName",
+          "kind": "string"
+        },
+        {
+          "path": "attachmentSize",
+          "column": "attachmentSize",
+          "kind": "number"
+        },
+        {
+          "path": "attachmentUrl",
+          "column": "attachmentUrl",
+          "kind": "string"
+        },
+        {
+          "path": "chatId",
+          "column": "chatId",
+          "kind": "json"
+        },
+        {
+          "path": "content",
+          "column": "content",
+          "kind": "string"
+        },
+        {
+          "path": "contentType",
+          "column": "contentType",
+          "kind": "string"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "deletedFor",
+          "column": "deletedFor",
+          "kind": "json"
+        },
+        {
+          "path": "isRead",
+          "column": "isRead",
+          "kind": "boolean"
+        },
+        {
+          "path": "messageId",
+          "column": "messageId",
+          "kind": "string"
+        },
+        {
+          "path": "readAt",
+          "column": "readAt",
+          "kind": "date"
+        },
+        {
+          "path": "senderId",
+          "column": "senderId",
+          "kind": "objectId"
+        },
+        {
+          "path": "senderRole",
+          "column": "senderRole",
+          "kind": "string"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "attachmentMimeType",
+          "column": "attachmentMimeType",
+          "kind": "string"
+        },
+        {
+          "path": "attachmentName",
+          "column": "attachmentName",
+          "kind": "string"
+        },
+        {
+          "path": "attachmentSize",
+          "column": "attachmentSize",
+          "kind": "number"
+        },
+        {
+          "path": "attachmentUrl",
+          "column": "attachmentUrl",
+          "kind": "string"
+        },
+        {
+          "path": "chatId",
+          "column": "chatId",
+          "kind": "json"
+        },
+        {
+          "path": "content",
+          "column": "content",
+          "kind": "string"
+        },
+        {
+          "path": "contentType",
+          "column": "contentType",
+          "kind": "string"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "deletedFor",
+          "column": "deletedFor",
+          "kind": "json"
+        },
+        {
+          "path": "isRead",
+          "column": "isRead",
+          "kind": "boolean"
+        },
+        {
+          "path": "messageId",
+          "column": "messageId",
+          "kind": "string"
+        },
+        {
+          "path": "readAt",
+          "column": "readAt",
+          "kind": "date"
+        },
+        {
+          "path": "senderId",
+          "column": "senderId",
+          "kind": "objectId"
+        },
+        {
+          "path": "senderRole",
+          "column": "senderRole",
+          "kind": "string"
+        }
+      ],
+      "count": 190,
+      "sha256": "b92302958db860943730899e254572c3f6860bf2a34b2b832549b3e457d8f469",
+      "archiveOnly": false
+    },
+    {
+      "name": "notificationdeliveries",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "campaignKey",
+          "column": "campaignKey",
+          "kind": "string"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "dedupeKey",
+          "column": "dedupeKey",
+          "kind": "string"
+        },
+        {
+          "path": "error",
+          "column": "error",
+          "kind": "json"
+        },
+        {
+          "path": "lastActiveAtSnapshot",
+          "column": "lastActiveAtSnapshot",
+          "kind": "date"
+        },
+        {
+          "path": "metadata",
+          "column": "metadata",
+          "kind": "json"
+        },
+        {
+          "path": "ruleType",
+          "column": "ruleType",
+          "kind": "string"
+        },
+        {
+          "path": "sentAt",
+          "column": "sentAt",
+          "kind": "date"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "campaignKey",
+          "column": "campaignKey",
+          "kind": "string"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "dedupeKey",
+          "column": "dedupeKey",
+          "kind": "string"
+        },
+        {
+          "path": "error",
+          "column": "error",
+          "kind": "json"
+        },
+        {
+          "path": "lastActiveAtSnapshot",
+          "column": "lastActiveAtSnapshot",
+          "kind": "date"
+        },
+        {
+          "path": "metadata.adminRuleId",
+          "column": "metadata_adminRuleId",
+          "kind": "string"
+        },
+        {
+          "path": "metadata.audience",
+          "column": "metadata_audience",
+          "kind": "string"
+        },
+        {
+          "path": "metadata.condition",
+          "column": "metadata_condition",
+          "kind": "string"
+        },
+        {
+          "path": "metadata.notificationType",
+          "column": "metadata_notificationType",
+          "kind": "string"
+        },
+        {
+          "path": "metadata.promotionId",
+          "column": "metadata_promotionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "metadata.specialization",
+          "column": "metadata_specialization",
+          "kind": "string"
+        },
+        {
+          "path": "ruleType",
+          "column": "ruleType",
+          "kind": "string"
+        },
+        {
+          "path": "sentAt",
+          "column": "sentAt",
+          "kind": "date"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "count": 20,
+      "sha256": "24d38f85effa8d8a536b667462b4338e8f7456606c5774a1ec0be8c1b764fa4c",
+      "archiveOnly": false
+    },
+    {
+      "name": "notificationrules",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "actionUrl",
+          "column": "actionUrl",
+          "kind": "string"
+        },
+        {
+          "path": "audience",
+          "column": "audience",
+          "kind": "string"
+        },
+        {
+          "path": "body",
+          "column": "body",
+          "kind": "string"
+        },
+        {
+          "path": "condition",
+          "column": "condition",
+          "kind": "string"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "createdBy",
+          "column": "createdBy",
+          "kind": "json"
+        },
+        {
+          "path": "data",
+          "column": "data",
+          "kind": "json"
+        },
+        {
+          "path": "lastProcessedAt",
+          "column": "lastProcessedAt",
+          "kind": "date"
+        },
+        {
+          "path": "notificationType",
+          "column": "notificationType",
+          "kind": "string"
+        },
+        {
+          "path": "scheduledAt",
+          "column": "scheduledAt",
+          "kind": "date"
+        },
+        {
+          "path": "selectedCounsellorIds",
+          "column": "selectedCounsellorIds",
+          "kind": "json"
+        },
+        {
+          "path": "selectedUserIds",
+          "column": "selectedUserIds",
+          "kind": "json"
+        },
+        {
+          "path": "sendImmediately",
+          "column": "sendImmediately",
+          "kind": "boolean"
+        },
+        {
+          "path": "specialization",
+          "column": "specialization",
+          "kind": "string"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "timezone",
+          "column": "timezone",
+          "kind": "string"
+        },
+        {
+          "path": "title",
+          "column": "title",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "updatedBy",
+          "column": "updatedBy",
+          "kind": "json"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "actionUrl",
+          "column": "actionUrl",
+          "kind": "string"
+        },
+        {
+          "path": "audience",
+          "column": "audience",
+          "kind": "string"
+        },
+        {
+          "path": "body",
+          "column": "body",
+          "kind": "string"
+        },
+        {
+          "path": "condition",
+          "column": "condition",
+          "kind": "string"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "createdBy.adminEmail",
+          "column": "createdBy_adminEmail",
+          "kind": "string"
+        },
+        {
+          "path": "createdBy.adminId",
+          "column": "createdBy_adminId",
+          "kind": "objectId"
+        },
+        {
+          "path": "data",
+          "column": "data",
+          "kind": "json"
+        },
+        {
+          "path": "lastProcessedAt",
+          "column": "lastProcessedAt",
+          "kind": "date"
+        },
+        {
+          "path": "notificationType",
+          "column": "notificationType",
+          "kind": "string"
+        },
+        {
+          "path": "scheduledAt",
+          "column": "scheduledAt",
+          "kind": "date"
+        },
+        {
+          "path": "selectedCounsellorIds",
+          "column": "selectedCounsellorIds",
+          "kind": "json"
+        },
+        {
+          "path": "selectedUserIds",
+          "column": "selectedUserIds",
+          "kind": "json"
+        },
+        {
+          "path": "sendImmediately",
+          "column": "sendImmediately",
+          "kind": "boolean"
+        },
+        {
+          "path": "specialization",
+          "column": "specialization",
+          "kind": "string"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "timezone",
+          "column": "timezone",
+          "kind": "string"
+        },
+        {
+          "path": "title",
+          "column": "title",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "updatedBy.adminEmail",
+          "column": "updatedBy_adminEmail",
+          "kind": "string"
+        },
+        {
+          "path": "updatedBy.adminId",
+          "column": "updatedBy_adminId",
+          "kind": "objectId"
+        }
+      ],
+      "count": 1,
+      "sha256": "465ba2f2dae69915646818807090aed8320bbb58af9f9d3ed4dde587e7769cc7",
+      "archiveOnly": false
+    },
+    {
+      "name": "notifications",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "actionUrl",
+          "column": "actionUrl",
+          "kind": "string"
+        },
+        {
+          "path": "actorId",
+          "column": "actorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "data",
+          "column": "data",
+          "kind": "json"
+        },
+        {
+          "path": "isRead",
+          "column": "isRead",
+          "kind": "boolean"
+        },
+        {
+          "path": "message",
+          "column": "message",
+          "kind": "string"
+        },
+        {
+          "path": "readAt",
+          "column": "readAt",
+          "kind": "date"
+        },
+        {
+          "path": "recipientId",
+          "column": "recipientId",
+          "kind": "objectId"
+        },
+        {
+          "path": "title",
+          "column": "title",
+          "kind": "string"
+        },
+        {
+          "path": "type",
+          "column": "type",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "actionUrl",
+          "column": "actionUrl",
+          "kind": "string"
+        },
+        {
+          "path": "actorId",
+          "column": "actorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "data",
+          "column": "data",
+          "kind": "json"
+        },
+        {
+          "path": "isRead",
+          "column": "isRead",
+          "kind": "boolean"
+        },
+        {
+          "path": "message",
+          "column": "message",
+          "kind": "string"
+        },
+        {
+          "path": "readAt",
+          "column": "readAt",
+          "kind": "date"
+        },
+        {
+          "path": "recipientId",
+          "column": "recipientId",
+          "kind": "objectId"
+        },
+        {
+          "path": "title",
+          "column": "title",
+          "kind": "string"
+        },
+        {
+          "path": "type",
+          "column": "type",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "count": 1276,
+      "sha256": "f8183f27b3e33221b296cae30f1235538b961d66591def68885e5d4589f42528",
+      "archiveOnly": false
+    },
+    {
+      "name": "notificationtokens",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "active",
+          "column": "active",
+          "kind": "boolean"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "lastUpdatedAt",
+          "column": "lastUpdatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "platform",
+          "column": "platform",
+          "kind": "string"
+        },
+        {
+          "path": "token",
+          "column": "token",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "active",
+          "column": "active",
+          "kind": "boolean"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "lastUpdatedAt",
+          "column": "lastUpdatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "platform",
+          "column": "platform",
+          "kind": "string"
+        },
+        {
+          "path": "token",
+          "column": "token",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "count": 11,
+      "sha256": "ff22a3069b572d3ee631dbf1a17e775cf7f23a84949cf36b6b779c1cc1639d4e",
+      "archiveOnly": false
+    },
+    {
+      "name": "otps",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "expiresAt",
+          "column": "expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "otp",
+          "column": "otp",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "expiresAt",
+          "column": "expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "otp",
+          "column": "otp",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "count": 3,
+      "sha256": "61cd96a7187e35e71cb654205f0384776e82e1df04417c9d2417efd2c983bf01",
+      "archiveOnly": false
+    },
+    {
+      "name": "payouts",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "amount",
+          "column": "amount",
+          "kind": "number"
+        },
+        {
+          "path": "approvedAt",
+          "column": "approvedAt",
+          "kind": "date"
+        },
+        {
+          "path": "approvedBy",
+          "column": "approvedBy",
+          "kind": "objectId"
+        },
+        {
+          "path": "bankDetails",
+          "column": "bankDetails",
+          "kind": "json"
+        },
+        {
+          "path": "completedAt",
+          "column": "completedAt",
+          "kind": "date"
+        },
+        {
+          "path": "counselorEmail",
+          "column": "counselorEmail",
+          "kind": "string"
+        },
+        {
+          "path": "counselorId",
+          "column": "counselorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "counselorName",
+          "column": "counselorName",
+          "kind": "string"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "currency",
+          "column": "currency",
+          "kind": "string"
+        },
+        {
+          "path": "failureReason",
+          "column": "failureReason",
+          "kind": "string"
+        },
+        {
+          "path": "metadata",
+          "column": "metadata",
+          "kind": "json"
+        },
+        {
+          "path": "netAmount",
+          "column": "netAmount",
+          "kind": "number"
+        },
+        {
+          "path": "notes",
+          "column": "notes",
+          "kind": "string"
+        },
+        {
+          "path": "paymentMethod",
+          "column": "paymentMethod",
+          "kind": "string"
+        },
+        {
+          "path": "payoutId",
+          "column": "payoutId",
+          "kind": "string"
+        },
+        {
+          "path": "period",
+          "column": "period",
+          "kind": "json"
+        },
+        {
+          "path": "processedAt",
+          "column": "processedAt",
+          "kind": "date"
+        },
+        {
+          "path": "processedBy",
+          "column": "processedBy",
+          "kind": "objectId"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "taxAmount",
+          "column": "taxAmount",
+          "kind": "number"
+        },
+        {
+          "path": "taxDocument",
+          "column": "taxDocument",
+          "kind": "string"
+        },
+        {
+          "path": "transactionReference",
+          "column": "transactionReference",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "amount",
+          "column": "amount",
+          "kind": "number"
+        },
+        {
+          "path": "approvedAt",
+          "column": "approvedAt",
+          "kind": "date"
+        },
+        {
+          "path": "approvedBy",
+          "column": "approvedBy",
+          "kind": "objectId"
+        },
+        {
+          "path": "bankDetails.accountHolderName",
+          "column": "bankDetails_accountHolderName",
+          "kind": "string"
+        },
+        {
+          "path": "bankDetails.accountNumber",
+          "column": "bankDetails_accountNumber",
+          "kind": "string"
+        },
+        {
+          "path": "bankDetails.bankName",
+          "column": "bankDetails_bankName",
+          "kind": "string"
+        },
+        {
+          "path": "bankDetails.ifscCode",
+          "column": "bankDetails_ifscCode",
+          "kind": "string"
+        },
+        {
+          "path": "bankDetails.upiId",
+          "column": "bankDetails_upiId",
+          "kind": "string"
+        },
+        {
+          "path": "completedAt",
+          "column": "completedAt",
+          "kind": "date"
+        },
+        {
+          "path": "counselorEmail",
+          "column": "counselorEmail",
+          "kind": "string"
+        },
+        {
+          "path": "counselorId",
+          "column": "counselorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "counselorName",
+          "column": "counselorName",
+          "kind": "string"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "currency",
+          "column": "currency",
+          "kind": "string"
+        },
+        {
+          "path": "failureReason",
+          "column": "failureReason",
+          "kind": "string"
+        },
+        {
+          "path": "metadata",
+          "column": "metadata",
+          "kind": "json"
+        },
+        {
+          "path": "netAmount",
+          "column": "netAmount",
+          "kind": "number"
+        },
+        {
+          "path": "notes",
+          "column": "notes",
+          "kind": "string"
+        },
+        {
+          "path": "paymentMethod",
+          "column": "paymentMethod",
+          "kind": "string"
+        },
+        {
+          "path": "payoutId",
+          "column": "payoutId",
+          "kind": "string"
+        },
+        {
+          "path": "period.endDate",
+          "column": "period_endDate",
+          "kind": "date"
+        },
+        {
+          "path": "period.startDate",
+          "column": "period_startDate",
+          "kind": "date"
+        },
+        {
+          "path": "processedAt",
+          "column": "processedAt",
+          "kind": "date"
+        },
+        {
+          "path": "processedBy",
+          "column": "processedBy",
+          "kind": "objectId"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "taxAmount",
+          "column": "taxAmount",
+          "kind": "number"
+        },
+        {
+          "path": "taxDocument",
+          "column": "taxDocument",
+          "kind": "string"
+        },
+        {
+          "path": "transactionReference",
+          "column": "transactionReference",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveOnly": false
+    },
+    {
+      "name": "prescriptions",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "chatId",
+          "column": "chatId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "festivalTheme",
+          "column": "festivalTheme",
+          "kind": "string"
+        },
+        {
+          "path": "identityVerification",
+          "column": "identityVerification",
+          "kind": "json"
+        },
+        {
+          "path": "instructions",
+          "column": "instructions",
+          "kind": "string"
+        },
+        {
+          "path": "issuedAt",
+          "column": "issuedAt",
+          "kind": "date"
+        },
+        {
+          "path": "medicines",
+          "column": "medicines",
+          "kind": "json"
+        },
+        {
+          "path": "patientId",
+          "column": "patientId",
+          "kind": "objectId"
+        },
+        {
+          "path": "patientPhoto",
+          "column": "patientPhoto",
+          "kind": "json"
+        },
+        {
+          "path": "patientSnapshot",
+          "column": "patientSnapshot",
+          "kind": "json"
+        },
+        {
+          "path": "pdf",
+          "column": "pdf",
+          "kind": "json"
+        },
+        {
+          "path": "problem",
+          "column": "problem",
+          "kind": "string"
+        },
+        {
+          "path": "psychiatristId",
+          "column": "psychiatristId",
+          "kind": "objectId"
+        },
+        {
+          "path": "psychiatristSnapshot",
+          "column": "psychiatristSnapshot",
+          "kind": "json"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "chatId",
+          "column": "chatId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "festivalTheme",
+          "column": "festivalTheme",
+          "kind": "string"
+        },
+        {
+          "path": "identityVerification.rejectionReason",
+          "column": "identityVerification_rejectionReason",
+          "kind": "string"
+        },
+        {
+          "path": "identityVerification.reviewedAt",
+          "column": "identityVerification_reviewedAt",
+          "kind": "date"
+        },
+        {
+          "path": "identityVerification.reviewedBy",
+          "column": "identityVerification_reviewedBy",
+          "kind": "objectId"
+        },
+        {
+          "path": "identityVerification.status",
+          "column": "identityVerification_status",
+          "kind": "string"
+        },
+        {
+          "path": "instructions",
+          "column": "instructions",
+          "kind": "string"
+        },
+        {
+          "path": "issuedAt",
+          "column": "issuedAt",
+          "kind": "date"
+        },
+        {
+          "path": "medicines",
+          "column": "medicines",
+          "kind": "json"
+        },
+        {
+          "path": "patientId",
+          "column": "patientId",
+          "kind": "objectId"
+        },
+        {
+          "path": "patientPhoto.data",
+          "column": "patientPhoto_data",
+          "kind": "json"
+        },
+        {
+          "path": "patientPhoto.mimeType",
+          "column": "patientPhoto_mimeType",
+          "kind": "string"
+        },
+        {
+          "path": "patientPhoto.name",
+          "column": "patientPhoto_name",
+          "kind": "string"
+        },
+        {
+          "path": "patientSnapshot.name",
+          "column": "patientSnapshot_name",
+          "kind": "string"
+        },
+        {
+          "path": "patientSnapshot.photo",
+          "column": "patientSnapshot_photo",
+          "kind": "string"
+        },
+        {
+          "path": "pdf.data",
+          "column": "pdf_data",
+          "kind": "json"
+        },
+        {
+          "path": "pdf.mimeType",
+          "column": "pdf_mimeType",
+          "kind": "string"
+        },
+        {
+          "path": "pdf.name",
+          "column": "pdf_name",
+          "kind": "string"
+        },
+        {
+          "path": "pdf.size",
+          "column": "pdf_size",
+          "kind": "number"
+        },
+        {
+          "path": "pdf.url",
+          "column": "pdf_url",
+          "kind": "string"
+        },
+        {
+          "path": "problem",
+          "column": "problem",
+          "kind": "string"
+        },
+        {
+          "path": "psychiatristId",
+          "column": "psychiatristId",
+          "kind": "objectId"
+        },
+        {
+          "path": "psychiatristSnapshot.name",
+          "column": "psychiatristSnapshot_name",
+          "kind": "string"
+        },
+        {
+          "path": "psychiatristSnapshot.prescriptionSeal",
+          "column": "psychiatristSnapshot_prescriptionSeal",
+          "kind": "string"
+        },
+        {
+          "path": "psychiatristSnapshot.prescriptionSignature",
+          "column": "psychiatristSnapshot_prescriptionSignature",
+          "kind": "string"
+        },
+        {
+          "path": "psychiatristSnapshot.qualification",
+          "column": "psychiatristSnapshot_qualification",
+          "kind": "string"
+        },
+        {
+          "path": "psychiatristSnapshot.specialization",
+          "column": "psychiatristSnapshot_specialization",
+          "kind": "json"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "count": 10,
+      "sha256": "e143a831be12929efcde275420c75adea16a2c215f3d8fc5f310bdb468b35377",
+      "archiveOnly": false
+    },
+    {
+      "name": "promotioncampaigns",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "activeStatus",
+          "column": "activeStatus",
+          "kind": "string"
+        },
+        {
+          "path": "audience",
+          "column": "audience",
+          "kind": "string"
+        },
+        {
+          "path": "body",
+          "column": "body",
+          "kind": "string"
+        },
+        {
+          "path": "counsellorIds",
+          "column": "counsellorIds",
+          "kind": "json"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "createdBy",
+          "column": "createdBy",
+          "kind": "json"
+        },
+        {
+          "path": "error",
+          "column": "error",
+          "kind": "json"
+        },
+        {
+          "path": "notificationType",
+          "column": "notificationType",
+          "kind": "string"
+        },
+        {
+          "path": "scheduledAt",
+          "column": "scheduledAt",
+          "kind": "date"
+        },
+        {
+          "path": "sentAt",
+          "column": "sentAt",
+          "kind": "date"
+        },
+        {
+          "path": "specialization",
+          "column": "specialization",
+          "kind": "json"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "summary",
+          "column": "summary",
+          "kind": "json"
+        },
+        {
+          "path": "title",
+          "column": "title",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userIds",
+          "column": "userIds",
+          "kind": "json"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "activeStatus",
+          "column": "activeStatus",
+          "kind": "string"
+        },
+        {
+          "path": "audience",
+          "column": "audience",
+          "kind": "string"
+        },
+        {
+          "path": "body",
+          "column": "body",
+          "kind": "string"
+        },
+        {
+          "path": "counsellorIds",
+          "column": "counsellorIds",
+          "kind": "json"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "createdBy",
+          "column": "createdBy",
+          "kind": "json"
+        },
+        {
+          "path": "error",
+          "column": "error",
+          "kind": "json"
+        },
+        {
+          "path": "notificationType",
+          "column": "notificationType",
+          "kind": "string"
+        },
+        {
+          "path": "scheduledAt",
+          "column": "scheduledAt",
+          "kind": "date"
+        },
+        {
+          "path": "sentAt",
+          "column": "sentAt",
+          "kind": "date"
+        },
+        {
+          "path": "specialization",
+          "column": "specialization",
+          "kind": "json"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "summary.failedCount",
+          "column": "summary_failedCount",
+          "kind": "number"
+        },
+        {
+          "path": "summary.sentCount",
+          "column": "summary_sentCount",
+          "kind": "number"
+        },
+        {
+          "path": "summary.skippedCount",
+          "column": "summary_skippedCount",
+          "kind": "number"
+        },
+        {
+          "path": "summary.totalMatched",
+          "column": "summary_totalMatched",
+          "kind": "number"
+        },
+        {
+          "path": "title",
+          "column": "title",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userIds",
+          "column": "userIds",
+          "kind": "json"
+        }
+      ],
+      "count": 1,
+      "sha256": "88c0e0d6aad6f011cecee5f7e54d3253e0f88fdccda45aa3e5caf4300e27e5ea",
+      "archiveOnly": false
+    },
+    {
+      "name": "ratings",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "chatId",
+          "column": "chatId",
+          "kind": "string"
+        },
+        {
+          "path": "comment",
+          "column": "comment",
+          "kind": "string"
+        },
+        {
+          "path": "counselor",
+          "column": "counselor",
+          "kind": "objectId"
+        },
+        {
+          "path": "counselorId",
+          "column": "counselorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "rating",
+          "column": "rating",
+          "kind": "number"
+        },
+        {
+          "path": "review",
+          "column": "review",
+          "kind": "string"
+        },
+        {
+          "path": "sessionId",
+          "column": "sessionId",
+          "kind": "string"
+        },
+        {
+          "path": "stars",
+          "column": "stars",
+          "kind": "number"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "user",
+          "column": "user",
+          "kind": "objectId"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "chatId",
+          "column": "chatId",
+          "kind": "string"
+        },
+        {
+          "path": "comment",
+          "column": "comment",
+          "kind": "string"
+        },
+        {
+          "path": "counselor",
+          "column": "counselor",
+          "kind": "objectId"
+        },
+        {
+          "path": "counselorId",
+          "column": "counselorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "rating",
+          "column": "rating",
+          "kind": "number"
+        },
+        {
+          "path": "review",
+          "column": "review",
+          "kind": "string"
+        },
+        {
+          "path": "sessionId",
+          "column": "sessionId",
+          "kind": "string"
+        },
+        {
+          "path": "stars",
+          "column": "stars",
+          "kind": "number"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "user",
+          "column": "user",
+          "kind": "objectId"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "count": 1,
+      "sha256": "062a4889ac4e1fec3ef10d7fff6f112cd284f5407a94dafcf3c58a46a660a152",
+      "archiveOnly": false
+    },
+    {
+      "name": "ratingstatuses",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "counselorId",
+          "column": "counselorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "eligibleAt",
+          "column": "eligibleAt",
+          "kind": "date"
+        },
+        {
+          "path": "eligibleReason",
+          "column": "eligibleReason",
+          "kind": "string"
+        },
+        {
+          "path": "hasRated",
+          "column": "hasRated",
+          "kind": "boolean"
+        },
+        {
+          "path": "lastInteractionAt",
+          "column": "lastInteractionAt",
+          "kind": "date"
+        },
+        {
+          "path": "neverAskAgain",
+          "column": "neverAskAgain",
+          "kind": "boolean"
+        },
+        {
+          "path": "remindLaterUntil",
+          "column": "remindLaterUntil",
+          "kind": "date"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "counselorId",
+          "column": "counselorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "eligibleAt",
+          "column": "eligibleAt",
+          "kind": "date"
+        },
+        {
+          "path": "eligibleReason",
+          "column": "eligibleReason",
+          "kind": "string"
+        },
+        {
+          "path": "hasRated",
+          "column": "hasRated",
+          "kind": "boolean"
+        },
+        {
+          "path": "lastInteractionAt",
+          "column": "lastInteractionAt",
+          "kind": "date"
+        },
+        {
+          "path": "neverAskAgain",
+          "column": "neverAskAgain",
+          "kind": "boolean"
+        },
+        {
+          "path": "remindLaterUntil",
+          "column": "remindLaterUntil",
+          "kind": "date"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "count": 2,
+      "sha256": "beb4f1cf303c52d8e76f46612813871857ecaea518873f29e5489f5ce2f45f05",
+      "archiveOnly": false
+    },
+    {
+      "name": "refreshtokens",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "ipAddress",
+          "column": "ipAddress",
+          "kind": "string"
+        },
+        {
+          "path": "token",
+          "column": "token",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userAgent",
+          "column": "userAgent",
+          "kind": "string"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "ipAddress",
+          "column": "ipAddress",
+          "kind": "string"
+        },
+        {
+          "path": "token",
+          "column": "token",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userAgent",
+          "column": "userAgent",
+          "kind": "string"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveOnly": false
+    },
+    {
+      "name": "registrationotps",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "email",
+          "column": "email",
+          "kind": "string"
+        },
+        {
+          "path": "expiresAt",
+          "column": "expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "otp",
+          "column": "otp",
+          "kind": "string"
+        },
+        {
+          "path": "purpose",
+          "column": "purpose",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "email",
+          "column": "email",
+          "kind": "string"
+        },
+        {
+          "path": "expiresAt",
+          "column": "expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "otp",
+          "column": "otp",
+          "kind": "string"
+        },
+        {
+          "path": "purpose",
+          "column": "purpose",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        }
+      ],
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveOnly": false
+    },
+    {
+      "name": "sessions",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "isActive",
+          "column": "isActive",
+          "kind": "boolean"
+        },
+        {
+          "path": "lastActivityAt",
+          "column": "lastActivityAt",
+          "kind": "date"
+        },
+        {
+          "path": "logoutAt",
+          "column": "logoutAt",
+          "kind": "date"
+        },
+        {
+          "path": "refreshToken",
+          "column": "refreshToken",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "isActive",
+          "column": "isActive",
+          "kind": "boolean"
+        },
+        {
+          "path": "lastActivityAt",
+          "column": "lastActivityAt",
+          "kind": "date"
+        },
+        {
+          "path": "logoutAt",
+          "column": "logoutAt",
+          "kind": "date"
+        },
+        {
+          "path": "refreshToken",
+          "column": "refreshToken",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "count": 271,
+      "sha256": "f117fb4d9a7de8daacb8e44f80ecb999922ed155fd6c451371381a7033d4291f",
+      "archiveOnly": false
+    },
+    {
+      "name": "settings",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "category",
+          "column": "category",
+          "kind": "string"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "description",
+          "column": "description",
+          "kind": "string"
+        },
+        {
+          "path": "key",
+          "column": "key",
+          "kind": "string"
+        },
+        {
+          "path": "type",
+          "column": "type",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "updatedBy",
+          "column": "updatedBy",
+          "kind": "objectId"
+        },
+        {
+          "path": "value",
+          "column": "value",
+          "kind": "json"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "category",
+          "column": "category",
+          "kind": "string"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "description",
+          "column": "description",
+          "kind": "string"
+        },
+        {
+          "path": "key",
+          "column": "key",
+          "kind": "string"
+        },
+        {
+          "path": "type",
+          "column": "type",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "updatedBy",
+          "column": "updatedBy",
+          "kind": "objectId"
+        },
+        {
+          "path": "value",
+          "column": "value",
+          "kind": "json"
+        }
+      ],
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveOnly": false
+    },
+    {
+      "name": "supporttickets",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "assignedTo",
+          "column": "assignedTo",
+          "kind": "string"
+        },
+        {
+          "path": "callDispute",
+          "column": "callDispute",
+          "kind": "json"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "lastMessageAt",
+          "column": "lastMessageAt",
+          "kind": "date"
+        },
+        {
+          "path": "messages",
+          "column": "messages",
+          "kind": "json"
+        },
+        {
+          "path": "priority",
+          "column": "priority",
+          "kind": "string"
+        },
+        {
+          "path": "requesterEmail",
+          "column": "requesterEmail",
+          "kind": "string"
+        },
+        {
+          "path": "requesterName",
+          "column": "requesterName",
+          "kind": "string"
+        },
+        {
+          "path": "resolvedAt",
+          "column": "resolvedAt",
+          "kind": "date"
+        },
+        {
+          "path": "source",
+          "column": "source",
+          "kind": "string"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "subject",
+          "column": "subject",
+          "kind": "string"
+        },
+        {
+          "path": "ticketNumber",
+          "column": "ticketNumber",
+          "kind": "string"
+        },
+        {
+          "path": "unreadByAdmin",
+          "column": "unreadByAdmin",
+          "kind": "boolean"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "assignedTo",
+          "column": "assignedTo",
+          "kind": "string"
+        },
+        {
+          "path": "callDispute.actualDurationSeconds",
+          "column": "callDispute_actualDurationSeconds",
+          "kind": "number"
+        },
+        {
+          "path": "callDispute.adjustmentId",
+          "column": "callDispute_adjustmentId",
+          "kind": "string"
+        },
+        {
+          "path": "callDispute.callId",
+          "column": "callDispute_callId",
+          "kind": "string"
+        },
+        {
+          "path": "callDispute.chargedAmount",
+          "column": "callDispute_chargedAmount",
+          "kind": "number"
+        },
+        {
+          "path": "callDispute.correctAmount",
+          "column": "callDispute_correctAmount",
+          "kind": "number"
+        },
+        {
+          "path": "callDispute.counselorReversal",
+          "column": "callDispute_counselorReversal",
+          "kind": "number"
+        },
+        {
+          "path": "callDispute.investigatedAt",
+          "column": "callDispute_investigatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "callDispute.platformReversal",
+          "column": "callDispute_platformReversal",
+          "kind": "number"
+        },
+        {
+          "path": "callDispute.reason",
+          "column": "callDispute_reason",
+          "kind": "string"
+        },
+        {
+          "path": "callDispute.refundedAmount",
+          "column": "callDispute_refundedAmount",
+          "kind": "number"
+        },
+        {
+          "path": "callDispute.refundedAt",
+          "column": "callDispute_refundedAt",
+          "kind": "date"
+        },
+        {
+          "path": "callDispute.resolvedBy",
+          "column": "callDispute_resolvedBy",
+          "kind": "string"
+        },
+        {
+          "path": "callDispute.status",
+          "column": "callDispute_status",
+          "kind": "string"
+        },
+        {
+          "path": "callDispute.transactionId",
+          "column": "callDispute_transactionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "lastMessageAt",
+          "column": "lastMessageAt",
+          "kind": "date"
+        },
+        {
+          "path": "messages",
+          "column": "messages",
+          "kind": "json"
+        },
+        {
+          "path": "priority",
+          "column": "priority",
+          "kind": "string"
+        },
+        {
+          "path": "requesterEmail",
+          "column": "requesterEmail",
+          "kind": "string"
+        },
+        {
+          "path": "requesterName",
+          "column": "requesterName",
+          "kind": "string"
+        },
+        {
+          "path": "resolvedAt",
+          "column": "resolvedAt",
+          "kind": "date"
+        },
+        {
+          "path": "source",
+          "column": "source",
+          "kind": "string"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "subject",
+          "column": "subject",
+          "kind": "string"
+        },
+        {
+          "path": "ticketNumber",
+          "column": "ticketNumber",
+          "kind": "string"
+        },
+        {
+          "path": "unreadByAdmin",
+          "column": "unreadByAdmin",
+          "kind": "boolean"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveOnly": false
+    },
+    {
+      "name": "transactions",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "amount",
+          "column": "amount",
+          "kind": "number"
+        },
+        {
+          "path": "chatId",
+          "column": "chatId",
+          "kind": "objectId"
+        },
+        {
+          "path": "counselorEarnings",
+          "column": "counselorEarnings",
+          "kind": "number"
+        },
+        {
+          "path": "counselorId",
+          "column": "counselorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "currency",
+          "column": "currency",
+          "kind": "string"
+        },
+        {
+          "path": "description",
+          "column": "description",
+          "kind": "string"
+        },
+        {
+          "path": "metadata",
+          "column": "metadata",
+          "kind": "json"
+        },
+        {
+          "path": "paymentMethod",
+          "column": "paymentMethod",
+          "kind": "string"
+        },
+        {
+          "path": "platformFee",
+          "column": "platformFee",
+          "kind": "number"
+        },
+        {
+          "path": "razorpayOrderId",
+          "column": "razorpayOrderId",
+          "kind": "string"
+        },
+        {
+          "path": "razorpayPaymentId",
+          "column": "razorpayPaymentId",
+          "kind": "string"
+        },
+        {
+          "path": "razorpaySignature",
+          "column": "razorpaySignature",
+          "kind": "string"
+        },
+        {
+          "path": "relatedTransactionId",
+          "column": "relatedTransactionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "sessionId",
+          "column": "sessionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "transactionId",
+          "column": "transactionId",
+          "kind": "string"
+        },
+        {
+          "path": "type",
+          "column": "type",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "amount",
+          "column": "amount",
+          "kind": "number"
+        },
+        {
+          "path": "chatId",
+          "column": "chatId",
+          "kind": "objectId"
+        },
+        {
+          "path": "counselorEarnings",
+          "column": "counselorEarnings",
+          "kind": "number"
+        },
+        {
+          "path": "counselorId",
+          "column": "counselorId",
+          "kind": "objectId"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "currency",
+          "column": "currency",
+          "kind": "string"
+        },
+        {
+          "path": "description",
+          "column": "description",
+          "kind": "string"
+        },
+        {
+          "path": "metadata",
+          "column": "metadata",
+          "kind": "json"
+        },
+        {
+          "path": "paymentMethod",
+          "column": "paymentMethod",
+          "kind": "string"
+        },
+        {
+          "path": "platformFee",
+          "column": "platformFee",
+          "kind": "number"
+        },
+        {
+          "path": "razorpayOrderId",
+          "column": "razorpayOrderId",
+          "kind": "string"
+        },
+        {
+          "path": "razorpayPaymentId",
+          "column": "razorpayPaymentId",
+          "kind": "string"
+        },
+        {
+          "path": "razorpaySignature",
+          "column": "razorpaySignature",
+          "kind": "string"
+        },
+        {
+          "path": "relatedTransactionId",
+          "column": "relatedTransactionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "sessionId",
+          "column": "sessionId",
+          "kind": "objectId"
+        },
+        {
+          "path": "status",
+          "column": "status",
+          "kind": "string"
+        },
+        {
+          "path": "transactionId",
+          "column": "transactionId",
+          "kind": "string"
+        },
+        {
+          "path": "type",
+          "column": "type",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "userId",
+          "column": "userId",
+          "kind": "objectId"
+        }
+      ],
+      "count": 207,
+      "sha256": "4bc9f91551cacd6a34081fd18898f5bde65790c0afa885231821901c7ed492eb",
+      "archiveOnly": false
+    },
+    {
+      "name": "users",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "aboutMe",
+          "column": "aboutMe",
+          "kind": "string"
+        },
+        {
+          "path": "activeClients",
+          "column": "activeClients",
+          "kind": "number"
+        },
+        {
+          "path": "activeWalletRefundRequest",
+          "column": "activeWalletRefundRequest",
+          "kind": "boolean"
+        },
+        {
+          "path": "address",
+          "column": "address",
+          "kind": "json"
+        },
+        {
+          "path": "age",
+          "column": "age",
+          "kind": "number"
+        },
+        {
+          "path": "anonymous",
+          "column": "anonymous",
+          "kind": "string"
+        },
+        {
+          "path": "authProvider",
+          "column": "authProvider",
+          "kind": "string"
+        },
+        {
+          "path": "availability",
+          "column": "availability",
+          "kind": "string"
+        },
+        {
+          "path": "bio",
+          "column": "bio",
+          "kind": "string"
+        },
+        {
+          "path": "bloodGroup",
+          "column": "bloodGroup",
+          "kind": "string"
+        },
+        {
+          "path": "certifications",
+          "column": "certifications",
+          "kind": "json"
+        },
+        {
+          "path": "chatContext",
+          "column": "chatContext",
+          "kind": "json"
+        },
+        {
+          "path": "chatPermission",
+          "column": "chatPermission",
+          "kind": "json"
+        },
+        {
+          "path": "consultationMode",
+          "column": "consultationMode",
+          "kind": "json"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "dateOfBirth",
+          "column": "dateOfBirth",
+          "kind": "date"
+        },
+        {
+          "path": "devicePlatform",
+          "column": "devicePlatform",
+          "kind": "string"
+        },
+        {
+          "path": "education",
+          "column": "education",
+          "kind": "string"
+        },
+        {
+          "path": "email",
+          "column": "email",
+          "kind": "string"
+        },
+        {
+          "path": "emailOTP",
+          "column": "emailOTP",
+          "kind": "json"
+        },
+        {
+          "path": "emergencyContact",
+          "column": "emergencyContact",
+          "kind": "json"
+        },
+        {
+          "path": "experience",
+          "column": "experience",
+          "kind": "number"
+        },
+        {
+          "path": "fcmToken",
+          "column": "fcmToken",
+          "kind": "string"
+        },
+        {
+          "path": "fullName",
+          "column": "fullName",
+          "kind": "string"
+        },
+        {
+          "path": "gender",
+          "column": "gender",
+          "kind": "string"
+        },
+        {
+          "path": "googleEmail",
+          "column": "googleEmail",
+          "kind": "string"
+        },
+        {
+          "path": "googleId",
+          "column": "googleId",
+          "kind": "string"
+        },
+        {
+          "path": "hourlyRate",
+          "column": "hourlyRate",
+          "kind": "number"
+        },
+        {
+          "path": "instantPayoutCount",
+          "column": "instantPayoutCount",
+          "kind": "number"
+        },
+        {
+          "path": "insuranceInfo",
+          "column": "insuranceInfo",
+          "kind": "json"
+        },
+        {
+          "path": "isActive",
+          "column": "isActive",
+          "kind": "boolean"
+        },
+        {
+          "path": "isEmailVerified",
+          "column": "isEmailVerified",
+          "kind": "boolean"
+        },
+        {
+          "path": "isOnline",
+          "column": "isOnline",
+          "kind": "boolean"
+        },
+        {
+          "path": "isPhoneVerified",
+          "column": "isPhoneVerified",
+          "kind": "boolean"
+        },
+        {
+          "path": "isVerified",
+          "column": "isVerified",
+          "kind": "boolean"
+        },
+        {
+          "path": "languages",
+          "column": "languages",
+          "kind": "json"
+        },
+        {
+          "path": "lastActiveAt",
+          "column": "lastActiveAt",
+          "kind": "date"
+        },
+        {
+          "path": "lastSeen",
+          "column": "lastSeen",
+          "kind": "date"
+        },
+        {
+          "path": "location",
+          "column": "location",
+          "kind": "string"
+        },
+        {
+          "path": "locationConsent",
+          "column": "locationConsent",
+          "kind": "boolean"
+        },
+        {
+          "path": "locationData",
+          "column": "locationData",
+          "kind": "json"
+        },
+        {
+          "path": "medicalInfo",
+          "column": "medicalInfo",
+          "kind": "json"
+        },
+        {
+          "path": "password",
+          "column": "password",
+          "kind": "string"
+        },
+        {
+          "path": "payoutAccount",
+          "column": "payoutAccount",
+          "kind": "json"
+        },
+        {
+          "path": "phone",
+          "column": "phone",
+          "kind": "string"
+        },
+        {
+          "path": "phoneCountryCode",
+          "column": "phoneCountryCode",
+          "kind": "string"
+        },
+        {
+          "path": "phoneNumber",
+          "column": "phoneNumber",
+          "kind": "string"
+        },
+        {
+          "path": "phoneOTP",
+          "column": "phoneOTP",
+          "kind": "json"
+        },
+        {
+          "path": "prescriptionSeal",
+          "column": "prescriptionSeal",
+          "kind": "json"
+        },
+        {
+          "path": "prescriptionSignature",
+          "column": "prescriptionSignature",
+          "kind": "json"
+        },
+        {
+          "path": "profileCompleted",
+          "column": "profileCompleted",
+          "kind": "boolean"
+        },
+        {
+          "path": "profilePhoto",
+          "column": "profilePhoto",
+          "kind": "json"
+        },
+        {
+          "path": "profilePhotoPublicId",
+          "column": "profilePhotoPublicId",
+          "kind": "string"
+        },
+        {
+          "path": "profilePicture",
+          "column": "profilePicture",
+          "kind": "string"
+        },
+        {
+          "path": "qualification",
+          "column": "qualification",
+          "kind": "string"
+        },
+        {
+          "path": "rating",
+          "column": "rating",
+          "kind": "number"
+        },
+        {
+          "path": "ratingCount",
+          "column": "ratingCount",
+          "kind": "number"
+        },
+        {
+          "path": "refreshToken",
+          "column": "refreshToken",
+          "kind": "string"
+        },
+        {
+          "path": "role",
+          "column": "role",
+          "kind": "string"
+        },
+        {
+          "path": "sessionId",
+          "column": "sessionId",
+          "kind": "string"
+        },
+        {
+          "path": "sessionsDone",
+          "column": "sessionsDone",
+          "kind": "number"
+        },
+        {
+          "path": "specialization",
+          "column": "specialization",
+          "kind": "json"
+        },
+        {
+          "path": "totalSessions",
+          "column": "totalSessions",
+          "kind": "number"
+        },
+        {
+          "path": "uniqueCode",
+          "column": "uniqueCode",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "walletAdjustmentIds",
+          "column": "walletAdjustmentIds",
+          "kind": "json"
+        },
+        {
+          "path": "walletBalance",
+          "column": "walletBalance",
+          "kind": "number"
+        },
+        {
+          "path": "walletCreditPaymentIds",
+          "column": "walletCreditPaymentIds",
+          "kind": "json"
+        }
+      ],
+      "oldColumns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "aboutMe",
+          "column": "aboutMe",
+          "kind": "string"
+        },
+        {
+          "path": "activeClients",
+          "column": "activeClients",
+          "kind": "number"
+        },
+        {
+          "path": "activeWalletRefundRequest",
+          "column": "activeWalletRefundRequest",
+          "kind": "boolean"
+        },
+        {
+          "path": "address.city",
+          "column": "address_city",
+          "kind": "string"
+        },
+        {
+          "path": "address.country",
+          "column": "address_country",
+          "kind": "string"
+        },
+        {
+          "path": "address.line1",
+          "column": "address_line1",
+          "kind": "string"
+        },
+        {
+          "path": "address.line2",
+          "column": "address_line2",
+          "kind": "string"
+        },
+        {
+          "path": "address.pincode",
+          "column": "address_pincode",
+          "kind": "string"
+        },
+        {
+          "path": "address.state",
+          "column": "address_state",
+          "kind": "string"
+        },
+        {
+          "path": "age",
+          "column": "age",
+          "kind": "number"
+        },
+        {
+          "path": "anonymous",
+          "column": "anonymous",
+          "kind": "string"
+        },
+        {
+          "path": "authProvider",
+          "column": "authProvider",
+          "kind": "string"
+        },
+        {
+          "path": "availability",
+          "column": "availability",
+          "kind": "string"
+        },
+        {
+          "path": "availabilityStatus",
+          "column": "availabilityStatus",
+          "kind": "string"
+        },
+        {
+          "path": "bio",
+          "column": "bio",
+          "kind": "string"
+        },
+        {
+          "path": "bloodGroup",
+          "column": "bloodGroup",
+          "kind": "string"
+        },
+        {
+          "path": "certifications",
+          "column": "certifications",
+          "kind": "json"
+        },
+        {
+          "path": "chatContext.currentCompany",
+          "column": "chatContext_currentCompany",
+          "kind": "string"
+        },
+        {
+          "path": "chatContext.currentSurrounding",
+          "column": "chatContext_currentSurrounding",
+          "kind": "string"
+        },
+        {
+          "path": "chatContext.safetyFlags",
+          "column": "chatContext_safetyFlags",
+          "kind": "json"
+        },
+        {
+          "path": "chatContext.updatedAt",
+          "column": "chatContext_updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "chatPermission.disabledAt",
+          "column": "chatPermission_disabledAt",
+          "kind": "date"
+        },
+        {
+          "path": "chatPermission.disabledBy",
+          "column": "chatPermission_disabledBy",
+          "kind": "string"
+        },
+        {
+          "path": "chatPermission.disabledReason",
+          "column": "chatPermission_disabledReason",
+          "kind": "string"
+        },
+        {
+          "path": "chatPermission.enabled",
+          "column": "chatPermission_enabled",
+          "kind": "boolean"
+        },
+        {
+          "path": "chatPermission.notes",
+          "column": "chatPermission_notes",
+          "kind": "string"
+        },
+        {
+          "path": "consultationFee",
+          "column": "consultationFee",
+          "kind": "number"
+        },
+        {
+          "path": "consultationMode",
+          "column": "consultationMode",
+          "kind": "json"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "dateOfBirth",
+          "column": "dateOfBirth",
+          "kind": "date"
+        },
+        {
+          "path": "devicePlatform",
+          "column": "devicePlatform",
+          "kind": "string"
+        },
+        {
+          "path": "education",
+          "column": "education",
+          "kind": "string"
+        },
+        {
+          "path": "email",
+          "column": "email",
+          "kind": "string"
+        },
+        {
+          "path": "emailOTP.code",
+          "column": "emailOTP_code",
+          "kind": "string"
+        },
+        {
+          "path": "emailOTP.expiresAt",
+          "column": "emailOTP_expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "emergencyContact.name",
+          "column": "emergencyContact_name",
+          "kind": "string"
+        },
+        {
+          "path": "emergencyContact.phone",
+          "column": "emergencyContact_phone",
+          "kind": "string"
+        },
+        {
+          "path": "emergencyContact.relation",
+          "column": "emergencyContact_relation",
+          "kind": "string"
+        },
+        {
+          "path": "experience",
+          "column": "experience",
+          "kind": "number"
+        },
+        {
+          "path": "fcmToken",
+          "column": "fcmToken",
+          "kind": "string"
+        },
+        {
+          "path": "fullName",
+          "column": "fullName",
+          "kind": "string"
+        },
+        {
+          "path": "gender",
+          "column": "gender",
+          "kind": "string"
+        },
+        {
+          "path": "googleEmail",
+          "column": "googleEmail",
+          "kind": "string"
+        },
+        {
+          "path": "googleId",
+          "column": "googleId",
+          "kind": "string"
+        },
+        {
+          "path": "hourlyRate",
+          "column": "hourlyRate",
+          "kind": "number"
+        },
+        {
+          "path": "instantPayoutCount",
+          "column": "instantPayoutCount",
+          "kind": "number"
+        },
+        {
+          "path": "insuranceInfo.coverageAmount",
+          "column": "insuranceInfo_coverageAmount",
+          "kind": "string"
+        },
+        {
+          "path": "insuranceInfo.groupNumber",
+          "column": "insuranceInfo_groupNumber",
+          "kind": "string"
+        },
+        {
+          "path": "insuranceInfo.insuranceType",
+          "column": "insuranceInfo_insuranceType",
+          "kind": "string"
+        },
+        {
+          "path": "insuranceInfo.nominee",
+          "column": "insuranceInfo_nominee",
+          "kind": "string"
+        },
+        {
+          "path": "insuranceInfo.policyNumber",
+          "column": "insuranceInfo_policyNumber",
+          "kind": "string"
+        },
+        {
+          "path": "insuranceInfo.provider",
+          "column": "insuranceInfo_provider",
+          "kind": "string"
+        },
+        {
+          "path": "insuranceInfo.relationship",
+          "column": "insuranceInfo_relationship",
+          "kind": "string"
+        },
+        {
+          "path": "insuranceInfo.validityDate",
+          "column": "insuranceInfo_validityDate",
+          "kind": "date"
+        },
+        {
+          "path": "isActive",
+          "column": "isActive",
+          "kind": "boolean"
+        },
+        {
+          "path": "isEmailVerified",
+          "column": "isEmailVerified",
+          "kind": "boolean"
+        },
+        {
+          "path": "isOnline",
+          "column": "isOnline",
+          "kind": "boolean"
+        },
+        {
+          "path": "isPhoneVerified",
+          "column": "isPhoneVerified",
+          "kind": "boolean"
+        },
+        {
+          "path": "isVerified",
+          "column": "isVerified",
+          "kind": "boolean"
+        },
+        {
+          "path": "languages",
+          "column": "languages",
+          "kind": "json"
+        },
+        {
+          "path": "lastActiveAt",
+          "column": "lastActiveAt",
+          "kind": "date"
+        },
+        {
+          "path": "lastSeen",
+          "column": "lastSeen",
+          "kind": "date"
+        },
+        {
+          "path": "location",
+          "column": "location",
+          "kind": "string"
+        },
+        {
+          "path": "locationConsent",
+          "column": "locationConsent",
+          "kind": "boolean"
+        },
+        {
+          "path": "locationData.current.address",
+          "column": "locationData_current_address",
+          "kind": "string"
+        },
+        {
+          "path": "locationData.current.capturedAt",
+          "column": "locationData_current_capturedAt",
+          "kind": "date"
+        },
+        {
+          "path": "locationData.current.city",
+          "column": "locationData_current_city",
+          "kind": "string"
+        },
+        {
+          "path": "locationData.current.coordinates",
+          "column": "locationData_current_coordinates",
+          "kind": "json"
+        },
+        {
+          "path": "locationData.current.country",
+          "column": "locationData_current_country",
+          "kind": "string"
+        },
+        {
+          "path": "locationData.current.ipAddress",
+          "column": "locationData_current_ipAddress",
+          "kind": "string"
+        },
+        {
+          "path": "locationData.current.state",
+          "column": "locationData_current_state",
+          "kind": "string"
+        },
+        {
+          "path": "locationData.current.type",
+          "column": "locationData_current_type",
+          "kind": "string"
+        },
+        {
+          "path": "locationData.history",
+          "column": "locationData_history",
+          "kind": "json"
+        },
+        {
+          "path": "locationData.isVerified",
+          "column": "locationData_isVerified",
+          "kind": "boolean"
+        },
+        {
+          "path": "locationData.verificationNotes",
+          "column": "locationData_verificationNotes",
+          "kind": "string"
+        },
+        {
+          "path": "locationData.verifiedAt",
+          "column": "locationData_verifiedAt",
+          "kind": "date"
+        },
+        {
+          "path": "locationData.verifiedBy",
+          "column": "locationData_verifiedBy",
+          "kind": "objectId"
+        },
+        {
+          "path": "medicalInfo.allergies",
+          "column": "medicalInfo_allergies",
+          "kind": "json"
+        },
+        {
+          "path": "medicalInfo.chronicConditions",
+          "column": "medicalInfo_chronicConditions",
+          "kind": "json"
+        },
+        {
+          "path": "medicalInfo.currentMedications",
+          "column": "medicalInfo_currentMedications",
+          "kind": "json"
+        },
+        {
+          "path": "medicalInfo.height",
+          "column": "medicalInfo_height",
+          "kind": "string"
+        },
+        {
+          "path": "medicalInfo.weight",
+          "column": "medicalInfo_weight",
+          "kind": "string"
+        },
+        {
+          "path": "password",
+          "column": "password",
+          "kind": "string"
+        },
+        {
+          "path": "payoutAccount.accountName",
+          "column": "payoutAccount_accountName",
+          "kind": "string"
+        },
+        {
+          "path": "payoutAccount.accountNumber",
+          "column": "payoutAccount_accountNumber",
+          "kind": "string"
+        },
+        {
+          "path": "payoutAccount.bankName",
+          "column": "payoutAccount_bankName",
+          "kind": "string"
+        },
+        {
+          "path": "payoutAccount.ifsc",
+          "column": "payoutAccount_ifsc",
+          "kind": "string"
+        },
+        {
+          "path": "payoutAccount.isVerified",
+          "column": "payoutAccount_isVerified",
+          "kind": "boolean"
+        },
+        {
+          "path": "payoutAccount.verifiedAt",
+          "column": "payoutAccount_verifiedAt",
+          "kind": "date"
+        },
+        {
+          "path": "phone",
+          "column": "phone",
+          "kind": "string"
+        },
+        {
+          "path": "phoneCountryCode",
+          "column": "phoneCountryCode",
+          "kind": "string"
+        },
+        {
+          "path": "phoneNumber",
+          "column": "phoneNumber",
+          "kind": "string"
+        },
+        {
+          "path": "phoneOTP.code",
+          "column": "phoneOTP_code",
+          "kind": "string"
+        },
+        {
+          "path": "phoneOTP.expiresAt",
+          "column": "phoneOTP_expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "prescriptionSeal.bytes",
+          "column": "prescriptionSeal_bytes",
+          "kind": "number"
+        },
+        {
+          "path": "prescriptionSeal.format",
+          "column": "prescriptionSeal_format",
+          "kind": "string"
+        },
+        {
+          "path": "prescriptionSeal.publicId",
+          "column": "prescriptionSeal_publicId",
+          "kind": "string"
+        },
+        {
+          "path": "prescriptionSeal.url",
+          "column": "prescriptionSeal_url",
+          "kind": "string"
+        },
+        {
+          "path": "prescriptionSignature.bytes",
+          "column": "prescriptionSignature_bytes",
+          "kind": "number"
+        },
+        {
+          "path": "prescriptionSignature.format",
+          "column": "prescriptionSignature_format",
+          "kind": "string"
+        },
+        {
+          "path": "prescriptionSignature.publicId",
+          "column": "prescriptionSignature_publicId",
+          "kind": "string"
+        },
+        {
+          "path": "prescriptionSignature.url",
+          "column": "prescriptionSignature_url",
+          "kind": "string"
+        },
+        {
+          "path": "profileCompleted",
+          "column": "profileCompleted",
+          "kind": "boolean"
+        },
+        {
+          "path": "profilePhoto.bytes",
+          "column": "profilePhoto_bytes",
+          "kind": "number"
+        },
+        {
+          "path": "profilePhoto.format",
+          "column": "profilePhoto_format",
+          "kind": "string"
+        },
+        {
+          "path": "profilePhoto.publicId",
+          "column": "profilePhoto_publicId",
+          "kind": "string"
+        },
+        {
+          "path": "profilePhoto.url",
+          "column": "profilePhoto_url",
+          "kind": "string"
+        },
+        {
+          "path": "profilePhotoPublicId",
+          "column": "profilePhotoPublicId",
+          "kind": "string"
+        },
+        {
+          "path": "profilePicture",
+          "column": "profilePicture",
+          "kind": "string"
+        },
+        {
+          "path": "qualification",
+          "column": "qualification",
+          "kind": "string"
+        },
+        {
+          "path": "rating",
+          "column": "rating",
+          "kind": "number"
+        },
+        {
+          "path": "ratingCount",
+          "column": "ratingCount",
+          "kind": "number"
+        },
+        {
+          "path": "refreshToken",
+          "column": "refreshToken",
+          "kind": "string"
+        },
+        {
+          "path": "role",
+          "column": "role",
+          "kind": "string"
+        },
+        {
+          "path": "sessionId",
+          "column": "sessionId",
+          "kind": "string"
+        },
+        {
+          "path": "sessionsDone",
+          "column": "sessionsDone",
+          "kind": "number"
+        },
+        {
+          "path": "specialization",
+          "column": "specialization",
+          "kind": "json"
+        },
+        {
+          "path": "totalSessions",
+          "column": "totalSessions",
+          "kind": "number"
+        },
+        {
+          "path": "uniqueCode",
+          "column": "uniqueCode",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "walletAdjustmentIds",
+          "column": "walletAdjustmentIds",
+          "kind": "json"
+        },
+        {
+          "path": "walletBalance",
+          "column": "walletBalance",
+          "kind": "number"
+        },
+        {
+          "path": "walletCreditPaymentIds",
+          "column": "walletCreditPaymentIds",
+          "kind": "json"
+        }
+      ],
+      "count": 28,
+      "sha256": "0451e5f6e476df306cf76f55166c5255994de37aa53f53457b985c6a0383d53a",
+      "archiveOnly": false
+    }
+  ],
+  "completedAt": "2026-09-11T12:08:11.289Z"
+}

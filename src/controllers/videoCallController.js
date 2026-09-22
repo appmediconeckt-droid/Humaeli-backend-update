@@ -1,9 +1,12 @@
-import mongoose from "mongoose";
-import { v4 as uuidv4 } from "uuid";
+﻿import { v4 as uuidv4 } from "uuid";
 import User from "../models/userModel.js";
 import Call from "../models/Call.js";
 import { chargeCallByDuration } from "../services/paidSessionService.js";
 import { createNotificationSafely } from "../services/notificationService.js";
+
+const isValidId = (id) => id != null && String(id).length >= 12;
+
+
 
 // In-memory storage (replace with database in production)
 const callHistory = [];
@@ -49,7 +52,7 @@ export const videoCallController = {
   // Helper function to get user details from your database
   async getUserDetails(userId, userType) {
     try {
-      if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      if (!userId || !isValidId(userId)) {
         console.log(`Invalid user ID format: ${userId}`);
         return null;
       }
@@ -160,14 +163,14 @@ export const videoCallController = {
       }
 
       // Validate ObjectIds
-      if (!mongoose.Types.ObjectId.isValid(initiatorId)) {
+      if (!isValidId(initiatorId)) {
         return res.status(400).json({
           success: false,
           error: "Invalid initiatorId format",
         });
       }
 
-      if (!mongoose.Types.ObjectId.isValid(receiverId)) {
+      if (!isValidId(receiverId)) {
         return res.status(400).json({
           success: false,
           error: "Invalid receiverId format",
@@ -618,7 +621,7 @@ export const videoCallController = {
         req.body?.acceptorType || req.body?.userType,
       );
 
-      if (!acceptorId || !mongoose.Types.ObjectId.isValid(acceptorId)) {
+      if (!acceptorId || !isValidId(acceptorId)) {
         return res.status(400).json({
           success: false,
           error: "Invalid acceptorId format",
@@ -867,7 +870,7 @@ export const videoCallController = {
 
       if (
         !rejectingUserId ||
-        !mongoose.Types.ObjectId.isValid(rejectingUserId)
+        !isValidId(rejectingUserId)
       ) {
         return res.status(400).json({
           success: false,
@@ -1015,7 +1018,7 @@ export const videoCallController = {
       const { callId } = req.params;
       const { userId, userType } = req.body;
 
-      if (!mongoose.Types.ObjectId.isValid(userId)) {
+      if (!isValidId(userId)) {
         return res.status(400).json({
           success: false,
           error: "Invalid userId format",
@@ -1661,7 +1664,7 @@ export const videoCallController = {
       currentStatus.status = status;
       userStatus.set(userId, currentStatus);
 
-      if (mongoose.Types.ObjectId.isValid(userId)) {
+      if (isValidId(userId)) {
         await User.findByIdAndUpdate(userId, {
           $set: { isActive: status === "online" },
         });
@@ -1776,7 +1779,7 @@ getCallHistory: async (req, res) => {
             call.receiverId?.toString(),
           ])
           .filter(Boolean)
-          .filter((id) => mongoose.Types.ObjectId.isValid(id))
+          .filter((id) => isValidId(id))
       ),
     ];
 
@@ -1907,7 +1910,7 @@ getCallHistory: async (req, res) => {
         });
       }
 
-      const query = mongoose.Types.ObjectId.isValid(callId)
+      const query = isValidId(callId)
         ? { $or: [{ callId }, { _id: callId }] }
         : { callId };
 

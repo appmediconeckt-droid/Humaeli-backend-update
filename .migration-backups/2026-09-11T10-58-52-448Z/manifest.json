@@ -1,0 +1,1504 @@
+{
+  "startedAt": "2026-09-11T10:58:52.553Z",
+  "target": "humaeli",
+  "snapshotTime": "7684230477237977091",
+  "verified": true,
+  "collections": [
+    {
+      "name": "admin_notification_deliveries",
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "ruleId": 1
+          },
+          "name": "ruleId_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "recipientId": 1
+          },
+          "name": "recipientId_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "status": 1
+          },
+          "name": "status_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "dedupeKey": 1
+          },
+          "name": "dedupeKey_1",
+          "background": true,
+          "unique": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "ruleId": 1,
+            "recipientId": 1,
+            "createdAt": -1
+          },
+          "name": "ruleId_1_recipientId_1_createdAt_-1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "recipientId": 1,
+            "createdAt": -1
+          },
+          "name": "recipientId_1_createdAt_-1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "status": 1,
+            "createdAt": -1
+          },
+          "name": "status_1_createdAt_-1",
+          "background": true
+        }
+      ]
+    },
+    {
+      "name": "aichats",
+      "count": 69,
+      "sha256": "adfc1b614982fc3ed33fec0badac8f94010617785b45734546fd636262960e57",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "sessionId": 1
+          },
+          "name": "sessionId_1"
+        }
+      ]
+    },
+    {
+      "name": "appointments",
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        }
+      ]
+    },
+    {
+      "name": "auditlogs",
+      "count": 2,
+      "sha256": "70e297eb7f2f84b9c21687c9361301c32e6f78d2846d60ddcc8a24b8e5f81258",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        }
+      ]
+    },
+    {
+      "name": "calls",
+      "count": 208,
+      "sha256": "14ef951a6d1945969611b8982ddf12132d29cbbbdd37032ee9908b59312d05cb",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "callId": 1
+          },
+          "name": "callId_1",
+          "unique": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "chatId": 1
+          },
+          "name": "chatId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "callerId": 1
+          },
+          "name": "callerId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "receiverId": 1
+          },
+          "name": "receiverId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "status": 1
+          },
+          "name": "status_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "createdAt": -1
+          },
+          "name": "createdAt_-1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "roomId": 1
+          },
+          "name": "roomId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "callerId": 1,
+            "createdAt": -1
+          },
+          "name": "callerId_1_createdAt_-1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "receiverId": 1,
+            "createdAt": -1
+          },
+          "name": "receiverId_1_createdAt_-1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "callerId": 1,
+            "status": 1,
+            "createdAt": -1
+          },
+          "name": "callerId_1_status_1_createdAt_-1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "receiverId": 1,
+            "status": 1,
+            "createdAt": -1
+          },
+          "name": "receiverId_1_status_1_createdAt_-1"
+        }
+      ]
+    },
+    {
+      "name": "chats",
+      "count": 10,
+      "sha256": "3caeceba60566bccdff5fa46268da09783619594dfb72671fa7b3498b8b148a9",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "chatId": 1
+          },
+          "name": "chatId_1",
+          "unique": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "deletedByUser": 1
+          },
+          "name": "deletedByUser_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "deletedByCounselor": 1
+          },
+          "name": "deletedByCounselor_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "archivedByUser": 1
+          },
+          "name": "archivedByUser_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "archivedByCounselor": 1
+          },
+          "name": "archivedByCounselor_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "userId": 1,
+            "counselorId": 1
+          },
+          "name": "userId_1_counselorId_1",
+          "unique": true
+        }
+      ]
+    },
+    {
+      "name": "chatsessions",
+      "count": 11,
+      "sha256": "6aeb5e0c1e9beb1047d3d6bbd93084e7a511af2128d827a2c449bbfff1cad315",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "userId": 1
+          },
+          "name": "userId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "counselorId": 1
+          },
+          "name": "counselorId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "chatId": 1
+          },
+          "name": "chatId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "paymentStatus": 1
+          },
+          "name": "paymentStatus_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "sessionStatus": 1
+          },
+          "name": "sessionStatus_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "expiresAt": 1
+          },
+          "name": "expiresAt_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "counselorId": 1,
+            "sessionStatus": 1,
+            "createdAt": -1
+          },
+          "name": "counselorId_1_sessionStatus_1_createdAt_-1"
+        }
+      ]
+    },
+    {
+      "name": "conversations",
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "participants.user": 1,
+            "participants.counsellor": 1
+          },
+          "name": "participants.user_1_participants.counsellor_1",
+          "unique": true
+        }
+      ]
+    },
+    {
+      "name": "counselorearnings",
+      "count": 53,
+      "sha256": "5ead17dbe1b6ab91f814fe853a9c11732f933ddb843acf6fd1e0536a00e3b4d6",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "counselorId": 1
+          },
+          "name": "counselorId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "sessionId": 1
+          },
+          "name": "sessionId_1",
+          "unique": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "payoutStatus": 1
+          },
+          "name": "payoutStatus_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "transactionId": 1
+          },
+          "name": "transactionId_1",
+          "unique": true,
+          "sparse": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "callId": 1
+          },
+          "name": "callId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "earningStatus": 1
+          },
+          "name": "earningStatus_1"
+        }
+      ]
+    },
+    {
+      "name": "counseloronlinesubscriptions",
+      "count": 2,
+      "sha256": "9aaeb7b936246420e80cf2daf2542b2fe3ae4a7130bccbee11e05c57e6aa5e20",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "userId": 1
+          },
+          "name": "userId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "counselorId": 1
+          },
+          "name": "counselorId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "userId": 1,
+            "counselorId": 1
+          },
+          "name": "userId_1_counselorId_1",
+          "unique": true
+        }
+      ]
+    },
+    {
+      "name": "feedbacks",
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        }
+      ]
+    },
+    {
+      "name": "forgotpasswordtokens",
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "expiresAt": 1
+          },
+          "name": "expiresAt_1",
+          "expireAfterSeconds": 0
+        }
+      ]
+    },
+    {
+      "name": "loginotps",
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "userId": 1
+          },
+          "name": "userId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "email": 1
+          },
+          "name": "email_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "expiresAt": 1
+          },
+          "name": "expiresAt_1",
+          "expireAfterSeconds": 0
+        }
+      ]
+    },
+    {
+      "name": "messages",
+      "count": 190,
+      "sha256": "b92302958db860943730899e254572c3f6860bf2a34b2b832549b3e457d8f469",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "messageId": 1
+          },
+          "name": "messageId_1",
+          "unique": true
+        }
+      ]
+    },
+    {
+      "name": "notificationdeliveries",
+      "count": 20,
+      "sha256": "24d38f85effa8d8a536b667462b4338e8f7456606c5774a1ec0be8c1b764fa4c",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "userId": 1
+          },
+          "name": "userId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "campaignKey": 1
+          },
+          "name": "campaignKey_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "ruleType": 1
+          },
+          "name": "ruleType_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "status": 1
+          },
+          "name": "status_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "dedupeKey": 1
+          },
+          "name": "dedupeKey_1",
+          "unique": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "ruleId": 1
+          },
+          "name": "ruleId_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "recipientId": 1
+          },
+          "name": "recipientId_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "ruleId": 1,
+            "recipientId": 1,
+            "createdAt": -1
+          },
+          "name": "ruleId_1_recipientId_1_createdAt_-1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "recipientId": 1,
+            "createdAt": -1
+          },
+          "name": "recipientId_1_createdAt_-1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "status": 1,
+            "createdAt": -1
+          },
+          "name": "status_1_createdAt_-1",
+          "background": true
+        }
+      ]
+    },
+    {
+      "name": "notificationrules",
+      "count": 1,
+      "sha256": "465ba2f2dae69915646818807090aed8320bbb58af9f9d3ed4dde587e7769cc7",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "notificationType": 1
+          },
+          "name": "notificationType_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "audience": 1
+          },
+          "name": "audience_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "condition": 1
+          },
+          "name": "condition_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "status": 1
+          },
+          "name": "status_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "scheduledAt": 1
+          },
+          "name": "scheduledAt_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "status": 1,
+            "condition": 1,
+            "audience": 1
+          },
+          "name": "status_1_condition_1_audience_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "notificationType": 1,
+            "specialization": 1
+          },
+          "name": "notificationType_1_specialization_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "lastProcessedAt": 1
+          },
+          "name": "lastProcessedAt_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "status": 1,
+            "condition": 1,
+            "scheduledAt": 1,
+            "lastProcessedAt": 1
+          },
+          "name": "status_1_condition_1_scheduledAt_1_lastProcessedAt_1",
+          "background": true
+        }
+      ]
+    },
+    {
+      "name": "notifications",
+      "count": 1254,
+      "sha256": "ce4b69aafd15ccf8880c4966a619de4d55c1081ec229f720db6f1e57811a8bbe",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "recipientId": 1
+          },
+          "name": "recipientId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "type": 1
+          },
+          "name": "type_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "isRead": 1
+          },
+          "name": "isRead_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "recipientId": 1,
+            "createdAt": -1
+          },
+          "name": "recipientId_1_createdAt_-1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "recipientId": 1,
+            "isRead": 1,
+            "createdAt": -1
+          },
+          "name": "recipientId_1_isRead_1_createdAt_-1"
+        }
+      ]
+    },
+    {
+      "name": "notificationtokens",
+      "count": 11,
+      "sha256": "c129e6f9ac575466858904e4350e9c899ef22447dfe275ca84cfcb315a9f63a0",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "userId": 1
+          },
+          "name": "userId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "token": 1
+          },
+          "name": "token_1",
+          "unique": true
+        }
+      ]
+    },
+    {
+      "name": "otps",
+      "count": 3,
+      "sha256": "61cd96a7187e35e71cb654205f0384776e82e1df04417c9d2417efd2c983bf01",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        }
+      ]
+    },
+    {
+      "name": "payouts",
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "payoutId": 1
+          },
+          "name": "payoutId_1",
+          "background": true,
+          "unique": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "counselorId": 1
+          },
+          "name": "counselorId_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "status": 1
+          },
+          "name": "status_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "counselorId": 1,
+            "createdAt": -1
+          },
+          "name": "counselorId_1_createdAt_-1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "status": 1,
+            "createdAt": -1
+          },
+          "name": "status_1_createdAt_-1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "createdAt": -1
+          },
+          "name": "createdAt_-1",
+          "background": true
+        }
+      ]
+    },
+    {
+      "name": "prescriptions",
+      "count": 10,
+      "sha256": "e143a831be12929efcde275420c75adea16a2c215f3d8fc5f310bdb468b35377",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "chatId": 1
+          },
+          "name": "chatId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "userId": 1
+          },
+          "name": "userId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "counselorId": 1
+          },
+          "name": "counselorId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "issuedAt": 1
+          },
+          "name": "issuedAt_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "patientId": 1
+          },
+          "name": "patientId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "psychiatristId": 1
+          },
+          "name": "psychiatristId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "patientId": 1,
+            "issuedAt": -1
+          },
+          "name": "patientId_1_issuedAt_-1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "psychiatristId": 1,
+            "issuedAt": -1
+          },
+          "name": "psychiatristId_1_issuedAt_-1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "identityVerification.status": 1
+          },
+          "name": "identityVerification.status_1"
+        }
+      ]
+    },
+    {
+      "name": "promotioncampaigns",
+      "count": 1,
+      "sha256": "88c0e0d6aad6f011cecee5f7e54d3253e0f88fdccda45aa3e5caf4300e27e5ea",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "notificationType": 1
+          },
+          "name": "notificationType_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "audience": 1
+          },
+          "name": "audience_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "scheduledAt": 1
+          },
+          "name": "scheduledAt_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "status": 1
+          },
+          "name": "status_1"
+        }
+      ]
+    },
+    {
+      "name": "ratings",
+      "count": 1,
+      "sha256": "062a4889ac4e1fec3ef10d7fff6f112cd284f5407a94dafcf3c58a46a660a152",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "counselorId": 1
+          },
+          "name": "counselorId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "userId": 1,
+            "chatId": 1
+          },
+          "name": "userId_1_chatId_1",
+          "unique": true,
+          "sparse": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "userId": 1
+          },
+          "name": "userId_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "user": 1
+          },
+          "name": "user_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "counselor": 1
+          },
+          "name": "counselor_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "status": 1
+          },
+          "name": "status_1",
+          "background": true
+        }
+      ]
+    },
+    {
+      "name": "ratingstatuses",
+      "count": 2,
+      "sha256": "beb4f1cf303c52d8e76f46612813871857ecaea518873f29e5489f5ce2f45f05",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "counselorId": 1
+          },
+          "name": "counselorId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "userId": 1
+          },
+          "name": "userId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "userId": 1,
+            "counselorId": 1
+          },
+          "name": "userId_1_counselorId_1",
+          "unique": true
+        }
+      ]
+    },
+    {
+      "name": "registrationotps",
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "email": 1
+          },
+          "name": "email_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "purpose": 1
+          },
+          "name": "purpose_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "expiresAt": 1
+          },
+          "name": "expiresAt_1",
+          "expireAfterSeconds": 0
+        },
+        {
+          "v": 2,
+          "key": {
+            "email": 1,
+            "otp": 1,
+            "purpose": 1,
+            "expiresAt": 1
+          },
+          "name": "email_1_otp_1_purpose_1_expiresAt_1"
+        }
+      ]
+    },
+    {
+      "name": "reviews",
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "userId": 1
+          },
+          "name": "userId_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "counselorId": 1
+          },
+          "name": "counselorId_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "status": 1
+          },
+          "name": "status_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "user": 1
+          },
+          "name": "user_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "counselor": 1
+          },
+          "name": "counselor_1",
+          "background": true
+        }
+      ]
+    },
+    {
+      "name": "sessions",
+      "count": 270,
+      "sha256": "85aa32f8b8f3779327c67ec742c919b74250434b4c5293ea930e50874266966e",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "refreshToken": 1
+          },
+          "name": "refreshToken_1",
+          "unique": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "lastActivityAt": 1
+          },
+          "name": "lastActivityAt_1"
+        }
+      ]
+    },
+    {
+      "name": "settings",
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "key": 1
+          },
+          "name": "key_1",
+          "background": true,
+          "unique": true
+        }
+      ]
+    },
+    {
+      "name": "supporttickets",
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "ticketNumber": 1
+          },
+          "name": "ticketNumber_1",
+          "background": true,
+          "unique": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "requesterEmail": 1
+          },
+          "name": "requesterEmail_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "status": 1
+          },
+          "name": "status_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "priority": 1
+          },
+          "name": "priority_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "unreadByAdmin": 1
+          },
+          "name": "unreadByAdmin_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "lastMessageAt": 1
+          },
+          "name": "lastMessageAt_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "status": 1,
+            "lastMessageAt": -1
+          },
+          "name": "status_1_lastMessageAt_-1",
+          "background": true
+        }
+      ]
+    },
+    {
+      "name": "transactions",
+      "count": 207,
+      "sha256": "4bc9f91551cacd6a34081fd18898f5bde65790c0afa885231821901c7ed492eb",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "transactionId": 1
+          },
+          "name": "transactionId_1",
+          "background": true,
+          "unique": true,
+          "sparse": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "razorpayPaymentId": 1
+          },
+          "name": "razorpayPaymentId_1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "razorpayOrderId": 1
+          },
+          "name": "razorpayOrderId_1",
+          "background": true
+        }
+      ]
+    },
+    {
+      "name": "users",
+      "count": 28,
+      "sha256": "cd0d907220970b0b8b96ba970c4f662505e1baeb48122be3043dd092a337905b",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "email": 1
+          },
+          "name": "email_1",
+          "unique": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "uniqueCode": 1
+          },
+          "name": "uniqueCode_1",
+          "unique": true,
+          "sparse": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "role": 1
+          },
+          "name": "role_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "isVerified": 1
+          },
+          "name": "isVerified_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "isActive": 1
+          },
+          "name": "isActive_1",
+          "background": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "locationData.current": "2dsphere"
+          },
+          "name": "locationData.current_2dsphere",
+          "2dsphereIndexVersion": 3
+        },
+        {
+          "v": 2,
+          "key": {
+            "googleId": 1
+          },
+          "name": "googleId_1",
+          "unique": true,
+          "sparse": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "phoneNumber": 1
+          },
+          "name": "phoneNumber_1",
+          "unique": true,
+          "partialFilterExpression": {
+            "phoneNumber": {
+              "$type": "string"
+            }
+          }
+        },
+        {
+          "v": 2,
+          "key": {
+            "lastActiveAt": 1
+          },
+          "name": "lastActiveAt_1"
+        }
+      ]
+    },
+    {
+      "name": "withdrawalrequests",
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        }
+      ]
+    }
+  ],
+  "completedAt": "2026-09-11T10:58:57.414Z"
+}

@@ -1,7 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
 import Session from "../models/sessionModel.js";
-import mongoose from "mongoose";
 
 export const authenticateToken = async (req, res, next) => {
   try {

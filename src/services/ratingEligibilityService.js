@@ -1,9 +1,12 @@
-import mongoose from "mongoose";
-import Chat from "../models/Chat.js";
+﻿import Chat from "../models/Chat.js";
 import Message from "../models/Message.js";
 import Call from "../models/Call.js";
 import User from "../models/userModel.js";
 import RatingStatus from "../models/RatingStatus.js";
+
+const isValidId = (id) => id != null && String(id).length >= 12;
+
+
 
 // ─── Business rule constants ────────────────────────────────────────────────
 export const MIN_CALL_SECONDS = 300; // 5 minutes
@@ -23,8 +26,8 @@ export const REMIND_LATER_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
  * remindLaterUntil), so refreshing is always safe to call.
  */
 export const refreshUserRatingEligibility = async (userId) => {
-  if (!mongoose.Types.ObjectId.isValid(userId)) return;
-  const userObjectId = new mongoose.Types.ObjectId(userId);
+  if (!isValidId(userId)) return;
+  const userObjectId = userId;
 
   // Accumulate per-counselor signals: { reason, lastInteractionAt }
   const eligible = new Map(); // counselorId(string) -> { reason, lastInteractionAt }

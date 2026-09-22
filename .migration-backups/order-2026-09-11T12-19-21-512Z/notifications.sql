@@ -1,0 +1,21 @@
+CREATE TABLE `notifications` (
+  `id` varchar(191) NOT NULL,
+  `__v` double DEFAULT NULL,
+  `actionUrl` longtext DEFAULT NULL,
+  `actorId` varchar(191) DEFAULT NULL,
+  `createdAt` datetime(3) DEFAULT NULL,
+  `data` longtext DEFAULT NULL CHECK (json_valid(`data`)),
+  `isRead` tinyint(1) DEFAULT NULL,
+  `message` longtext DEFAULT NULL,
+  `readAt` datetime(3) DEFAULT NULL,
+  `recipientId` varchar(191) DEFAULT NULL,
+  `title` longtext DEFAULT NULL,
+  `type` longtext DEFAULT NULL,
+  `updatedAt` datetime(3) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_7d1a087ab3eb7bb5` (`isRead`),
+  KEY `idx_afeda9ee24f47513` (`recipientId`),
+  KEY `idx_4c9eed3979d32843` (`recipientId`,`createdAt`),
+  KEY `idx_3fcca45e83c8e4ec` (`recipientId`,`isRead`,`createdAt`),
+  KEY `idx_fc2dd9490492ffcd` (`type`(191))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC;

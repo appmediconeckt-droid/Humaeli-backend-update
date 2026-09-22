@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import { generateObjectId } from "../models/mysql/BaseModel.js";
 import User from "../models/userModel.js";
 import Chat from "../models/Chat.js";
 import Message from "../models/Message.js";
@@ -1992,11 +1992,11 @@ export const loginUser = async (req, res) => {
   try {
     const email = normalizeEmail(req.body?.email);
     const { password } = req.body;
-    const role = normalizeRole(req.body?.role);
+    const requestedRole = req.body?.role ? normalizeRole(req.body.role) : null;
 
-    if (!email || !password || !role) {
+    if (!email || !password) {
       return res.status(400).json({
-        message: "Email, password and role are required",
+        message: "Email and password are required",
         success: false,
       });
     }
@@ -2010,7 +2010,7 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    if (normalizeRole(user.role) !== role) {
+    if (requestedRole && normalizeRole(user.role) !== requestedRole) {
       return res.status(403).json({
         message:
           normalizeRole(user.role) === "counsellor"
@@ -2020,7 +2020,7 @@ export const loginUser = async (req, res) => {
         roleMismatch: true,
         code: "ROLE_MISMATCH",
         actualRole: user.role,
-        requestedRole: role,
+        requestedRole,
       });
     }
 
@@ -2028,6 +2028,13 @@ export const loginUser = async (req, res) => {
       return res
         .status(401)
         .json({ message: "Account is deactivated", success: false });
+    }
+
+    if (!user.password || typeof user.password !== "string") {
+      return res.status(401).json({
+        message: "No password set for this account. Please use OTP or Google login.",
+        success: false,
+      });
     }
 
     const match = await bcrypt.compare(password, user.password);
@@ -2057,15 +2064,15 @@ export const loginUser = async (req, res) => {
     }
 
     // ---- No other session → normal login ----
-    const sessionId = new mongoose.Types.ObjectId();
+    const sessionId = generateObjectId();
     const accessToken = generateAccessToken(
       user._id,
-      sessionId.toString(),
+      sessionId,
       user.role,
     );
     const refreshToken = generateRefreshToken(
       user._id,
-      sessionId.toString(),
+      sessionId,
       user.role,
     );
 
@@ -2317,15 +2324,15 @@ export const googleAuth = async (req, res) => {
     );
 
     // 5. Create new session + tokens
-    const sessionId = new mongoose.Types.ObjectId();
+    const sessionId = generateObjectId();
     const accessToken = generateAccessToken(
       user._id,
-      sessionId.toString(),
+      sessionId,
       user.role,
     );
     const refreshToken = generateRefreshToken(
       user._id,
-      sessionId.toString(),
+      sessionId,
       user.role,
     );
 
@@ -2734,15 +2741,15 @@ export const verifyLoginOTP = async (req, res) => {
     );
 
     // OTP is valid → create a **new** session for this device
-    const sessionId = new mongoose.Types.ObjectId();
+    const sessionId = generateObjectId();
     const accessToken = generateAccessToken(
       user._id,
-      sessionId.toString(),
+      sessionId,
       user.role,
     );
     const refreshToken = generateRefreshToken(
       user._id,
-      sessionId.toString(),
+      sessionId,
       user.role,
     );
 
@@ -2806,7 +2813,7 @@ export const refreshAccessToken = async (req, res) => {
       return res.status(401).json({ message: "Invalid refresh token" });
     }
 
-    if (!mongoose.isValidObjectId(decoded.sessionId)) {
+    if (!decoded.sessionId || typeof decoded.sessionId !== "string" || decoded.sessionId.length < 12) {
       return res.status(401).json({ message: "Invalid session" });
     }
 

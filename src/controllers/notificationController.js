@@ -1,6 +1,9 @@
-import mongoose from "mongoose";
-import Notification from "../models/Notification.js";
+﻿import Notification from "../models/Notification.js";
 import User from "../models/userModel.js";
+
+const isValidId = (id) => id != null && String(id).length >= 12;
+
+
 
 const visibleNotificationTypes = ["appointment", "payment"];
 
@@ -92,7 +95,7 @@ export const getUnreadCount = async (req, res) => {
 };
 
 export const markAsRead = async (req, res) => {
-  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+  if (!isValidId(req.params.id)) {
     return res.status(400).json({ message: "Invalid notification id" });
   }
   const notification = await Notification.findOneAndUpdate(

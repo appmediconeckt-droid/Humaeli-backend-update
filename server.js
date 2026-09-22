@@ -44,10 +44,10 @@
 
 // index.js or server.js
 import server from "./src/app.js";
-import mongoose from "mongoose";
 import dotenv from "dotenv";
 import dns from "node:dns";
 import connectDB from "./src/config/db.js";
+import { connectMySQL } from "./src/config/mysql.js";
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 // IMPORTANT: Load environment variables FIRST
@@ -110,9 +110,22 @@ async function connectWithRetry() {
   }
 }
 
-// Connect to MongoDB using cached connection
-connectWithRetry()
-  .then(() => {
+// Start server with Railway MySQL as primary database
+async function startServer() {
+  try {
+    // 1. Connect Railway MySQL (primary resilient connection pool with keep-alive)
+    await connectMySQL();
+
+    // 2. Optional MongoDB connection (only if MONGO_URI is configured)
+    if (process.env.MONGO_URI) {
+      connectDB()
+        .then(() => console.log("✅ MongoDB Connected (secondary)"))
+        .catch((err) => console.warn("⚠️ MongoDB notice:", err.message));
+    } else {
+      console.log("ℹ️ Running fully on Railway MySQL as primary database");
+    }
+
+    // 3. Start HTTP server
     server.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
       console.log(`📡 API URL: http://localhost:${PORT}`);
@@ -131,8 +144,10 @@ connectWithRetry()
     });
 
     server.on('error', handleServerError);
-  })
-  .catch(err => {
-    console.error("❌ MongoDB connection error:", err);
+  } catch (err) {
+    console.error("❌ Fatal database connection error:", err.message);
     process.exit(1);
-  });
+  }
+}
+
+startServer();

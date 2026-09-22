@@ -1,8 +1,11 @@
-import Chat from "../models/Chat.js";
+﻿import Chat from "../models/Chat.js";
 import Message from "../models/Message.js";
 import User from "../models/userModel.js";
 import Call from "../models/Call.js";
-import mongoose from "mongoose";
+
+const isValidId = (id) => id != null && String(id).length >= 12;
+
+
 
 class SocketHandler {
   constructor(io) {
@@ -32,7 +35,7 @@ class SocketHandler {
 
     if (!normalizedChatId) return null;
 
-    if (mongoose.Types.ObjectId.isValid(normalizedChatId)) {
+    if (isValidId(normalizedChatId)) {
       const chat = await Chat.findById(normalizedChatId);
       if (chat) return chat;
     }

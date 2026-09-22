@@ -1,0 +1,632 @@
+{
+  "database": "humaeli_test_convert_1789126399616",
+  "backupDatabase": "humaeli_test_convert_1789_document_backup_20260911113320230",
+  "startedAt": "2026-09-11T11:33:20.236Z",
+  "verified": true,
+  "tables": [
+    {
+      "name": "users",
+      "columns": [
+        {
+          "path": "_id",
+          "column": "id",
+          "kind": "objectId"
+        },
+        {
+          "path": "__v",
+          "column": "__v",
+          "kind": "number"
+        },
+        {
+          "path": "aboutMe",
+          "column": "aboutMe",
+          "kind": "string"
+        },
+        {
+          "path": "activeClients",
+          "column": "activeClients",
+          "kind": "number"
+        },
+        {
+          "path": "activeWalletRefundRequest",
+          "column": "activeWalletRefundRequest",
+          "kind": "boolean"
+        },
+        {
+          "path": "address.city",
+          "column": "address_city",
+          "kind": "string"
+        },
+        {
+          "path": "address.country",
+          "column": "address_country",
+          "kind": "string"
+        },
+        {
+          "path": "address.line1",
+          "column": "address_line1",
+          "kind": "string"
+        },
+        {
+          "path": "address.line2",
+          "column": "address_line2",
+          "kind": "string"
+        },
+        {
+          "path": "address.pincode",
+          "column": "address_pincode",
+          "kind": "string"
+        },
+        {
+          "path": "address.state",
+          "column": "address_state",
+          "kind": "string"
+        },
+        {
+          "path": "age",
+          "column": "age",
+          "kind": "number"
+        },
+        {
+          "path": "anonymous",
+          "column": "anonymous",
+          "kind": "string"
+        },
+        {
+          "path": "authProvider",
+          "column": "authProvider",
+          "kind": "string"
+        },
+        {
+          "path": "availability",
+          "column": "availability",
+          "kind": "string"
+        },
+        {
+          "path": "bio",
+          "column": "bio",
+          "kind": "string"
+        },
+        {
+          "path": "bloodGroup",
+          "column": "bloodGroup",
+          "kind": "string"
+        },
+        {
+          "path": "certifications",
+          "column": "certifications",
+          "kind": "json"
+        },
+        {
+          "path": "chatContext.currentCompany",
+          "column": "chatContext_currentCompany",
+          "kind": "string"
+        },
+        {
+          "path": "chatContext.currentSurrounding",
+          "column": "chatContext_currentSurrounding",
+          "kind": "string"
+        },
+        {
+          "path": "chatContext.safetyFlags",
+          "column": "chatContext_safetyFlags",
+          "kind": "json"
+        },
+        {
+          "path": "chatContext.updatedAt",
+          "column": "chatContext_updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "chatPermission.disabledAt",
+          "column": "chatPermission_disabledAt",
+          "kind": "date"
+        },
+        {
+          "path": "chatPermission.disabledBy",
+          "column": "chatPermission_disabledBy",
+          "kind": "string"
+        },
+        {
+          "path": "chatPermission.disabledReason",
+          "column": "chatPermission_disabledReason",
+          "kind": "string"
+        },
+        {
+          "path": "chatPermission.enabled",
+          "column": "chatPermission_enabled",
+          "kind": "boolean"
+        },
+        {
+          "path": "chatPermission.notes",
+          "column": "chatPermission_notes",
+          "kind": "string"
+        },
+        {
+          "path": "consultationMode",
+          "column": "consultationMode",
+          "kind": "json"
+        },
+        {
+          "path": "createdAt",
+          "column": "createdAt",
+          "kind": "date"
+        },
+        {
+          "path": "dateOfBirth",
+          "column": "dateOfBirth",
+          "kind": "date"
+        },
+        {
+          "path": "devicePlatform",
+          "column": "devicePlatform",
+          "kind": "string"
+        },
+        {
+          "path": "education",
+          "column": "education",
+          "kind": "string"
+        },
+        {
+          "path": "email",
+          "column": "email",
+          "kind": "string"
+        },
+        {
+          "path": "emailOTP.code",
+          "column": "emailOTP_code",
+          "kind": "string"
+        },
+        {
+          "path": "emailOTP.expiresAt",
+          "column": "emailOTP_expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "emergencyContact.name",
+          "column": "emergencyContact_name",
+          "kind": "string"
+        },
+        {
+          "path": "emergencyContact.phone",
+          "column": "emergencyContact_phone",
+          "kind": "string"
+        },
+        {
+          "path": "emergencyContact.relation",
+          "column": "emergencyContact_relation",
+          "kind": "string"
+        },
+        {
+          "path": "experience",
+          "column": "experience",
+          "kind": "number"
+        },
+        {
+          "path": "fcmToken",
+          "column": "fcmToken",
+          "kind": "string"
+        },
+        {
+          "path": "fullName",
+          "column": "fullName",
+          "kind": "string"
+        },
+        {
+          "path": "gender",
+          "column": "gender",
+          "kind": "string"
+        },
+        {
+          "path": "googleEmail",
+          "column": "googleEmail",
+          "kind": "string"
+        },
+        {
+          "path": "googleId",
+          "column": "googleId",
+          "kind": "string"
+        },
+        {
+          "path": "hourlyRate",
+          "column": "hourlyRate",
+          "kind": "number"
+        },
+        {
+          "path": "instantPayoutCount",
+          "column": "instantPayoutCount",
+          "kind": "number"
+        },
+        {
+          "path": "insuranceInfo.coverageAmount",
+          "column": "insuranceInfo_coverageAmount",
+          "kind": "string"
+        },
+        {
+          "path": "insuranceInfo.groupNumber",
+          "column": "insuranceInfo_groupNumber",
+          "kind": "string"
+        },
+        {
+          "path": "insuranceInfo.insuranceType",
+          "column": "insuranceInfo_insuranceType",
+          "kind": "string"
+        },
+        {
+          "path": "insuranceInfo.nominee",
+          "column": "insuranceInfo_nominee",
+          "kind": "string"
+        },
+        {
+          "path": "insuranceInfo.policyNumber",
+          "column": "insuranceInfo_policyNumber",
+          "kind": "string"
+        },
+        {
+          "path": "insuranceInfo.provider",
+          "column": "insuranceInfo_provider",
+          "kind": "string"
+        },
+        {
+          "path": "insuranceInfo.relationship",
+          "column": "insuranceInfo_relationship",
+          "kind": "string"
+        },
+        {
+          "path": "insuranceInfo.validityDate",
+          "column": "insuranceInfo_validityDate",
+          "kind": "date"
+        },
+        {
+          "path": "isActive",
+          "column": "isActive",
+          "kind": "boolean"
+        },
+        {
+          "path": "isEmailVerified",
+          "column": "isEmailVerified",
+          "kind": "boolean"
+        },
+        {
+          "path": "isOnline",
+          "column": "isOnline",
+          "kind": "boolean"
+        },
+        {
+          "path": "isPhoneVerified",
+          "column": "isPhoneVerified",
+          "kind": "boolean"
+        },
+        {
+          "path": "isVerified",
+          "column": "isVerified",
+          "kind": "boolean"
+        },
+        {
+          "path": "languages",
+          "column": "languages",
+          "kind": "json"
+        },
+        {
+          "path": "lastActiveAt",
+          "column": "lastActiveAt",
+          "kind": "date"
+        },
+        {
+          "path": "lastSeen",
+          "column": "lastSeen",
+          "kind": "date"
+        },
+        {
+          "path": "location",
+          "column": "location",
+          "kind": "string"
+        },
+        {
+          "path": "locationConsent",
+          "column": "locationConsent",
+          "kind": "boolean"
+        },
+        {
+          "path": "locationData.current.address",
+          "column": "locationData_current_address",
+          "kind": "string"
+        },
+        {
+          "path": "locationData.current.capturedAt",
+          "column": "locationData_current_capturedAt",
+          "kind": "date"
+        },
+        {
+          "path": "locationData.current.city",
+          "column": "locationData_current_city",
+          "kind": "string"
+        },
+        {
+          "path": "locationData.current.coordinates",
+          "column": "locationData_current_coordinates",
+          "kind": "json"
+        },
+        {
+          "path": "locationData.current.country",
+          "column": "locationData_current_country",
+          "kind": "string"
+        },
+        {
+          "path": "locationData.current.ipAddress",
+          "column": "locationData_current_ipAddress",
+          "kind": "string"
+        },
+        {
+          "path": "locationData.current.state",
+          "column": "locationData_current_state",
+          "kind": "string"
+        },
+        {
+          "path": "locationData.current.type",
+          "column": "locationData_current_type",
+          "kind": "string"
+        },
+        {
+          "path": "locationData.history",
+          "column": "locationData_history",
+          "kind": "json"
+        },
+        {
+          "path": "locationData.isVerified",
+          "column": "locationData_isVerified",
+          "kind": "boolean"
+        },
+        {
+          "path": "locationData.verificationNotes",
+          "column": "locationData_verificationNotes",
+          "kind": "string"
+        },
+        {
+          "path": "locationData.verifiedAt",
+          "column": "locationData_verifiedAt",
+          "kind": "date"
+        },
+        {
+          "path": "locationData.verifiedBy",
+          "column": "locationData_verifiedBy",
+          "kind": "objectId"
+        },
+        {
+          "path": "medicalInfo.allergies",
+          "column": "medicalInfo_allergies",
+          "kind": "json"
+        },
+        {
+          "path": "medicalInfo.chronicConditions",
+          "column": "medicalInfo_chronicConditions",
+          "kind": "json"
+        },
+        {
+          "path": "medicalInfo.currentMedications",
+          "column": "medicalInfo_currentMedications",
+          "kind": "json"
+        },
+        {
+          "path": "medicalInfo.height",
+          "column": "medicalInfo_height",
+          "kind": "string"
+        },
+        {
+          "path": "medicalInfo.weight",
+          "column": "medicalInfo_weight",
+          "kind": "string"
+        },
+        {
+          "path": "password",
+          "column": "password",
+          "kind": "string"
+        },
+        {
+          "path": "payoutAccount.accountName",
+          "column": "payoutAccount_accountName",
+          "kind": "string"
+        },
+        {
+          "path": "payoutAccount.accountNumber",
+          "column": "payoutAccount_accountNumber",
+          "kind": "string"
+        },
+        {
+          "path": "payoutAccount.bankName",
+          "column": "payoutAccount_bankName",
+          "kind": "string"
+        },
+        {
+          "path": "payoutAccount.ifsc",
+          "column": "payoutAccount_ifsc",
+          "kind": "string"
+        },
+        {
+          "path": "payoutAccount.isVerified",
+          "column": "payoutAccount_isVerified",
+          "kind": "boolean"
+        },
+        {
+          "path": "payoutAccount.verifiedAt",
+          "column": "payoutAccount_verifiedAt",
+          "kind": "date"
+        },
+        {
+          "path": "phone",
+          "column": "phone",
+          "kind": "string"
+        },
+        {
+          "path": "phoneCountryCode",
+          "column": "phoneCountryCode",
+          "kind": "string"
+        },
+        {
+          "path": "phoneNumber",
+          "column": "phoneNumber",
+          "kind": "string"
+        },
+        {
+          "path": "phoneOTP.code",
+          "column": "phoneOTP_code",
+          "kind": "string"
+        },
+        {
+          "path": "phoneOTP.expiresAt",
+          "column": "phoneOTP_expiresAt",
+          "kind": "date"
+        },
+        {
+          "path": "prescriptionSeal.bytes",
+          "column": "prescriptionSeal_bytes",
+          "kind": "number"
+        },
+        {
+          "path": "prescriptionSeal.format",
+          "column": "prescriptionSeal_format",
+          "kind": "string"
+        },
+        {
+          "path": "prescriptionSeal.publicId",
+          "column": "prescriptionSeal_publicId",
+          "kind": "string"
+        },
+        {
+          "path": "prescriptionSeal.url",
+          "column": "prescriptionSeal_url",
+          "kind": "string"
+        },
+        {
+          "path": "prescriptionSignature.bytes",
+          "column": "prescriptionSignature_bytes",
+          "kind": "number"
+        },
+        {
+          "path": "prescriptionSignature.format",
+          "column": "prescriptionSignature_format",
+          "kind": "string"
+        },
+        {
+          "path": "prescriptionSignature.publicId",
+          "column": "prescriptionSignature_publicId",
+          "kind": "string"
+        },
+        {
+          "path": "prescriptionSignature.url",
+          "column": "prescriptionSignature_url",
+          "kind": "string"
+        },
+        {
+          "path": "profileCompleted",
+          "column": "profileCompleted",
+          "kind": "boolean"
+        },
+        {
+          "path": "profilePhoto.bytes",
+          "column": "profilePhoto_bytes",
+          "kind": "number"
+        },
+        {
+          "path": "profilePhoto.format",
+          "column": "profilePhoto_format",
+          "kind": "string"
+        },
+        {
+          "path": "profilePhoto.publicId",
+          "column": "profilePhoto_publicId",
+          "kind": "string"
+        },
+        {
+          "path": "profilePhoto.url",
+          "column": "profilePhoto_url",
+          "kind": "string"
+        },
+        {
+          "path": "profilePhotoPublicId",
+          "column": "profilePhotoPublicId",
+          "kind": "string"
+        },
+        {
+          "path": "profilePicture",
+          "column": "profilePicture",
+          "kind": "string"
+        },
+        {
+          "path": "qualification",
+          "column": "qualification",
+          "kind": "string"
+        },
+        {
+          "path": "rating",
+          "column": "rating",
+          "kind": "number"
+        },
+        {
+          "path": "ratingCount",
+          "column": "ratingCount",
+          "kind": "number"
+        },
+        {
+          "path": "refreshToken",
+          "column": "refreshToken",
+          "kind": "string"
+        },
+        {
+          "path": "role",
+          "column": "role",
+          "kind": "string"
+        },
+        {
+          "path": "sessionId",
+          "column": "sessionId",
+          "kind": "string"
+        },
+        {
+          "path": "sessionsDone",
+          "column": "sessionsDone",
+          "kind": "number"
+        },
+        {
+          "path": "specialization",
+          "column": "specialization",
+          "kind": "json"
+        },
+        {
+          "path": "totalSessions",
+          "column": "totalSessions",
+          "kind": "number"
+        },
+        {
+          "path": "uniqueCode",
+          "column": "uniqueCode",
+          "kind": "string"
+        },
+        {
+          "path": "updatedAt",
+          "column": "updatedAt",
+          "kind": "date"
+        },
+        {
+          "path": "walletAdjustmentIds",
+          "column": "walletAdjustmentIds",
+          "kind": "json"
+        },
+        {
+          "path": "walletBalance",
+          "column": "walletBalance",
+          "kind": "number"
+        },
+        {
+          "path": "walletCreditPaymentIds",
+          "column": "walletCreditPaymentIds",
+          "kind": "json"
+        }
+      ],
+      "count": 2,
+      "sha256": "3ce8e1ed2bc30a7b95f5d68d10d79816d684844110c95c947a9bf7229657177f",
+      "archiveOnly": false
+    }
+  ],
+  "completedAt": "2026-09-11T11:33:20.460Z"
+}

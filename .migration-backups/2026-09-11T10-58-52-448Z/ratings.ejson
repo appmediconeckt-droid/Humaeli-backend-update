@@ -1,0 +1,1 @@
+[{"_id":{"$oid":"6a9e52a8fcbe8368733ec302"},"counselorId":{"$oid":"6a8fe3941b6b57cb250df2b2"},"userId":{"$oid":"6a8ff73f1b6b57cb250df2ba"},"chatId":null,"sessionId":null,"stars":{"$numberInt":"5"},"comment":"","createdAt":{"$date":{"$numberLong":"1788760744284"}},"updatedAt":{"$date":{"$numberLong":"1788760744284"}},"__v":{"$numberInt":"0"}}]

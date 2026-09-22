@@ -1,4 +1,3 @@
-import mongoose from "mongoose";
 import Chat from "../models/Chat.js";
 import Message from "../models/Message.js";
 import User from "../models/userModel.js";
@@ -19,6 +18,8 @@ import {
   isPaidSessionsEnabled,
   refundPaidSession,
 } from "../services/paidSessionService.js";
+
+const isValidId = (id) => id != null && String(id).length >= 12;
 
 const handleTimedChatUsage = (action) => async (req, res) => {
   try {
@@ -53,7 +54,7 @@ export const touchChatUsage = handleTimedChatUsage("heartbeat");
 // Helper function to find chat by either _id or chatId
 const findChatByIdentifier = async (identifier) => {
   // Check if it's a valid ObjectId
-  if (mongoose.Types.ObjectId.isValid(identifier)) {
+  if (isValidId(identifier)) {
     const chat = await Chat.findById(identifier);
     if (chat) return chat;
   }
@@ -1010,7 +1011,7 @@ export const getChatMessages = async (req, res) => {
     // Try to find chat by _id first, then by chatId
     let chat;
 
-    if (mongoose.Types.ObjectId.isValid(chatId)) {
+    if (isValidId(chatId)) {
       chat = await Chat.findById(chatId);
     }
 
@@ -1129,7 +1130,7 @@ export const sendMessage = async (req, res) => {
     let chat;
 
     // Check if it's a valid ObjectId
-    if (mongoose.Types.ObjectId.isValid(chatId)) {
+    if (isValidId(chatId)) {
       chat = await Chat.findById(chatId);
     }
 
@@ -1569,7 +1570,7 @@ export const markAllRead = async (req, res) => {
     let chat = await findChatByIdentifier(chatId);
 
     // Fallback: if frontend sends otherParty._id as chatId
-    if (!chat && mongoose.Types.ObjectId.isValid(chatId)) {
+    if (!chat && isValidId(chatId)) {
       chat = await Chat.findOne({
         $or: [
           { userId: chatId, counselorId: req.user._id },
@@ -1676,7 +1677,7 @@ export const deletePersonalMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
     const message = await Message.findOne({
-      $or: [{ _id: mongoose.Types.ObjectId.isValid(messageId) ? messageId : null }, { messageId }],
+      $or: [{ _id: isValidId(messageId) ? messageId : null }, { messageId }],
     });
 
     if (!message) return res.status(404).json({ success: false, error: "Message not found" });

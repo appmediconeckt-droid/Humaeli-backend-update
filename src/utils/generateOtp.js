@@ -25,7 +25,7 @@ export const generateOtp = async (req, res) => {
     await OTP.create({
       userId: user._id,
       otp: String(otp),
-      expiresAt: Date.now() + 5 * 60 * 1000,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
     });
 
     // Send via Brevo (same as login OTP)

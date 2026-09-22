@@ -1,0 +1,20 @@
+CREATE TABLE `messages` (
+  `id` varchar(191) NOT NULL,
+  `__v` double DEFAULT NULL,
+  `attachmentMimeType` longtext DEFAULT NULL,
+  `attachmentName` longtext DEFAULT NULL,
+  `attachmentSize` double DEFAULT NULL,
+  `attachmentUrl` longtext DEFAULT NULL,
+  `chatId` longtext DEFAULT NULL CHECK (json_valid(`chatId`)),
+  `content` longtext DEFAULT NULL,
+  `contentType` longtext DEFAULT NULL,
+  `createdAt` datetime(3) DEFAULT NULL,
+  `deletedFor` longtext DEFAULT NULL CHECK (json_valid(`deletedFor`)),
+  `isRead` tinyint(1) DEFAULT NULL,
+  `messageId` longtext DEFAULT NULL,
+  `readAt` datetime(3) DEFAULT NULL,
+  `senderId` varchar(191) DEFAULT NULL,
+  `senderRole` longtext DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_c09fd29048e6b3b4` (`messageId`(191))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC;

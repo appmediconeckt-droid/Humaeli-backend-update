@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import crypto from "crypto";
+import nodemailer from "nodemailer";
 import twilio from "twilio";
 
 export const PLAY_REVIEW_TEST_EMAILS = Object.freeze([
@@ -22,8 +23,7 @@ const PLAY_REVIEW_FIXED_OTP = "123456";
 const FROM_NAME = "Humaeli";
 const VERIFIED_FALLBACK_FROM_EMAIL =
   process.env.VERIFIED_EMAIL_FROM || "info@humaeli.com";
-// ⚠️ IMPORTANT: FROM_EMAIL must exactly match the authenticated domain in Brevo dashboard
-// (same subdomain, same TLD). Mismatches will cause authentication failures.
+const UNVERIFIED_BREVO_SENDERS = new Set(["info@humaeli.com"]);
 const configuredFromEmail =
   process.env.EMAIL_FROM ||
   process.env.HUMAELI_EMAIL_FROM ||
@@ -37,8 +37,37 @@ const SENDER_EMAILS = [...new Set([FROM_EMAIL, VERIFIED_FALLBACK_FROM_EMAIL])];
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "support@humaeli.com";
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 
-if (!BREVO_API_KEY) {
-  console.error("❌ Brevo API key is not configured. Set BREVO_API_KEY in .env.");
+// Gmail SMTP Credentials
+const SMTP_HOST = process.env.EMAIL_HOST || "smtp.gmail.com";
+const SMTP_PORT = Number(process.env.EMAIL_PORT || 587);
+const SMTP_USER = String(
+  process.env.SMTP_USER || process.env.EMAIL_USER || process.env.EMAIL || "",
+).trim();
+const SMTP_PASS = String(
+  process.env.SMTP_PASS || process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD || "",
+).trim();
+
+let gmailTransporter = null;
+function getGmailTransporter() {
+  if (!gmailTransporter) {
+    gmailTransporter = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_PORT === 465,
+      auth: {
+        user: SMTP_USER,
+        pass: SMTP_PASS,
+      },
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
+    });
+  }
+  return gmailTransporter;
+}
+
+if (!BREVO_API_KEY && !SMTP_PASS) {
+  console.error("❌ No email service configured. Set EMAIL_PASS or BREVO_API_KEY in .env.");
 }
 
 if (configuredFromEmail === "info@humaeli.com") {
@@ -138,6 +167,43 @@ async function sendBrevoEmail({ to, subject, html, text }) {
   throw new Error(
     `Failed to send email via Brevo. Last error: ${lastError?.message || "Unknown error"}`,
   );
+}
+
+async function sendGmailEmail({ to, subject, html, text }) {
+  if (!SMTP_USER || !SMTP_PASS) {
+    throw new Error("Gmail SMTP credentials not configured");
+  }
+  const transporter = getGmailTransporter();
+  const info = await transporter.sendMail({
+    from: `"${FROM_NAME}" <${SMTP_USER}>`,
+    to,
+    subject,
+    html,
+    text,
+  });
+  return { messageId: info.messageId, provider: "gmail" };
+}
+
+async function sendTransactionalEmail({ to, subject, html, text }) {
+  // If Gmail SMTP credentials are configured, prioritize direct Gmail delivery
+  // so emails pass SPF/DKIM/DMARC and land straight in recipient inboxes
+  if (SMTP_USER && SMTP_PASS) {
+    try {
+      const result = await sendGmailEmail({ to, subject, html, text });
+      console.log(`✅ Email delivered via Gmail SMTP to ${to} | ID: ${result.messageId}`);
+      return result;
+    } catch (err) {
+      console.warn(`⚠️ Gmail SMTP delivery failed for ${to}: ${err.message}. Trying Brevo fallback...`);
+    }
+  }
+
+  // Fallback to Brevo
+  if (BREVO_API_KEY) {
+    const brevoResult = await sendBrevoEmail({ to, subject, html, text });
+    return { ...brevoResult, provider: "brevo" };
+  }
+
+  throw new Error("No working email delivery service available (Gmail SMTP or Brevo API)");
 }
 
 const buildEmailOTPHtml = (otp) => `
@@ -272,7 +338,7 @@ class OTPService {
         `If this wasn't you, change your password immediately at ${SUPPORT_EMAIL}\n\n` +
         `©️ ${new Date().getFullYear()} Humaeli `;
 
-      const data = await sendBrevoEmail({
+      const data = await sendTransactionalEmail({
         to: email,
         subject: "[Humaeli] Your login verification code",
         html: buildLoginOTPHtml(otp),
@@ -318,7 +384,7 @@ class OTPService {
       `©️ ${year} Humaeli Global Pvt Ltd`;
 
     try {
-      const data = await sendBrevoEmail({
+      const data = await sendTransactionalEmail({
         to: email,
         subject: "[Humaeli] Password reset verification code",
         html,
@@ -356,7 +422,7 @@ class OTPService {
 
     for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
       try {
-        const data = await sendBrevoEmail({
+        const data = await sendTransactionalEmail({
           to: email,
           subject: "[Humaeli] Email verification code",
           html: buildEmailOTPHtml(otp),
@@ -441,7 +507,7 @@ class OTPService {
 </html>`;
 
     try {
-      const data = await sendBrevoEmail({
+      const data = await sendTransactionalEmail({
         to: email,
         subject: "[Humaeli] Password reset code",
         html,

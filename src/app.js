@@ -251,7 +251,6 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 import cookieParser from "cookie-parser";
-import mongoose from "mongoose";
 import path from "path";
 import { fileURLToPath } from "url";
 import http from "http";
@@ -284,6 +283,7 @@ import avatarRoutes from "./routes/avatarRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
 import aiRealtimeRoute from "./routes/aiRealtimeRoute.js"
 import { expirePendingPaidChatRequests } from "./services/paidSessionService.js";
+import { checkHealth as checkMySQLHealth } from "./config/mysql.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -433,26 +433,37 @@ app.get("/account-deletion.css", (_req, res) => {
 // ---------------------------
 // 4. Routes
 // ---------------------------
-app.get("/api/health", (_req, res) => {
-  const dbState = mongoose.connection.readyState;
-  const dbStatus = DB_STATE_LABEL[dbState] || "unknown";
-  const isHealthy = dbState === 1;
+app.get("/api/health", async (_req, res) => {
+  const mysqlHealth = await checkMySQLHealth().catch((err) => ({ status: "unhealthy", error: err.message }));
+  const isHealthy = mysqlHealth.status === "healthy";
 
   res.status(isHealthy ? 200 : 503).json({
     success: isHealthy,
     status: isHealthy ? "ok" : "degraded",
     service: "humaeli-backend",
+    database: "mysql",
     environment: process.env.NODE_ENV || "development",
     uptimeSeconds: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
     features: {
       landingStats: true,
     },
-    db: {
-      state: dbStatus,
-      readyState: dbState,
-    },
+    mysql: mysqlHealth,
   });
+});
+
+app.get("/api/health/db", async (_req, res) => {
+  try {
+    const mysqlHealth = await checkMySQLHealth();
+    const isHealthy = mysqlHealth.status === "healthy";
+    res.status(isHealthy ? 200 : 503).json({
+      success: isHealthy,
+      mysql: mysqlHealth,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    res.status(503).json({ success: false, error: err.message });
+  }
 });
 
 app.use("/api/auth", authRoutes);
