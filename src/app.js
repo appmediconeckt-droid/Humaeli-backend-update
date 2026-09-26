@@ -261,7 +261,6 @@ import messageRoutes from "./routes/messageRoutes.js";
 import callRoutes from "./routes/callRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import appointmentRoutes from "./routes/appointmentRoutes.js";
-import { deleteExpiredUnresolvedAppointments } from "./controllers/appointmentController.js";
 import { getMyChatHistory } from "./controllers/chatController.js";
 import { getPaymentConfig } from "./controllers/messageController.js";
 import { settleInactiveChatSessions } from "./services/paidSessionService.js";
@@ -282,6 +281,13 @@ import translateRoutes from "./routes/translateRoutes.js";
 import avatarRoutes from "./routes/avatarRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
 import aiRealtimeRoute from "./routes/aiRealtimeRoute.js"
+import walkinRoutes from "./routes/walkinRoutes.js";
+import doctorBreakRoutes from "./routes/doctorBreakRoutes.js";
+import clinicRoutes from "./routes/clinicRoutes.js";
+import availabilityRoutes from "./routes/availabilityRoutes.js";
+import followUpRoutes from "./routes/followUpRoutes.js";
+import staffRoutes from "./routes/staffRoutes.js";
+import prescriptionRoutes from "./routes/prescriptionRoutes.js";
 import { expirePendingPaidChatRequests } from "./services/paidSessionService.js";
 import { checkHealth as checkMySQLHealth } from "./config/mysql.js";
 
@@ -398,6 +404,7 @@ const corsOptions = {
     "X-Requested-With",
     "Accept",
   ],
+  exposedHeaders: ["X-New-Access-Token"],
   optionsSuccessStatus: 204,
 };
 
@@ -475,6 +482,17 @@ app.use("/api/progress", progressRoutes); // <--- Mood tracking & progress endpo
 app.use("/api/call", callRoutes);
 app.use("/api/video", videoRoutes);
 app.use("/api/appointments", appointmentRoutes);
+app.use("/api/walkin-appointments", walkinRoutes);
+app.use("/api/walkin-appointment", walkinRoutes);
+app.use("/api/doctor-breaks", doctorBreakRoutes);
+app.use("/api/doctor-break", doctorBreakRoutes);
+app.use("/api/clinics", clinicRoutes);
+app.use("/api/clinic", clinicRoutes);
+app.use("/api/availability", availabilityRoutes);
+app.use("/api/followups", followUpRoutes);
+app.use("/api/follow-ups", followUpRoutes);
+app.use("/api/staff", staffRoutes);
+app.use("/api/prescriptions", prescriptionRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/location", locationRoutes);
@@ -487,14 +505,6 @@ app.use('/api/translate', translateRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/ai/realtime", aiRealtimeRoute);
 
-// Remove unresolved appointments only after their scheduled date/time has
-// passed. The request-time cleanup in getAppointments is a second safeguard.
-const appointmentCleanupInterval = setInterval(() => {
-  deleteExpiredUnresolvedAppointments().catch((error) => {
-    console.error("Appointment cleanup failed:", error.message);
-  });
-}, 60 * 1000);
-appointmentCleanupInterval.unref?.();
 const chatBillingSettlementInterval = setInterval(() => {
   settleInactiveChatSessions().catch((error) => {
     console.error("Inactive chat billing settlement failed:", error.message);
@@ -504,9 +514,7 @@ chatBillingSettlementInterval.unref?.();
 settleInactiveChatSessions().catch((error) => {
   console.error("Initial inactive chat billing settlement failed:", error.message);
 });
-deleteExpiredUnresolvedAppointments().catch((error) => {
-  console.error("Initial appointment cleanup failed:", error.message);
-});
+
 
 const paidChatExpiryInterval = setInterval(() => {
   expirePendingPaidChatRequests().catch((error) => {

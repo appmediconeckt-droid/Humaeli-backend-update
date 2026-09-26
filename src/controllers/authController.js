@@ -1,4 +1,6 @@
 import { generateObjectId } from "../models/mysql/BaseModel.js";
+import { query } from "../config/mysql.js";
+import { doctorQrStats } from "../services/doctorQrStatsService.js";
 import User from "../models/userModel.js";
 import Chat from "../models/Chat.js";
 import Message from "../models/Message.js";
@@ -790,7 +792,7 @@ export const updateUserById = async (req, res) => {
         (field) => field.includes("certifications") || field === "certificationDocuments",
       );
 
-    if (currentUser.role === "counsellor" && hasCertificationPayload) {
+    if (["counsellor", "doctor"].includes(currentUser.role) && hasCertificationPayload) {
       const existingCertificationIds = new Set(
         (currentUser.certifications || [])
           .map((cert) => cert?._id?.toString())
@@ -1002,7 +1004,7 @@ export const updateUserById = async (req, res) => {
     }
 
     // 7. Handle counsellor-specific fields
-    if (currentUser.role === "counsellor") {
+    if (["counsellor", "doctor"].includes(currentUser.role)) {
       const counsellorFields = [
         "qualification",
         "specialization",
@@ -1039,7 +1041,7 @@ export const updateUserById = async (req, res) => {
     }
 
     // 8a. Auto-set profileCompleted for counsellors when required fields are present
-    if (currentUser.role === "counsellor") {
+    if (["counsellor", "doctor"].includes(currentUser.role)) {
       const mergedSpec = updates.specialization ?? currentUser.specialization;
       const mergedExp = updates.experience ?? currentUser.experience;
       const mergedQual = updates.qualification ?? currentUser.qualification ?? updates.education ?? currentUser.education;
@@ -1120,7 +1122,7 @@ export const updateUserById = async (req, res) => {
     };
 
     // Add counsellor fields if applicable
-    if (updatedUser.role === "counsellor") {
+    if (["counsellor", "doctor"].includes(updatedUser.role)) {
       Object.assign(formattedUser, {
         qualification: updatedUser.qualification,
         specialization: updatedUser.specialization,
@@ -1670,6 +1672,23 @@ export const verifyPhoneOTP = async (req, res) => {
 // ================= STEP 5: COMPLETE REGISTRATION =================
 export const completeRegistration = async (req, res) => {
   try {
+    // The role selector is authoritative; professional fields cannot distinguish
+    // doctors from counsellors and must never decide the account's role.
+    const role = normalizeRole(req.body.role ?? req.body.accountRole ?? "");
+    if (!["user", "counsellor", "doctor"].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        code: "INVALID_ROLE",
+        message: "Select a valid registration role: user, counsellor or doctor.",
+      });
+    }
+    if (req.body.accountRole != null && normalizeRole(req.body.accountRole) !== role) {
+      return res.status(400).json({
+        success: false,
+        code: "INVALID_ROLE",
+        message: "Registration roles do not match. Please select your role again.",
+      });
+    }
     const {
       fullName,
       anonymous,
@@ -1803,11 +1822,6 @@ export const completeRegistration = async (req, res) => {
       });
     }
 
-    // Auto-detect role based on counsellor fields
-    const hasCounsellorFields =
-      qualification && specialization && experience && location;
-    const role = hasCounsellorFields ? "counsellor" : "user";
-
     const hashedPassword = await bcrypt.hash(password, 10);
     const dob = getAgeFromDateOfBirth(dateOfBirth);
     if (!dob.valid) {
@@ -1897,8 +1911,8 @@ export const completeRegistration = async (req, res) => {
       );
     }
 
-    // Add counsellor-specific fields ONLY if role is counsellor
-    if (role === "counsellor") {
+    // Both professional roles retain their submitted professional profile.
+    if (["counsellor", "doctor"].includes(role)) {
       userData.qualification = qualification;
       userData.specialization =
         typeof specialization === "string"
@@ -1992,7 +2006,10 @@ export const loginUser = async (req, res) => {
   try {
     const email = normalizeEmail(req.body?.email);
     const { password } = req.body;
-    const requestedRole = req.body?.role ? normalizeRole(req.body.role) : null;
+    // "auto" means the frontend does not want to enforce a role — use DB role.
+    const rawRole = req.body?.role;
+    const requestedRole =
+      rawRole && rawRole !== "auto" ? normalizeRole(rawRole) : null;
 
     if (!email || !password) {
       return res.status(400).json({
@@ -2139,8 +2156,17 @@ export const googleAuth = async (req, res) => {
       });
     }
 
-    // Default role to "user" if not provided. Frontend should send "user" or "counsellor".
-    const requestedRole = role === "counsellor" ? "counsellor" : "user";
+    // Every Google signup/login must identify its portal before any account or
+    // session is created. Missing/auto roles must not bypass this boundary.
+    const rawRole = role == null ? "" : normalizeRole(role);
+    const requestedRole = rawRole === "consultant" ? "counsellor" : rawRole;
+    if (!["user", "counsellor", "doctor"].includes(requestedRole)) {
+      return res.status(400).json({
+        success: false,
+        code: "INVALID_ROLE",
+        message: "Select a valid login role: user, counsellor or doctor.",
+      });
+    }
 
     // 1. Verify the Google ID token
     let payload;
@@ -2158,9 +2184,9 @@ export const googleAuth = async (req, res) => {
       });
     }
 
-    if (!payload || !payload.email) {
+    if (!payload || !payload.email || !payload.sub) {
       return res.status(401).json({
-        message: "Google token did not contain email",
+        message: "Google token did not contain a valid identity and email",
         success: false,
       });
     }
@@ -2172,7 +2198,7 @@ export const googleAuth = async (req, res) => {
       });
     }
 
-    const email = payload.email.toLowerCase();
+    const email = payload.email.trim().toLowerCase();
     const googleId = payload.sub;
     const fullName = payload.name || email.split("@")[0];
     const picture = payload.picture || null;
@@ -2218,10 +2244,8 @@ export const googleAuth = async (req, res) => {
     }
 
     if (user) {
-      // Role mismatch guard — same contract as /login. If the client said
-      // "user" but the existing account is a counsellor (or vice-versa),
-      // refuse rather than silently logging them in to the wrong dashboard.
-      if (user.role !== requestedRole) {
+      // Reject cross-role login before linking Google or changing any sessions.
+      if (normalizeRole(user.role) !== requestedRole) {
         return res.status(403).json({
           message: `This Google account is registered as ${user.role}. Please pick the ${user.role} role and try again.`,
           success: false,
@@ -2834,8 +2858,8 @@ export const refreshAccessToken = async (req, res) => {
     }
 
     // ✅ FIXED: Pass sessionId to generateAccessToken
-    const newAccessToken = generateAccessToken(user._id, session._id);
-    const newRefreshToken = generateRefreshToken(user._id, session._id);
+    const newAccessToken = generateAccessToken(user._id, session._id, user.role);
+    const newRefreshToken = generateRefreshToken(user._id, session._id, user.role);
 
     // Update session with new refresh token
     session.refreshToken = newRefreshToken;
@@ -3074,7 +3098,7 @@ export const getAllCounsellors = async (req, res) => {
     const { specialization, location, consultationMode, minExperience } =
       req.query;
     let filter = {
-      role: "counsellor",
+      role: { $in: ["counsellor", "doctor"] },
       isActive: true,
       profileCompleted: true,
       "specialization.0": { $exists: true },
@@ -3101,7 +3125,7 @@ export const getAllCounsellors = async (req, res) => {
       {
         $match: {
           senderId: { $in: counsellorIds },
-          senderRole: "counsellor",
+          senderRole: { $in: ["counsellor", "doctor"] },
         },
       },
       {
@@ -3175,7 +3199,7 @@ export const getCounsellorById = async (req, res) => {
     const { counsellorId } = req.params;
     const counsellor = await User.findOne({
       _id: counsellorId,
-      role: "counsellor",
+      role: { $in: ["counsellor", "doctor"] },
       isActive: true,
       profileCompleted: true,
       "specialization.0": { $exists: true },
@@ -3283,7 +3307,7 @@ export const getMyProfile = async (req, res) => {
     };
 
     // Add counsellor-specific fields if user is counsellor
-    if (user.role === "counsellor") {
+    if (["counsellor", "doctor"].includes(user.role)) {
       formattedProfile.qualification = user.qualification;
       formattedProfile.specialization = user.specialization;
       formattedProfile.experience = user.experience;
@@ -3756,13 +3780,22 @@ export const deleteUser = async (req, res) => {
       return res
         .status(404)
         .json({ message: "User not found", success: false });
-    if (user.profilePhoto) deleteLocalFile(user.profilePhoto);
     await Session.deleteMany({ userId: id });
     await User.findByIdAndDelete(id);
+    // Uploaded photos are stored in Cloudinary; external avatars have no publicId.
+    // A media-service outage must not turn a successful account deletion into a 500.
+    if (user.profilePhoto?.publicId) {
+      try {
+        await deleteFromCloudinary(user.profilePhoto.publicId);
+      } catch (error) {
+        console.error("Deleted account photo cleanup failed:", error.message);
+      }
+    }
     return res
       .status(200)
       .json({ message: "User deleted successfully", success: true });
   } catch (error) {
+    console.error("Account deletion failed:", error.message);
     return res
       .status(500)
       .json({ message: "Error deleting user", success: false });
@@ -4169,4 +4202,66 @@ export const consumeVerifiedProfileChange = (userId, field, attemptedValue) => {
   }
   verifiedProfileChanges.delete(key);
   return { ok: true };
+};
+
+export const getDoctorQr = async (req, res) => {
+  try {
+    const { doctorId } = req.params;
+    const doctor = await User.findById(doctorId).select("-password -emailOTP -phoneOTP");
+    if (!doctor) {
+      return res.status(404).json({ success: false, message: "Doctor not found" });
+    }
+    return res.status(200).json({
+      success: true,
+      data: {
+        doctor: {
+          id: doctor.id || doctor._id,
+          _id: doctor.id || doctor._id,
+          full_name: doctor.fullName,
+          fullName: doctor.fullName,
+          name: doctor.fullName,
+          email: doctor.email,
+          phone: doctor.phoneNumber || doctor.phone || "",
+          speciality: doctor.specialization || "Doctor",
+          specialization: doctor.specialization || "Doctor",
+          profile_image: doctor.profilePhoto || doctor.profilePicture || "",
+          profileImage: doctor.profilePhoto || doctor.profilePicture || "",
+        },
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Server error", error: err.message });
+  }
+};
+
+export const getDoctorQrStats = async (req, res) => {
+  try {
+    const { doctorId } = req.params;
+    const stats = await doctorQrStats.getStats(doctorId);
+
+    return res.status(200).json({
+      success: true,
+      data: stats,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Server error", error: err.message });
+  }
+};
+
+export const recordDoctorQrVisit = async (req, res) => {
+  const { doctorId } = req.params;
+  const { visitId, source } = req.body || {};
+  if (typeof visitId !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(visitId)) {
+    return res.status(400).json({ success: false, message: "Invalid visit ID" });
+  }
+  try {
+    const doctor = await User.findById(doctorId);
+    if (!doctor || !["doctor", "counsellor"].includes(doctor.role)) {
+      return res.status(404).json({ success: false, message: "Doctor not found" });
+    }
+    await doctorQrStats.recordVisit(doctorId, visitId, source === "qr");
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Unable to record QR visit" });
+  }
 };

@@ -13,6 +13,7 @@ const razorpay = new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_YOUR_KEY_ID',
     key_secret: process.env.RAZORPAY_KEY_SECRET || 'YOUR_KEY_SECRET'
 });
+export { razorpay as walletGateway };
 
 const fetchCapturedPayment = async ({ paymentId, orderId }) => {
     if (paymentId) {
@@ -178,8 +179,10 @@ export const reconcileWalletPayment = async (req, res) => {
 
         const payment = await fetchCapturedPayment({ paymentId, orderId });
         if (!payment || (payment.status !== 'captured' && payment.captured !== true)) {
-            return res.status(409).json({
+            return res.status(202).json({
                 success: false,
+                pending: true,
+                code: 'PAYMENT_NOT_CAPTURED',
                 message: 'Payment is not captured yet. A bank debit may still be automatically reversed.'
             });
         }

@@ -18,6 +18,7 @@ const isCloudinaryConfigured = () =>
 
 const getUploadFolder = (file) => {
   if (file.fieldname === "profilePhoto") return "profile-photos";
+  if (file.fieldname === "clinic_photo") return "clinic-photos";
   return "certifications";
 };
 
@@ -60,7 +61,6 @@ const certificationStorage = new CloudinaryStorage({
 });
 
 // Dynamic storage based on field name
-// Dynamic storage based on field name
 const dynamicStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: (req, file) => {
@@ -97,7 +97,6 @@ const dynamicStorage = new CloudinaryStorage({
   },
 });
 
-// File filter for uploaded files
 // File filter for uploaded files
 const fileFilter = (req, file, cb) => {
   // Check if it's a profile photo
@@ -139,7 +138,6 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Create multer instance that accepts any fields
 // Create multer instance that accepts any fields
 const upload = multer({
   storage: isCloudinaryConfigured() ? dynamicStorage : localStorage,
@@ -297,9 +295,41 @@ export const uploadChatAttachment = (req, res, next) => {
   });
 };
 
-// Handle user upload - accept all fields
-
 // Export individual middlewares for backward compatibility
+const clinicPhotoUpload = multer({
+  storage: isCloudinaryConfigured()
+    ? new CloudinaryStorage({
+        cloudinary,
+        params: {
+          folder: "clinic-photos",
+          allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
+          transformation: [{ width: 1200, height: 1200, crop: "limit" }],
+        },
+      })
+    : localStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!/^image\/(jpeg|jpg|png|gif|webp)$/i.test(file.mimetype || "")) {
+      return cb(new Error("Clinic photo must be an image (jpeg, jpg, png, gif, webp)"));
+    }
+    cb(null, true);
+  },
+}).single("clinic_photo");
+
+export const uploadClinicPhoto = (req, res, next) => {
+  clinicPhotoUpload(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    if (req.file?.path && !/^https?:\/\//i.test(req.file.path)) {
+      const relativePath = path.relative(uploadsRoot, req.file.path).replace(/\\/g, "/");
+      req.file.localPath = req.file.path;
+      req.file.path = `/uploads/${relativePath}`;
+    }
+    next();
+  });
+};
+
 export const uploadProfilePhoto = upload.single("profilePhoto");
 export const uploadCertificationFiles = upload.array(
   "certificationDocuments",

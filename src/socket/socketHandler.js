@@ -1,7 +1,8 @@
-﻿import Chat from "../models/Chat.js";
+import Chat from "../models/Chat.js";
 import Message from "../models/Message.js";
 import User from "../models/userModel.js";
 import Call from "../models/Call.js";
+import { notifyCounselorOnlineSubscribers } from "../services/notificationService.js";
 
 const isValidId = (id) => id != null && String(id).length >= 12;
 
@@ -98,9 +99,11 @@ class SocketHandler {
       lastSeen: null,
     });
     console.log("PRESENCE ONLINE", userId);
-   
-
-
+    if (this.isCounsellorRole(socket.userRole)) {
+      notifyCounselorOnlineSubscribers(userId).catch((err) =>
+        console.warn("Counselor online notification failed:", err.message)
+      );
+    }
   }
 
   async markUserOffline(socket) {

@@ -68,8 +68,8 @@ const tryRefreshAndContinue = async (req, res, next, incomingRefreshToken) => {
     }
 
     // 5. Issue new tokens (rotation)
-    const newAccessToken = generateAccessToken(user._id, session._id);
-    const newRefreshToken = generateRefreshToken(user._id, session._id);
+    const newAccessToken = generateAccessToken(user._id, session._id, user.role);
+    const newRefreshToken = generateRefreshToken(user._id, session._id, user.role);
 
     // 6. Persist new refresh token
     session.refreshToken = newRefreshToken;

@@ -1761,14 +1761,13 @@ getCallHistory: async (req, res) => {
     const skip = (parsedPage - 1) * parsedLimit;
 
     const [total, calls] = await Promise.all([
-      Call.countDocuments(query).maxTimeMS(8000),
+      Call.countDocuments(query),
 
       Call.find(query)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parsedLimit)
-        .lean()
-        .maxTimeMS(8000),
+        .lean(),
     ]);
 
     const participantIds = [
@@ -1789,7 +1788,6 @@ getCallHistory: async (req, res) => {
         })
           .select("_id fullName full_name name role anonymous avatar profilePhoto")
           .lean()
-          .maxTimeMS(8000)
       : [];
 
     const userMap = {};
@@ -2240,7 +2238,7 @@ getCallHistory: async (req, res) => {
 };
 
 // Auto-cancel expired requests every second
-setInterval(async () => {
+if (process.env.NODE_ENV !== "test") setInterval(async () => {
   const cancelled = await videoCallController.cancelExpiredRequests();
   if (cancelled > 0) {
     console.log(`Auto-cancelled ${cancelled} expired call requests`);

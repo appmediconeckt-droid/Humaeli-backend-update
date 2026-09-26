@@ -4,7 +4,7 @@ import BaseModel from "./BaseModel.js";
 export class CounselorEarning extends BaseModel {
   static tableName = "counselorearnings";
   static booleanFields = [];
-  static jsonFields = [];
+  static jsonFields = ["metadata"];
 }
 
 export default CounselorEarning;

@@ -1,20 +1,3 @@
-import mongoose from "mongoose";
-
-const chatSchema = new mongoose.Schema(
-  {
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: false, // Optional for guest/landing page chats
-    },
-    sessionId: {
-      type: String,
-      index: true,
-    },
-    userMessage: String,
-    aiResponse: String,
-  },
-  { timestamps: true },
-);
-
-export default mongoose.models.AIChat || mongoose.model("AIChat", chatSchema);
+// AI conversations use the existing MySQL aichats table.
+// Keep this separate from Chat.js, which stores counselor conversations.
+export { default } from "./mysql/AIChatModel.js";

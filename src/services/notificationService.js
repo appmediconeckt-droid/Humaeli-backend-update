@@ -78,3 +78,38 @@ export const createNotificationSafely = async (payload) => {
     return null;
   }
 };
+
+export const notifyCounselorOnlineSubscribers = async (counselorId) => {
+  if (!counselorId) return;
+  try {
+    const CounselorOnlineSubscription = (await import("../models/mysql/CounselorOnlineSubscription.js")).default;
+    const subscriptions = await CounselorOnlineSubscription.find({ counselorId: String(counselorId) });
+    if (!subscriptions || subscriptions.length === 0) return;
+
+    const counselor = await User.findById(counselorId).select("fullName specialization").lean();
+    const counselorName = counselor?.fullName || "Your counselor";
+
+    for (const sub of subscriptions) {
+      try {
+        const subscriber = await User.findById(sub.userId).select("fcmToken").lean();
+        if (subscriber?.fcmToken) {
+          await sendPushNotification({
+            token: subscriber.fcmToken,
+            title: `${counselorName} is now online!`,
+            body: `${counselorName} is available for consultation now.`,
+            data: {
+              type: "COUNSELOR_ONLINE",
+              counselorId: String(counselorId),
+            },
+          });
+        }
+        await CounselorOnlineSubscription.deleteOne({ _id: sub._id || sub.id });
+      } catch (subErr) {
+        console.warn(`Failed to notify subscriber ${sub.userId}:`, subErr.message);
+      }
+    }
+  } catch (err) {
+    console.error("notifyCounselorOnlineSubscribers error:", err.message);
+  }
+};
+

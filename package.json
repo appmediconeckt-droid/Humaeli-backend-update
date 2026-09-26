@@ -12,6 +12,8 @@
     "test:single": "cross-env NODE_ENV=test mocha --timeout 10000 --exit --require @babel/register",
     "dev": "nodemon server.js",
     "migrate:chat-deletion": "node scripts/migrate-chat-participant-deletion.js",
+    "migrate:clinic-staff": "node scripts/migrate-clinic-staff.js",
+    "migrate:emergency-appointments": "node scripts/migrate-emergency-appointments.js",
     "seed:play-review": "node scripts/seed-play-review-accounts.js"
   },
   "keywords": [],

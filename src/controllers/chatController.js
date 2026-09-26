@@ -878,7 +878,7 @@ export const deleteMyChatMessage = async (req, res) => {
     const deletedChat = await Chat.findOneAndDelete({
       _id: chatId,
       userId,
-    }).lean();
+    });
 
     if (!deletedChat) {
       return res

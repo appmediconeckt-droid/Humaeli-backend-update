@@ -34,6 +34,7 @@ function stringifyJsonSafe(val) {
 }
 
 const tableColumnsCache = new Map();
+export const invalidateTableColumns = (tableName) => tableColumnsCache.delete(tableName);
 
 export async function getTableColumns(tableName) {
   if (!tableName) return null;

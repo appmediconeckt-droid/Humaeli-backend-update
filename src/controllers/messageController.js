@@ -83,7 +83,7 @@ const restoreChatForBothParticipants = (chat) => {
 };
 
 const visibleCounselorFilter = {
-  role: "counsellor",
+  role: { $in: ["counsellor", "doctor"] },
   isActive: true,
   profileCompleted: true,
   "specialization.0": { $exists: true },
@@ -505,7 +505,7 @@ export const acceptChat = async (req, res) => {
 
     // Check if counselor is authorized
     if (
-      req.user.role !== "counsellor" ||
+      (req.user.role !== "counsellor" && req.user.role !== "doctor") ||
       chat.counselorId.toString() !== req.user._id.toString()
     ) {
       return res
@@ -654,7 +654,7 @@ export const rejectChat = async (req, res) => {
 
     // Check if counselor is authorized
     if (
-      req.user.role !== "counsellor" ||
+      (req.user.role !== "counsellor" && req.user.role !== "doctor") ||
       chat.counselorId.toString() !== req.user._id.toString()
     ) {
       return res
@@ -724,7 +724,7 @@ export const rejectChat = async (req, res) => {
 // Get pending chat requests (counselor only) - Filter out expired requests
 export const getPendingRequests = async (req, res) => {
   try {
-    if (req.user.role !== "counsellor") {
+    if (req.user.role !== "counsellor" && req.user.role !== "doctor") {
       return res
         .status(403)
         .json({ error: "Only counselors can view pending requests" });
@@ -813,7 +813,7 @@ export const getChats = async (req, res) => {
     if (req.user.role === "user") {
       query.userId = req.user._id;
       query.deletedByUser = { $ne: true };
-    } else if (req.user.role === "counsellor") {
+    } else if (req.user.role === "counsellor" || req.user.role === "doctor") {
       query.counselorId = req.user._id;
       query.deletedByCounselor = { $ne: true };
     } else {
@@ -932,7 +932,7 @@ export const completeChatSession = async (req, res) => {
     const isAuthorized =
       (req.user.role === "user" &&
         chat.userId.toString() === req.user._id.toString()) ||
-      (req.user.role === "counsellor" &&
+      ((req.user.role === "counsellor" || req.user.role === "doctor") &&
         chat.counselorId.toString() === req.user._id.toString());
 
     if (!isAuthorized) {
@@ -1027,7 +1027,7 @@ export const getChatMessages = async (req, res) => {
     const isAuthorized =
       (req.user.role === "user" &&
         chat.userId.toString() === req.user._id.toString()) ||
-      (req.user.role === "counsellor" &&
+      ((req.user.role === "counsellor" || req.user.role === "doctor") &&
         chat.counselorId.toString() === req.user._id.toString());
 
     if (!isAuthorized) {
@@ -1147,7 +1147,7 @@ export const sendMessage = async (req, res) => {
     const isAuthorized =
       (req.user.role === "user" &&
         chat.userId.toString() === req.user._id.toString()) ||
-      (req.user.role === "counsellor" &&
+      ((req.user.role === "counsellor" || req.user.role === "doctor") &&
         chat.counselorId.toString() === req.user._id.toString());
 
     if (!isAuthorized) {

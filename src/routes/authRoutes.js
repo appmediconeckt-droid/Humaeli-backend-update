@@ -8,6 +8,9 @@ import {
   getAllCounsellors,
   getCounsellorById,
   getMyProfile,
+  getDoctorQr,
+  getDoctorQrStats,
+  recordDoctorQrVisit,
   verifyEmailOTP,
   sendEmailOTP,
   sendPhoneOTP,
@@ -100,17 +103,20 @@ authRoutes.get("/debug/counsellor", debugCounsellorByEmail);
 authRoutes.get(
   "/me",
   authMiddleware,
-  authorizeRoles("user", "counsellor"), // both allowed
+  authorizeRoles("user", "counsellor", "doctor"), // all allowed
   getMyProfile,
 );
 authRoutes.get("/getUser/:userId", getUser);
+authRoutes.get("/doctor-qr/:doctorId", getDoctorQr);
+authRoutes.get("/doctor-qr/:doctorId/stats", getDoctorQrStats);
+authRoutes.post("/doctor-qr/:doctorId/visits", recordDoctorQrVisit);
 
 authRoutes.get(
   "/getAllUser",
   authMiddleware,
-  authorizeRoles("counsellor"),
+  authorizeRoles("counsellor", "doctor"),
   getAlluser,
-);;
+);
 
 // UPDATE ROUTE - Uses handleUserUpload for both profile photo and certifications
 authRoutes.patch(
