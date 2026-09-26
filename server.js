@@ -48,6 +48,7 @@ import dotenv from "dotenv";
 import dns from "node:dns";
 import connectDB from "./src/config/db.js";
 import { connectMySQL } from "./src/config/mysql.js";
+import { initAdminTables } from "./src/config/initAdminTables.js";
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 // IMPORTANT: Load environment variables FIRST
@@ -115,6 +116,7 @@ async function startServer() {
   try {
     // 1. Connect Railway MySQL (primary resilient connection pool with keep-alive)
     await connectMySQL();
+    await initAdminTables();
 
     // 2. Optional MongoDB connection (only if MONGO_URI is configured)
     if (process.env.MONGO_URI) {

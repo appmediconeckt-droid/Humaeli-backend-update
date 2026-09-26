@@ -2,10 +2,11 @@
 import Appointment from "../models/appointmentModel.js";
 import User from "../models/userModel.js";
 import { createNotificationSafely } from "../services/notificationService.js";
-import { withAppointmentSlot, indiaDateTime } from "../services/appointmentSlotService.js";
+import { withAppointmentSlot, indiaDateTime, timeMinutes } from "../services/appointmentSlotService.js";
 import { getConsultationTiming, emitQueueUpdated } from "../services/consultationTimingService.js";
 import { validateAppointmentPriority, createEmergencyAppointment } from "../services/emergencyAppointmentService.js";
 import { enrichAppointmentsWithDelay } from "../services/appointmentDelayService.js";
+import { query } from "../config/mysql.js";
 
 // IST (India Standard Time) is UTC+5:30
 const IST_OFFSET = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
@@ -30,6 +31,41 @@ const getEndOfDayIST = (date) => {
   const endOfDay = new Date(istDate);
   endOfDay.setHours(23, 59, 59, 999);
   return new Date(endOfDay.getTime() - IST_OFFSET); // Convert back to UTC
+};
+
+export const autoCancelExpiredAppointments = async () => {
+  try {
+    const now = indiaDateTime();
+    const currentDate = now.date;
+    const currentTime = now.time;
+
+    // 1. Cancel appointments from past dates that were not started/completed
+    await query(
+      `UPDATE appointments 
+       SET status = 'cancelled', updated_at = NOW() 
+       WHERE status IN ('pending', 'confirmed', 'booked', 'scheduled', 'waiting', 'queued')
+       AND (priority IS NULL OR priority != 'emergency')
+       AND (
+         (appointment_date IS NOT NULL AND appointment_date < ?)
+         OR (appointment_date IS NULL AND date < ?)
+       )`,
+      [currentDate, `${currentDate} 00:00:00`]
+    );
+
+    // 2. Cancel today's appointments whose scheduled slot time has already passed
+    await query(
+      `UPDATE appointments 
+       SET status = 'cancelled', updated_at = NOW() 
+       WHERE status IN ('pending', 'confirmed', 'booked', 'scheduled', 'waiting', 'queued')
+       AND (priority IS NULL OR priority != 'emergency')
+       AND (appointment_date = ? OR (appointment_date IS NULL AND DATE(date) = ?))
+       AND appointment_time IS NOT NULL 
+       AND appointment_time < ?`,
+      [currentDate, currentDate, currentTime]
+    );
+  } catch (err) {
+    console.warn("⚠️ Auto-cancel expired appointments error:", err.message);
+  }
 };
 
 export const book = async (req, res) => {
@@ -57,13 +93,33 @@ export const book = async (req, res) => {
       });
     }
 
-
-
-
-
     if (priorityFields.priority === "emergency") {
       if (counselor.role !== "doctor") return res.status(400).json({ message: "Emergency appointments are available with doctors only" });
     }
+
+    // Validate that non-emergency appointments are not in the past
+    if (priorityFields.priority !== "emergency" && date) {
+      const now = indiaDateTime();
+      const appDate = req.body.appointment_date || indiaDateTime(date).date;
+      const appTime = req.body.appointment_time || indiaDateTime(date).time;
+
+      if (appDate < now.date) {
+        return res.status(400).json({
+          message: "Cannot book an appointment for a past date. Please select a future date.",
+        });
+      }
+
+      if (appDate === now.date && appTime) {
+        const slotMinute = timeMinutes(appTime);
+        const currentMinute = timeMinutes(now.time);
+        if (slotMinute !== null && currentMinute !== null && slotMinute <= currentMinute) {
+          return res.status(400).json({
+            message: "Cannot book an appointment for a time that has already passed. Please select an upcoming time slot.",
+          });
+        }
+      }
+    }
+
     const payload = {
       ...(priorityFields.priority === "emergency" ? priorityFields : {}),
       patient: req.user._id, // `auth` middleware puts the logged‑in user on req.user
@@ -138,6 +194,9 @@ export const getAppointments = async (req, res) => {
     const userId = req.user._id;
     const { filter, date } = req.query;
 
+    // Automatically cancel expired appointments
+    await autoCancelExpiredAppointments();
+
     let dateFilter = {};
     const now = new Date();
 
@@ -175,7 +234,7 @@ export const getAppointments = async (req, res) => {
     })
       .populate("patient", "fullName phoneNumber dateOfBirth age gender bloodGroup address locationData profilePhoto anonymous")
       .populate("counselor", "fullName profilePhoto anonymous")
-      .sort({ date: -1 })
+      .sort({ date: 1 })
       .lean();
 
     const expanded = appointments.map(expandConsultationNotes);
@@ -184,6 +243,30 @@ export const getAppointments = async (req, res) => {
     const targetDoctor = requestedDoctorId || (userRole === "doctor" ? userId : null);
     const targetDate = date ? String(date).slice(0, 10) : indiaDateTime().date;
     const enriched = await enrichAppointmentsWithDelay(expanded, targetDoctor, targetDate);
+
+    // Sort order: Emergency appointments FIRST, then by Token Number ascending, then by Time/Date ascending
+    enriched.sort((a, b) => {
+      const isEmergA = String(a?.priority || "").toLowerCase() === "emergency";
+      const isEmergB = String(b?.priority || "").toLowerCase() === "emergency";
+      if (isEmergA && !isEmergB) return -1;
+      if (!isEmergA && isEmergB) return 1;
+
+      const tokenA = a?.token_number !== null && a?.token_number !== undefined ? Number(a.token_number) : null;
+      const tokenB = b?.token_number !== null && b?.token_number !== undefined ? Number(b.token_number) : null;
+      if (tokenA !== null && tokenB !== null && !isNaN(tokenA) && !isNaN(tokenB) && tokenA !== tokenB) {
+        return tokenA - tokenB;
+      }
+
+      const timeStrA = a?.appointment_time || "";
+      const timeStrB = b?.appointment_time || "";
+      if (timeStrA && timeStrB && timeStrA !== timeStrB) {
+        return timeStrA.localeCompare(timeStrB);
+      }
+
+      const dateA = a?.date ? new Date(a.date).getTime() : 0;
+      const dateB = b?.date ? new Date(b.date).getTime() : 0;
+      return dateA - dateB;
+    });
 
     return res.json(enriched);
   } catch (err) {

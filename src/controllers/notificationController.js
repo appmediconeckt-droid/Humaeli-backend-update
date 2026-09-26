@@ -142,11 +142,26 @@ export const deleteNotification = async (req, res) => {
 
 export const getCounselorOnlineSubscription = async (req, res) => {
   try {
-    const counselorId = req.params?.counselorId || req.params?.id || req.query?.counselorId;
-    const userId = req.user?._id || req.user?.id || req.user?.userId;
+    const counselorId =
+      req.params?.counselorId ||
+      req.params?.id ||
+      req.query?.counselorId ||
+      req.body?.counselorId;
+    const userId =
+      req.user?._id ||
+      req.user?.id ||
+      req.user?.userId ||
+      req.userId ||
+      null;
 
     if (!userId) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
+      return res.json({
+        success: true,
+        isSubscribed: false,
+        subscribed: false,
+        subscription: null,
+        data: null,
+      });
     }
 
     if (!counselorId) {
@@ -188,7 +203,11 @@ export const subscribeToCounselorOnline = async (req, res) => {
       req.body?.ccounselorId ||
       req.params?.counselorId ||
       req.params?.id;
-    const userId = req.user?._id || req.user?.id || req.user?.userId;
+    const userId =
+      req.user?._id ||
+      req.user?.id ||
+      req.user?.userId ||
+      req.userId;
     const fcmToken = req.body?.fcmToken;
 
     if (!userId) {
@@ -249,7 +268,11 @@ export const unsubscribeFromCounselorOnline = async (req, res) => {
       req.params?.id ||
       req.body?.counselorId ||
       req.body?.ccounselorId;
-    const userId = req.user?._id || req.user?.id || req.user?.userId;
+    const userId =
+      req.user?._id ||
+      req.user?.id ||
+      req.user?.userId ||
+      req.userId;
 
     if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized" });

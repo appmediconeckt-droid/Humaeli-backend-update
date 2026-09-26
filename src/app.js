@@ -274,7 +274,7 @@ import SocketHandler from "./socket/socketHandler.js";
 import { authenticateSocket } from "./middleware/auth.js";
 import { authMiddleware } from "./middleware/authMiddleware.js";
 import { resetAllUsersPresence } from "./utils/presenceManager.js";
-// import adminRoutes from "./routes/adminRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
 // import { initChatCleanupJob } from "./jobs/chatCleanupJob.js";
 import forgotPasswordRoutes from "./routes/forgotPasswordRoutes.js";
 import translateRoutes from "./routes/translateRoutes.js";
@@ -495,11 +495,12 @@ app.use("/api/staff", staffRoutes);
 app.use("/api/prescriptions", prescriptionRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/availability-subscriptions", notificationRoutes);
 app.use("/api/location", locationRoutes);
 app.use("/api/counselors", ratingRoutes);
 app.use("/api/ratings", ratingsApiRoutes);
 app.use("/api/avatar", avatarRoutes); // <--- Avatar generation with OpenAI
-// app.use("/api/admin", adminRoutes); // <--- Admin endpoints (cleanup, stats, etc.)
+app.use("/api/admin", adminRoutes); // Admin panel endpoints (merged from admin-backend)
 app.use('/api/auth', forgotPasswordRoutes);
 app.use('/api/translate', translateRoutes);
 app.use("/api/ai", aiRoutes);

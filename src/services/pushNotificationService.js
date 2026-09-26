@@ -1,4 +1,4 @@
-import firebaseMessaging from "../config/firebaseAdmin.js";
+import messaging, { admin } from "../config/firebaseAdmin.js";
 
 export const sendPushNotification = async ({
   token,
@@ -7,51 +7,86 @@ export const sendPushNotification = async ({
   data = {},
 }) => {
   try {
-    if (!token) {
-      throw new Error('FCM token is required');
+    if (!token || typeof token !== "string" || !token.trim()) {
+      throw new Error("FCM token is required");
     }
 
     const safeData = {};
-
-    Object.keys(data).forEach((key) => {
-      safeData[key] = String(data[key]);
+    Object.keys(data || {}).forEach((key) => {
+      const val = data[key];
+      safeData[key] = val !== null && val !== undefined ? String(val) : "";
     });
 
-    const notificationType = String(safeData.type || '').toUpperCase();
-    const isCallNotification =
-      notificationType.includes('CALL') && Boolean(safeData.callId);
+    const notificationType = String(safeData.type || "").toUpperCase();
+    const isCallNotification = notificationType.includes("CALL") && Boolean(safeData.callId);
+
+    const imageUrl = safeData.imageUrl || safeData.image || null;
 
     const message = {
-      token,
+      token: token.trim(),
       ...(isCallNotification
         ? {
             data: {
               ...safeData,
-              title: String(title || 'Incoming call'),
-              body: String(body || 'Incoming call'),
+              title: String(title || "Incoming call"),
+              body: String(body || "Incoming call"),
             },
           }
         : {
-            notification: { title, body },
+            notification: {
+              title: String(title || "Mediconeckt"),
+              body: String(body || ""),
+              ...(imageUrl ? { imageUrl } : {}),
+            },
             data: safeData,
           }),
       android: {
-        priority: 'high',
+        priority: "high",
         ...(isCallNotification
           ? {}
-          : { notification: { sound: 'default' } }),
+          : {
+              notification: {
+                sound: "default",
+                channelId: "high_importance_channel",
+                priority: "max",
+                defaultSound: true,
+                defaultVibrateTimings: true,
+                clickAction: "FLUTTER_NOTIFICATION_CLICK",
+                ...(imageUrl ? { imageUrl } : {}),
+              },
+            }),
+      },
+      apns: {
+        payload: {
+          aps: {
+            alert: {
+              title: String(title || "Mediconeckt"),
+              body: String(body || ""),
+            },
+            sound: "default",
+            badge: 1,
+            contentAvailable: true,
+          },
+        },
       },
     };
 
-    const response = await firebaseMessaging.send(message);
+    const client = messaging || (admin && typeof admin.messaging === "function" ? admin.messaging() : admin);
 
-    console.log('✅ Push notification sent successfully:');
-    console.log(response);
+    if (!client || typeof client.send !== "function") {
+      throw new Error("Firebase messaging client not ready");
+    }
 
+    const response = await client.send(message);
+
+    console.log("✅ Push notification sent successfully to token:", token.slice(0, 15) + "...", response);
     return response;
   } catch (error) {
-    console.error('❌ Push notification error:', error);
+    console.error("❌ Push notification error:", error.code || error.message);
     throw error;
   }
 };
 
+export default {
+  sendPushNotification,
+};

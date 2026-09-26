@@ -12,7 +12,7 @@ export function validateAppointmentPriority(body) {
   if (!["normal", "emergency"].includes(priority)) throw invalid("Select a valid appointment type");
   if (priority === "normal") return { priority, emergency_reason: null };
   const reason = typeof body.emergency_reason === "string" ? body.emergency_reason.trim() : "";
-  if (reason.length < 10 || reason.length > 1000) throw invalid("Describe the emergency in 10 to 1000 characters");
+  if (reason.length < 1 || reason.length > 1000) throw invalid("Describe the emergency");
   if (!body.clinic_id) throw invalid("Select a clinic for the emergency appointment");
   return { priority, emergency_reason: reason };
 }
