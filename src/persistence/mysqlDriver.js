@@ -388,6 +388,8 @@ class SQLCollection {
   async deleteOne(filter, options) { return this.remove(filter, options); }
   async deleteMany(filter, options) { return this.remove(filter, options, true); }
   async findOneAndDelete(filter, options = {}) { const result = await this.remove(filter, options); return options.includeResultMetadata ? result : result.value; }
+
+  
   async createIndex(key, options = {}) {
     const name = options.name || Object.entries(key).map(([key, order]) => `${key}_${order}`).join('_');
     if (name === '_id_') return name;
@@ -397,8 +399,20 @@ class SQLCollection {
     try {
       await client.beginTransaction();
       await client.execute('SELECT collection_name FROM `_humaeli_locks` WHERE collection_name = ? FOR UPDATE', [this.name]);
-      const existing = (await this.indexes(client)).find(index => index.name === name);
-      if (existing && encode(existing) !== encode(definition)) throw new Error(`Index ${name} has conflicting options; migrate the index explicitly`);
+     const existing = (await this.indexes(client))
+  .find(index => index.name === name);
+
+if (existing && !sameIndexDefinition(existing, definition)) {
+  console.error("Index definition conflict:", {
+    name,
+    existing: normalizeIndexDefinition(existing),
+    requested: normalizeIndexDefinition(definition),
+  });
+
+  throw new Error(
+    `Index ${name} has conflicting options; migrate the index explicitly`
+  );
+}
       checkUnique(await this.read(client), [definition]);
       await client.execute('INSERT INTO `_humaeli_indexes` (collection_name, index_name, definition) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE definition = VALUES(definition)', [this.name, name, encode(definition)]);
       await client.commit();
