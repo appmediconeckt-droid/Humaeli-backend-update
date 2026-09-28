@@ -116,7 +116,7 @@ function checkUnique(documents, indexes) {
     for (const doc of documents) {
       if (partial && !partial.test(doc)) continue;
       const values = fields.map(key => getPath(doc, key));
-      if (index.sparse && values.every(value => value === undefined)) continue;
+      if (index.sparse && values.every(value => value == null)) continue;
       // Current unique indexes contain scalar fields. Reject future multikey
       // uniqueness rather than silently weakening a schema constraint.
       if (values.some(Array.isArray)) throw new Error(`Multikey unique index is unsupported: ${index.name}`);

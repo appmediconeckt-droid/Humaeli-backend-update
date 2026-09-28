@@ -99,6 +99,26 @@ suite('MySQL storage integration', function () {
     assert.equal(result.modifiedCount, 1); assert.equal(result.deletedCount, 1);
     assert.equal((await Account.findById(first._id)).balance, 3);
   });
+  it('allows nullish values in sparse unique indexes while enforcing real values', async () => {
+    const schema = new mongoose.Schema({
+      email: { type: String, required: true },
+      externalId: { type: String, unique: true, sparse: true },
+    });
+    const SparseAccount = mongoose.models.SQLTestSparseAccount || mongoose.model('SQLTestSparseAccount', schema);
+    await SparseAccount.createCollection();
+    await SparseAccount.createIndexes();
+    await SparseAccount.deleteMany({});
+
+    await SparseAccount.create({ email: 'absent-a' });
+    await SparseAccount.create({ email: 'absent-b' });
+    await SparseAccount.create({ email: 'null-a', externalId: null });
+    await SparseAccount.create({ email: 'null-b', externalId: null });
+    await SparseAccount.create({ email: 'real-a', externalId: 'gid-1' });
+    await assert.rejects(
+      SparseAccount.create({ email: 'real-b', externalId: 'gid-1' }),
+      error => error.code === 11000,
+    );
+  });
   it('resumes imports only while target records still match the saved baseline', async () => {
     const collection = mongoose.connection.db.collection(Account.collection.name);
     const id = new mongoose.Types.ObjectId();
