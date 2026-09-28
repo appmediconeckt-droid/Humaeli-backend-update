@@ -1,28 +1,35 @@
-// src/routes/availabilityRoutes.js
-import express from "express";
-import {
-  getAvailabilityRanges,
-  createAvailabilityRange,
-  deleteAvailabilityRange,
-  getAvailableRanges,
-  setUnavailableDate,
-  removeUnavailableDate,
-  clearDateRanges,
-  clearAllRanges,
-} from "../controllers/availabilityController.js";
-import { optionalAuth, authMiddleware } from "../middleware/authMiddleware.js";
-import { authorizeRoles } from "../middleware/authorizeRoles.js";
+// routes/availabilityRoutes.js
+import express from 'express';
+import availabilityController from '../controllers/availabilityController.js';
+import { protect, allowRoles } from '../middleware/authMiddleware.js';
+
 
 const router = express.Router();
+router.get('/available', availabilityController.getAvailableDates);
+router.get('/ranges', availabilityController.getAllRanges);
+router.use(protect, allowRoles('doctor', 'admin', 'assistant', 'nurse', 'department_manager'));
+// GET all ranges and unavailable dates
 
-router.get("/ranges", optionalAuth, getAvailabilityRanges);
-router.post("/ranges", optionalAuth, createAvailabilityRange);
-router.delete("/ranges/:id", optionalAuth, deleteAvailabilityRange);
-router.get("/available", optionalAuth, getAvailableRanges);
-router.post("/unavailable", authMiddleware, authorizeRoles("doctor", "counsellor"), setUnavailableDate);
-router.delete("/unavailable", authMiddleware, authorizeRoles("doctor", "counsellor"), removeUnavailableDate);
-router.delete("/clear-date", optionalAuth, clearDateRanges);
-router.delete("/clear-all", authMiddleware, authorizeRoles("doctor", "counsellor"), clearAllRanges);
-router.get("/", optionalAuth, getAvailabilityRanges);
+// POST add new date range
+router.post('/ranges', availabilityController.addDateRange.bind(availabilityController));
+
+// PUT update date range
+router.put('/ranges/:id', availabilityController.updateDateRange.bind(availabilityController));
+
+// DELETE date range
+router.delete('/ranges/:id', availabilityController.deleteDateRange.bind(availabilityController));
+
+// POST mark specific date as unavailable
+router.post('/unavailable', availabilityController.markDateUnavailable.bind(availabilityController));
+router.delete('/unavailable', availabilityController.removeUnavailableDate);
+
+// DELETE clear specific date range
+router.delete('/clear-date', availabilityController.clearDateRange.bind(availabilityController));
+
+// DELETE clear all unavailable dates
+router.delete('/clear-all', availabilityController.clearAllRanges);
+router.delete('/clear-all-unavailable', availabilityController.clearAllUnavailableDates.bind(availabilityController));
+
+// GET available dates
 
 export default router;

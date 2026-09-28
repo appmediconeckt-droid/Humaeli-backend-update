@@ -3,6 +3,7 @@ import User from '../models/userModel.js';
 import ForgotPasswordToken from '../models/ForgotPasswordToken.js';
 import bcrypt from 'bcryptjs';
 import otpService from '../services/otpService.js';
+import { getStrongPasswordError } from '../utils/passwordPolicy.js';
 
 // ==================== SEND FORGOT PASSWORD OTP ====================
 export const sendForgotPasswordOTP = async (req, res) => {
@@ -132,10 +133,11 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    if (newPassword.length < 6) {
+    const passwordError = getStrongPasswordError(newPassword);
+    if (passwordError) {
       return res.status(400).json({
         success: false,
-        message: 'Password must be at least 6 characters long',
+        message: passwordError,
       });
     }
 

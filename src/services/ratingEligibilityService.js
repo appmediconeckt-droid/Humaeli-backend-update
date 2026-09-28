@@ -1,12 +1,10 @@
-﻿import Chat from "../models/Chat.js";
+import mongoose from "../persistence/mongoose.js";
+import Chat from "../models/Chat.js";
 import Message from "../models/Message.js";
 import Call from "../models/Call.js";
 import User from "../models/userModel.js";
+import Rating from "../models/Rating.js";
 import RatingStatus from "../models/RatingStatus.js";
-
-const isValidId = (id) => id != null && String(id).length >= 12;
-
-
 
 // ─── Business rule constants ────────────────────────────────────────────────
 export const MIN_CALL_SECONDS = 300; // 5 minutes
@@ -26,8 +24,22 @@ export const REMIND_LATER_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
  * remindLaterUntil), so refreshing is always safe to call.
  */
 export const refreshUserRatingEligibility = async (userId) => {
-  if (!isValidId(userId)) return;
-  const userObjectId = userId;
+  if (!mongoose.Types.ObjectId.isValid(userId)) return;
+  const userObjectId = new mongoose.Types.ObjectId(userId);
+
+  // Ratings are the durable source of truth. Keep status rows in sync for
+  // ratings created before RatingStatus existed (or if an earlier status
+  // update was interrupted), so an already-rated counselor is never prompted
+  // again.
+  const ratedCounselorIds = await Rating.distinct("counselorId", {
+    userId: userObjectId,
+  });
+  if (ratedCounselorIds.length) {
+    await RatingStatus.updateMany(
+      { userId: userObjectId, counselorId: { $in: ratedCounselorIds } },
+      { $set: { hasRated: true, remindLaterUntil: null } }
+    );
+  }
 
   // Accumulate per-counselor signals: { reason, lastInteractionAt }
   const eligible = new Map(); // counselorId(string) -> { reason, lastInteractionAt }
@@ -128,8 +140,12 @@ export const refreshUserRatingEligibility = async (userId) => {
  */
 export const getPromptableStatus = async (userId) => {
   const now = new Date();
+  const ratedCounselorIds = await Rating.distinct("counselorId", { userId });
   return RatingStatus.findOne({
     userId,
+    ...(ratedCounselorIds.length
+      ? { counselorId: { $nin: ratedCounselorIds } }
+      : {}),
     hasRated: false,
     neverAskAgain: false,
     eligibleAt: { $ne: null, $lte: now },

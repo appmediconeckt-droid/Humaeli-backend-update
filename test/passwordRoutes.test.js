@@ -36,4 +36,13 @@ describe('Password endpoints (basic smoke tests)', function () {
     expect(res.status).to.equal(401);
     expect(res.body).to.have.property('success', false);
   });
+
+  it('DELETE /api/auth/delete -> 401 when unauthenticated', async () => {
+    const res = await request(app)
+      .delete('/api/auth/delete')
+      .set('Accept', 'application/json');
+
+    expect(res.status).to.equal(401);
+    expect(res.body).to.have.property('success', false);
+  });
 });

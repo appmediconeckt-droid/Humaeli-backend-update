@@ -1,21 +1,10 @@
-// src/routes/staffRoutes.js
-import express from "express";
-import {
-  getStaff,
-  createStaff,
-  updateStaff,
-  deleteStaff,
-} from "../controllers/staffController.js";
-import { authMiddleware } from "../middleware/authMiddleware.js";
-import { authorizeRoles } from "../middleware/authorizeRoles.js";
-
-const router = express.Router();
-router.use(authMiddleware, authorizeRoles("doctor", "counsellor"));
-
-router.get("/", getStaff);
-router.post("/", createStaff);
-router.patch("/:id", updateStaff);
-router.put("/:id", updateStaff);
-router.delete("/:id", deleteStaff);
-
+import { Router } from 'express';
+import { protect, allowRoles } from '../middleware/authMiddleware.js';
+import { addStaff, listStaff, updateStaff, removeStaff } from '../controllers/staffController.js';
+const router = Router();
+router.use(protect, allowRoles('doctor', 'admin'));
+router.post('/', addStaff);
+router.get('/', listStaff);
+router.patch('/:id', updateStaff);
+router.delete('/:id', removeStaff);
 export default router;

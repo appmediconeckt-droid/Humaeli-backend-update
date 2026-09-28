@@ -1,19 +1,15 @@
-// src/routes/doctorBreakRoutes.js
 import express from "express";
+import { protect } from "../middleware/authMiddleware.js";
 import {
+  endBreak,
   getActiveBreak,
   startBreak,
-  endBreak,
-  getDoctorBreaks,
 } from "../controllers/doctorBreakController.js";
-import { optionalAuth } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
-
-router.get("/active", optionalAuth, getActiveBreak);
-router.post("/start", optionalAuth, startBreak);
-router.patch("/:id/end", optionalAuth, endBreak);
-router.post("/:id/end", optionalAuth, endBreak);
-router.get("/", optionalAuth, getDoctorBreaks);
+router.use(protect);
+router.post("/start", startBreak);
+router.patch("/:breakId/end", endBreak);
+router.get("/active", getActiveBreak);
 
 export default router;

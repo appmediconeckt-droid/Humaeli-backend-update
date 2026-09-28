@@ -1,74 +1,35 @@
-// src/config/db.js
-// Cached MongoDB connection for serverless environments (Vercel)
-import mongoose from "mongoose";
-import User from "../models/userModel.js";
+import modelStorage, { connectMySQL } from '../persistence/mongoose.js';
+import { mysqlConfig } from '../persistence/mysqlDriver.js';
+import { loadModels } from '../persistence/models.js';
 
-let cachedConnection = null;
-
-const PHONE_INDEX_NAME = "phoneNumber_1";
-
-async function ensurePhoneNumberIndex() {
-  const collection = User.collection;
-  const indexes = await collection.indexes();
-  const phoneIndex = indexes.find((index) => index.name === PHONE_INDEX_NAME);
-  const expectedPartial = { phoneNumber: { $type: "string" } };
-
-  const hasExpectedIndex =
-    phoneIndex?.unique === true &&
-    JSON.stringify(phoneIndex.partialFilterExpression) ===
-      JSON.stringify(expectedPartial);
-
-  if (hasExpectedIndex) return;
-
-  if (phoneIndex) {
-    console.warn(
-      "⚠️ Rebuilding users.phoneNumber unique index as a partial index",
-    );
-    await collection.dropIndex(PHONE_INDEX_NAME);
+let connecting;
+export default async function connectDB() {
+  if (process.env.NODE_ENV === 'test') {
+    if (!/^humaeli_test_[a-z0-9_]+$/.test(process.env.MYSQL_TEST_DATABASE || '')) {
+      throw new Error('Database tests require MYSQL_TEST_DATABASE=humaeli_test_<name>');
+    }
+    process.env.MYSQL_DATABASE = process.env.MYSQL_TEST_DATABASE;
   }
-
-  await collection.createIndex(
-    { phoneNumber: 1 },
-    {
-      unique: true,
-      name: PHONE_INDEX_NAME,
-      partialFilterExpression: expectedPartial,
-    },
-  );
+  if (connecting) return connecting;
+  if (modelStorage.connection.readyState === 1) return modelStorage.connection;
+  connecting = (async () => {
+    try {
+      // Reads MYSQL_HOST/PORT/USER/PASSWORD/DATABASE, provider aliases or MYSQL_URL.
+      // connectMySQL uses the custom mysql2 driver shared by all application models.
+      const config = mysqlConfig();
+      await loadModels();
+      const connection = await connectMySQL(config);
+      // Install constraints before accepting requests; no background index races.
+      for (const model of Object.values(modelStorage.models)) {
+        await model.createCollection();
+        await model.createIndexes();
+      }
+      console.log(`MySQL connected: ${connection.name}`);
+      return connection;
+    } catch (error) {
+      await modelStorage.disconnect().catch(() => {});
+      throw error;
+    } finally { connecting = null; }
+  })();
+  return connecting;
 }
-
-async function connectDB() {
-  // If already connected, reuse the connection
-  if (cachedConnection && mongoose.connection.readyState === 1) {
-    return cachedConnection;
-  }
-
-  // If a connection is being established, wait for it
-  if (mongoose.connection.readyState === 2) {
-    await mongoose.connection.asPromise();
-    cachedConnection = mongoose.connection;
-    return cachedConnection;
-  }
-
-  try {
-    const conn = await mongoose.connect(process.env.MONGO_URI, {
-      // These options help with serverless cold starts
-      serverSelectionTimeoutMS: 30000,
-      connectTimeoutMS: 20000,
-      socketTimeoutMS: 45000,
-      heartbeatFrequencyMS: 10000,
-      maxPoolSize: 10,
-      minPoolSize: 0, // Allow pool to shrink to 0 when idle
-    });
-
-    cachedConnection = conn.connection;
-    await ensurePhoneNumberIndex();
-    console.log("✅ MongoDB Connected Successfully");
-    return cachedConnection;
-  } catch (error) {
-    console.error("❌ MongoDB connection error:", error);
-    throw error;
-  }
-}
-
-export default connectDB;

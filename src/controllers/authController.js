@@ -1,11 +1,11 @@
-import { generateObjectId } from "../models/mysql/BaseModel.js";
-import { query } from "../config/mysql.js";
-import { doctorQrStats } from "../services/doctorQrStatsService.js";
+import mongoose from "../persistence/mongoose.js";
 import User from "../models/userModel.js";
+import { markUserOnlineAndNotify } from "../services/onlinePresenceService.js";
 import Chat from "../models/Chat.js";
 import Message from "../models/Message.js";
 import OTP from "../models/otpModel.js";
 import LoginOTP from "../models/loginOtpModel.js";
+import RegistrationOTP from "../models/registrationOtpModel.js";
 import bcrypt from "bcryptjs";
 import { formatCertifications } from "../utils/certificationFormatter.js";
 import Session from "../models/sessionModel.js";
@@ -20,9 +20,15 @@ import {
   uploadToCloudinary,
   deleteFromCloudinary,
 } from "../utils/uploadHelper.js";
+import { cleanupAccountData } from "../services/accountCleanupService.js";
 // import User from "../models/userModel.js";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
+import { getStrongPasswordError } from "../utils/passwordPolicy.js";
+import { generateDoctorQrCode } from "../services/doctorQrService.js";
+import { recordDoctorAnalyticsEvent, getDoctorQuickStats } from '../services/doctorAnalyticsService.js';
+import { staffRoles } from '../utils/clinicAccess.js';
+import Appointment from '../models/appointmentModel.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -33,6 +39,8 @@ const verifiedUsersStore = new Map();
 const emailOTPStore = new Map();
 const phoneOTPStore = new Map();
 const EMAIL_VERIFICATION_PURPOSE = "registration_email_verified";
+const REGISTRATION_EMAIL_OTP_PURPOSE = "registration_email";
+const REGISTRATION_OTP_TTL_MS = 10 * 60 * 1000;
 
 // Public aggregate counters used by the landing page. Only totals are exposed.
 export const getLandingStats = async (_req, res) => {
@@ -127,12 +135,78 @@ const isGeneratedUserAvatarUrl = (value = "") => {
   );
 };
 const DEFAULT_PHONE_COUNTRY_CODE = "91";
-const LOCAL_PHONE_NUMBER_LENGTH = 10;
+const LOCAL_PHONE_NUMBER_LENGTHS_BY_COUNTRY_CODE = {
+  "1": [10], "7": [10], "20": [10], "27": [9], "30": [10], "31": [9],
+  "32": [9], "33": [9], "34": [9], "36": [9], "39": [9, 10], "40": [9],
+  "41": [9], "43": [10, 11, 12, 13], "44": [10], "45": [8], "46": [9],
+  "47": [8], "48": [9], "49": [10, 11], "51": [9], "52": [10],
+  "53": [8], "54": [10], "55": [10, 11], "56": [9], "57": [10],
+  "58": [10], "60": [9, 10], "61": [9], "62": [9, 10, 11, 12],
+  "63": [10], "64": [8, 9, 10], "65": [8], "66": [9], "81": [10],
+  "82": [9, 10], "84": [9], "86": [11], "90": [10], "91": [10],
+  "92": [10], "93": [9], "94": [9], "95": [8, 9, 10], "98": [10],
+  "211": [9], "212": [9], "213": [9], "216": [8], "218": [9],
+  "220": [7], "221": [9], "222": [8], "223": [8], "224": [9],
+  "225": [10], "226": [8], "227": [8], "228": [8], "229": [8],
+  "230": [8], "231": [7, 8], "232": [8], "233": [9], "234": [10],
+  "235": [8], "236": [8], "237": [9], "238": [7], "239": [7],
+  "240": [9], "241": [8], "242": [9], "243": [9], "244": [9],
+  "245": [7], "248": [7], "249": [9], "250": [9], "251": [9],
+  "252": [8, 9], "253": [8], "254": [9], "255": [9], "256": [9],
+  "257": [8], "258": [9], "260": [9], "261": [9], "262": [9],
+  "263": [9], "264": [9], "265": [9], "266": [8], "267": [7, 8],
+  "268": [8], "269": [7], "290": [4], "291": [7], "297": [7],
+  "298": [6], "299": [6], "350": [8], "351": [9], "352": [9],
+  "353": [9], "354": [7], "355": [8, 9], "356": [8], "357": [8],
+  "358": [9, 10], "359": [8, 9], "370": [8], "371": [8], "372": [7, 8],
+  "373": [8], "374": [8], "375": [9], "376": [6], "377": [8, 9],
+  "378": [10], "379": [10], "380": [9], "381": [8, 9], "382": [8],
+  "383": [8], "385": [8, 9], "386": [8], "387": [8], "389": [8],
+  "420": [9], "421": [9], "423": [7], "500": [5], "501": [7],
+  "502": [8], "503": [8], "504": [8], "505": [8], "506": [8],
+  "507": [8], "508": [6], "509": [8], "590": [9], "591": [8],
+  "592": [7], "593": [9], "594": [9], "595": [9], "596": [9],
+  "597": [7], "598": [8], "599": [7], "670": [7, 8], "672": [6],
+  "673": [7], "674": [7], "675": [8], "676": [5, 7], "677": [5, 7],
+  "678": [5, 7], "679": [7], "680": [7], "681": [6], "682": [5],
+  "683": [4], "685": [5, 7], "686": [5, 8], "687": [6], "688": [5],
+  "689": [6], "690": [4], "691": [7], "692": [7], "850": [10],
+  "852": [8], "853": [8], "855": [8, 9], "856": [8, 10], "880": [10],
+  "886": [9], "960": [7], "961": [8], "962": [9], "963": [9],
+  "964": [10], "965": [8], "966": [9], "967": [9], "968": [8],
+  "970": [9], "971": [9], "972": [9], "973": [8], "974": [8],
+  "975": [8], "976": [8], "977": [10], "992": [9], "993": [8],
+  "994": [9], "995": [9], "996": [9], "998": [9],
+  "1242": [10], "1246": [10], "1264": [10], "1268": [10],
+  "1284": [10], "1340": [10], "1345": [10], "1441": [10],
+  "1473": [10], "1649": [10], "1664": [10], "1670": [10],
+  "1671": [10], "1684": [10], "1721": [10], "1758": [10],
+  "1767": [10], "1784": [10], "1787": [10], "1809": [10],
+  "1829": [10], "1849": [10], "1868": [10], "1876": [10],
+  "1869": [10], "1939": [10], "441481": [6], "441534": [10],
+  "441624": [10],
+};
+
+const getLocalPhoneLengths = (countryCode = DEFAULT_PHONE_COUNTRY_CODE) => {
+  const countryDigits =
+    String(countryCode || DEFAULT_PHONE_COUNTRY_CODE).replace(/\D/g, "") ||
+    DEFAULT_PHONE_COUNTRY_CODE;
+  return (
+    LOCAL_PHONE_NUMBER_LENGTHS_BY_COUNTRY_CODE[countryDigits] ||
+    [Math.max(4, 15 - countryDigits.length)]
+  );
+};
+
+const getLocalPhoneMaxLength = (countryCode = DEFAULT_PHONE_COUNTRY_CODE) =>
+  Math.max(...getLocalPhoneLengths(countryCode));
+
 const normalizePhoneNumber = (value = "", fallbackCountryCode = DEFAULT_PHONE_COUNTRY_CODE) => {
   const raw = String(value || "").trim();
   const digits = raw.replace(/\D/g, "");
   const fallbackDigits = String(fallbackCountryCode || DEFAULT_PHONE_COUNTRY_CODE).replace(/\D/g, "") || DEFAULT_PHONE_COUNTRY_CODE;
   const countryCode = `+${fallbackDigits}`;
+  const allowedLengths = getLocalPhoneLengths(fallbackDigits);
+  const maxLocalLength = getLocalPhoneMaxLength(fallbackDigits);
 
   if (!digits) {
     return {
@@ -146,19 +220,20 @@ const normalizePhoneNumber = (value = "", fallbackCountryCode = DEFAULT_PHONE_CO
   }
 
   let localDigits = digits;
-  if (localDigits.length > LOCAL_PHONE_NUMBER_LENGTH) {
+  if (localDigits.length > maxLocalLength) {
     const prefixes = Array.from(
       new Set([fallbackDigits, DEFAULT_PHONE_COUNTRY_CODE].filter(Boolean)),
     );
     const matchingPrefix = prefixes.find(
       (prefix) =>
         localDigits.startsWith(prefix) &&
-        localDigits.length - prefix.length === LOCAL_PHONE_NUMBER_LENGTH,
+        localDigits.length - prefix.length <= maxLocalLength,
     );
     if (matchingPrefix) {
       localDigits = localDigits.slice(matchingPrefix.length);
     }
   }
+  localDigits = localDigits.slice(0, maxLocalLength);
 
   const formatted = localDigits;
   const smsFormatted = `+${fallbackDigits}${localDigits}`;
@@ -178,9 +253,85 @@ const normalizePhoneNumber = (value = "", fallbackCountryCode = DEFAULT_PHONE_CO
     formatted,
     smsFormatted,
     countryCode,
-    isValid: localDigits.length === LOCAL_PHONE_NUMBER_LENGTH,
+    isValid: allowedLengths.includes(localDigits.length),
     duplicateValues,
   };
+};
+
+const hasText = (value) => String(value || "").trim().length > 0;
+const hasArrayItems = (value) => Array.isArray(value) && value.length > 0;
+const hasProfilePhoto = (value) => {
+  if (!value) return false;
+  if (typeof value === "string") return hasText(value);
+  return hasText(value.url) || hasText(value.secure_url) || hasText(value.path);
+};
+const hasCertification = (value) =>
+  Array.isArray(value) &&
+  value.some((cert) =>
+    hasText(cert?.name) && (hasText(cert?.documentUrl) || hasText(cert?.documentPublicId)),
+  );
+const hasCompleteAddress = (value) => Boolean(hasText(value) || (
+  value && typeof value === "object" &&
+  ["line1", "city", "state", "pincode", "country"].every(key => hasText(value[key]))
+));
+const doctorProfileFields = (body) => {
+  const fields = {};
+  for (const [key, aliases] of Object.entries({
+    aadhaarNumber: ["aadhaarNumber", "aadharNumber", "adharNumber", "aadhaar", "aadhar", "adhar"],
+    panNumber: ["panNumber", "pan"],
+    permanentAddress: ["permanentAddress"],
+    aboutMe: ["aboutMe", "about"],
+  })) {
+    const alias = aliases.find(name => body[name] !== undefined);
+    if (!alias) continue;
+    let value = body[alias];
+    if (key === "permanentAddress") {
+      if (typeof value === "string") {
+        value = value.trim();
+        if (value.startsWith("{")) {
+          try { value = JSON.parse(value); } catch { throw new Error("permanentAddress must be a valid JSON object or address text"); }
+        }
+      }
+      if (typeof value !== "string" && (!value || typeof value !== "object" || Array.isArray(value))) throw new Error("Invalid permanentAddress");
+    } else {
+      if (typeof value !== "string") throw new Error(`${key} must be a string`);
+      value = value.trim();
+      if (key === "aadhaarNumber") value = value.replace(/[ -]/g, "");
+      if (key === "panNumber") value = value.toUpperCase();
+      if (value && key === "aadhaarNumber" && !/^\d{12}$/.test(value)) throw new Error("aadhaarNumber must contain 12 digits");
+      if (value && key === "panNumber" && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(value)) throw new Error("Invalid panNumber format");
+    }
+    fields[key] = value;
+  }
+  return fields;
+};
+const privateDoctorProfile = (user) => ({
+  aadhaarNumber: user.aadhaarNumber || "",
+  panNumber: user.panNumber || "",
+  permanentAddress: user.permanentAddress || "",
+  about: user.aboutMe || "",
+});
+const isCounsellorProfileComplete = (data) => {
+  const dob = getAgeFromDateOfBirth(data?.dateOfBirth);
+  const address = data?.address || {};
+  const doctor = data?.role === "doctor";
+  return (
+    hasText(data?.fullName) &&
+    hasText(data?.email) &&
+    normalizePhoneNumber(data?.phoneNumber, data?.phoneCountryCode).isValid &&
+    hasProfilePhoto(data?.profilePhoto) &&
+    dob.valid &&
+    dob.age !== null &&
+    hasText(data?.gender) &&
+    hasArrayItems(data?.specialization) &&
+    (doctor ? (data?.experience !== null && data?.experience !== undefined && data?.experience !== "" && Number.isFinite(Number(data.experience)) && Number(data.experience) >= 0) : Number(data?.experience) > 0) &&
+    (hasText(data?.qualification) || hasText(data?.education)) &&
+    hasText(data?.aboutMe) &&
+    hasArrayItems(data?.languages) &&
+    hasArrayItems(data?.consultationMode) &&
+    (doctor ? (hasCompleteAddress(data.permanentAddress) && /^\d{12}$/.test(data.aadhaarNumber || "") && /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(data.panNumber || "")) : hasCompleteAddress(address)) &&
+    hasCertification(data?.certifications)
+  );
 };
 const LOGIN_OTP_TTL_MS = 10 * 60 * 1000;
 
@@ -224,9 +375,7 @@ const markUserOnline = async (userOrId) => {
   const userId = userOrId?._id || userOrId;
   if (!userId) return;
 
-  await User.findByIdAndUpdate(userId, {
-    $set: { isOnline: true, lastSeen: null },
-  });
+  await markUserOnlineAndNotify(userId);
 
   if (userOrId?._id) {
     userOrId.isOnline = true;
@@ -329,6 +478,13 @@ setInterval(
 
 export const updateUserById = async (req, res) => {
   try {
+    if (req.body?.gender !== undefined) {
+      const gender = typeof req.body.gender === 'string' ? req.body.gender.trim().toLowerCase() : '';
+      if (!['male', 'female', 'other'].includes(gender)) {
+        return res.status(400).json({ success: false, message: 'Gender must be male, female, or other', field: 'gender' });
+      }
+      req.body.gender = gender;
+    }
     const { userId } = req.params;
 
     // Removed verbose console logs for production
@@ -444,6 +600,43 @@ export const updateUserById = async (req, res) => {
         }
       }
       updates.profilePhoto = null;
+    }
+
+    if (["counsellor", "doctor"].includes(currentUser.role)) {
+      const prescriptionAssetFields = [
+        ["prescriptionSignature", "prescriptionSignatureUrl"],
+        ["prescriptionSeal", "prescriptionSealUrl"],
+      ];
+
+      for (const [field, urlField] of prescriptionAssetFields) {
+        const uploadedFile = req.files?.[field]?.[0];
+        if (uploadedFile?.path) {
+          const previousPublicId = currentUser[field]?.publicId;
+          if (
+            process.env.CLOUDINARY_CLOUD_NAME &&
+            process.env.CLOUDINARY_API_KEY &&
+            process.env.CLOUDINARY_API_SECRET &&
+            previousPublicId
+          ) {
+            try {
+              await cloudinary.uploader.destroy(previousPublicId);
+            } catch (err) {
+              console.error(`Error deleting old ${field}:`, err);
+            }
+          }
+          updates[field] = {
+            url: uploadedFile.path,
+            publicId: uploadedFile.filename,
+            format: uploadedFile.format || null,
+            bytes: uploadedFile.bytes || uploadedFile.size || null,
+          };
+        } else if (typeof req.body[urlField] === "string" && req.body[urlField].trim()) {
+          updates[field] = {
+            ...(currentUser[field]?.toObject?.() || currentUser[field] || {}),
+            url: req.body[urlField].trim(),
+          };
+        }
+      }
     }
 
     // 2. Handle Certifications - FIXED: Properly handle document URLs and DELETION
@@ -1040,19 +1233,31 @@ export const updateUserById = async (req, res) => {
       });
     }
 
-    // 8a. Auto-set profileCompleted for counsellors when required fields are present
+    if (currentUser.role === "doctor") {
+      try { Object.assign(updates, doctorProfileFields(req.body)); }
+      catch (error) { return res.status(400).json({ success: false, message: error.message }); }
+    }
+
+    // Recompute professional completion from saved fields and this update.
     if (["counsellor", "doctor"].includes(currentUser.role)) {
-      const mergedSpec = updates.specialization ?? currentUser.specialization;
-      const mergedExp = updates.experience ?? currentUser.experience;
-      const mergedQual = updates.qualification ?? currentUser.qualification ?? updates.education ?? currentUser.education;
-      const mergedLoc = updates.location ?? currentUser.location;
-      const specOk = Array.isArray(mergedSpec) ? mergedSpec.length > 0 : !!mergedSpec;
-      const hasAllRequired = specOk && !!mergedExp && !!mergedQual && !!mergedLoc;
-      updates.profileCompleted = hasAllRequired;
+      const currentUserData =
+        typeof currentUser.toObject === "function"
+          ? currentUser.toObject()
+          : currentUser;
+      updates.profileCompleted = isCounsellorProfileComplete({
+        ...currentUserData,
+        ...updates,
+      });
     }
 
     // 8. Validate phone number
-    if (updates.phoneNumber && !normalizePhoneNumber(updates.phoneNumber).isValid) {
+    if (
+      updates.phoneNumber &&
+      !normalizePhoneNumber(
+        updates.phoneNumber,
+        updates.phoneCountryCode || currentUser.phoneCountryCode,
+      ).isValid
+    ) {
       return res.status(400).json({
         message: "Enter a valid phone number",
         success: false,
@@ -1106,6 +1311,8 @@ export const updateUserById = async (req, res) => {
       age: updatedAgeFromDateOfBirth.age ?? updatedUser.age,
       gender: updatedUser.gender,
       role: updatedUser.role,
+      accountType: updatedUser.accountType ?? null,
+      doctorQrCode: updatedUser.accountType === "doctor" ? updatedUser.doctorQrCode ?? null : null,
       profilePhoto: updatedUser.profilePhoto,
       isActive: updatedUser.isActive,
       profileCompleted: updatedUser.profileCompleted,
@@ -1120,6 +1327,8 @@ export const updateUserById = async (req, res) => {
       medicalInfo: updatedUser.medicalInfo,
       insuranceInfo: updatedUser.insuranceInfo,
     };
+
+    if (updatedUser.role === "doctor") Object.assign(formattedUser, privateDoctorProfile(updatedUser));
 
     // Add counsellor fields if applicable
     if (["counsellor", "doctor"].includes(updatedUser.role)) {
@@ -1137,6 +1346,10 @@ export const updateUserById = async (req, res) => {
         totalSessions: updatedUser.totalSessions,
         activeClients: updatedUser.activeClients,
         uniqueCode: updatedUser.uniqueCode,
+        prescriptionSignature: updatedUser.prescriptionSignature,
+        prescriptionSignatureUrl: updatedUser.prescriptionSignature?.url || "",
+        prescriptionSeal: updatedUser.prescriptionSeal,
+        prescriptionSealUrl: updatedUser.prescriptionSeal?.url || "",
       });
     }
 
@@ -1145,6 +1358,10 @@ export const updateUserById = async (req, res) => {
     //   formattedUser.certifications?.length,
     // );
 
+    if (["counsellor", "counselor"].includes(updatedUser.role)) {
+      // Invalidate the public directory without broadcasting private profile data.
+      global.io?.emit("counselor-directory-updated", { counselorId: String(updatedUser._id) });
+    }
     return res.status(200).json({
       message: "User updated successfully",
       success: true,
@@ -1191,6 +1408,12 @@ export const updateUserById = async (req, res) => {
       });
     }
 
+    if (error?.name === 'ValidationError' || error?.name === 'CastError') {
+      return res.status(400).json({
+        success: false, message: 'Invalid profile details',
+        fields: error.errors ? Object.keys(error.errors) : [error.path].filter(Boolean),
+      });
+    }
     return res.status(500).json({
       message: "Error updating user",
       success: false,
@@ -1221,18 +1444,26 @@ export const sendEmailOTP = async (req, res) => {
     }
 
     const otp = otpService.generateOTP(normalizedEmail);
+    const expiresAt = new Date(Date.now() + REGISTRATION_OTP_TTL_MS);
 
     try {
-      await otpService.sendEmailOTP(normalizedEmail, otp, "User");
+      const delivery = await otpService.sendEmailOTP(normalizedEmail, otp, "User");
       emailOTPStore.set(normalizedEmail, {
         otp,
-        expiresAt: Date.now() + 10 * 60 * 1000,
+        expiresAt: expiresAt.getTime(),
+      });
+      await RegistrationOTP.create({
+        email: normalizedEmail,
+        otp: String(otp),
+        purpose: REGISTRATION_EMAIL_OTP_PURPOSE,
+        expiresAt,
       });
 
       return res.status(200).json({
         message: "Email OTP sent successfully",
         success: true,
         email: normalizedEmail,
+        deliveryProvider: delivery?.provider || "unknown",
       });
     } catch (sendError) {
       console.error("OTP sending error:", sendError);
@@ -1268,24 +1499,52 @@ export const verifyEmailOTP = async (req, res) => {
       return res.status(400).json({ message: "Invalid OTP", success: false });
     }
 
-    const storedData = emailOTPStore.get(normalizedEmail);
+    const now = Date.now();
+    const nowDate = new Date(now);
+    let storedData = emailOTPStore.get(normalizedEmail);
 
-    if (!storedData) {
+    if (storedData && now > storedData.expiresAt) {
+      emailOTPStore.delete(normalizedEmail);
+      storedData = null;
+    }
+
+    await RegistrationOTP.deleteMany({
+      email: normalizedEmail,
+      purpose: REGISTRATION_EMAIL_OTP_PURPOSE,
+      expiresAt: { $lte: nowDate },
+    });
+
+    const memoryOtpMatches =
+      storedData && String(storedData.otp) === normalizedOtp;
+    const matchingRegistrationOtp = memoryOtpMatches
+      ? null
+      : await RegistrationOTP.findOne({
+          email: normalizedEmail,
+          otp: normalizedOtp,
+          purpose: REGISTRATION_EMAIL_OTP_PURPOSE,
+          expiresAt: { $gt: nowDate },
+        })
+          .sort({ createdAt: -1 })
+          .lean();
+    const hasPendingRegistrationOtp =
+      Boolean(storedData) ||
+      Boolean(matchingRegistrationOtp) ||
+      Boolean(
+        await RegistrationOTP.exists({
+          email: normalizedEmail,
+          purpose: REGISTRATION_EMAIL_OTP_PURPOSE,
+          expiresAt: { $gt: nowDate },
+        }),
+      );
+
+    if (!hasPendingRegistrationOtp) {
       return res.status(400).json({
         message: "No OTP found. Please request a new OTP.",
         success: false,
       });
     }
 
-    if (Date.now() > storedData.expiresAt) {
-      emailOTPStore.delete(normalizedEmail);
-      return res.status(400).json({
-        message: "OTP has expired. Please request a new OTP.",
-        success: false,
-      });
-    }
-
-    if (String(storedData.otp) !== normalizedOtp) {
+    if (!memoryOtpMatches && !matchingRegistrationOtp) {
       return res.status(400).json({ message: "Invalid OTP", success: false });
     }
 
@@ -1302,6 +1561,10 @@ export const verifyEmailOTP = async (req, res) => {
 
     verifiedUsersStore.set(normalizedEmail, userVerification);
     emailOTPStore.delete(normalizedEmail);
+    await RegistrationOTP.deleteMany({
+      email: normalizedEmail,
+      purpose: REGISTRATION_EMAIL_OTP_PURPOSE,
+    });
 
     const emailVerificationToken = jwt.sign(
       { email: normalizedEmail, purpose: EMAIL_VERIFICATION_PURPOSE },
@@ -1672,23 +1935,6 @@ export const verifyPhoneOTP = async (req, res) => {
 // ================= STEP 5: COMPLETE REGISTRATION =================
 export const completeRegistration = async (req, res) => {
   try {
-    // The role selector is authoritative; professional fields cannot distinguish
-    // doctors from counsellors and must never decide the account's role.
-    const role = normalizeRole(req.body.role ?? req.body.accountRole ?? "");
-    if (!["user", "counsellor", "doctor"].includes(role)) {
-      return res.status(400).json({
-        success: false,
-        code: "INVALID_ROLE",
-        message: "Select a valid registration role: user, counsellor or doctor.",
-      });
-    }
-    if (req.body.accountRole != null && normalizeRole(req.body.accountRole) !== role) {
-      return res.status(400).json({
-        success: false,
-        code: "INVALID_ROLE",
-        message: "Registration roles do not match. Please select your role again.",
-      });
-    }
     const {
       fullName,
       anonymous,
@@ -1696,6 +1942,7 @@ export const completeRegistration = async (req, res) => {
       phoneNumber,
       phoneCountryCode,
       password,
+      confirmPassword,
       age,
       gender,
       qualification,
@@ -1713,7 +1960,72 @@ export const completeRegistration = async (req, res) => {
       medicalInfo,
       insuranceInfo,
       emailVerificationToken,
+      staff_id,
+      nursing_license,
+      shift,
+      shift_time,
+      shift_start_time,
+      shift_end_time,
+      assigned_ward,
+      years_of_experience,
+      qualifications,
+      assistant_id,
+      department,
+      supervisor,
+      technician_id,
+      lab_type,
+      certifications,
+      housekeeping_staff_id,
+      assigned_area,
+      housekeeping_supervisor,
+      supervisor_id,
+      team_size,
+      responsibilities,
+      manager_id,
+      employees_under,
+      budget_responsibility: budgetResponsibility,
+      billing_id,
+      software_expertise: softwareExpertise,
     } = req.body;
+
+    const professionalTypes = ["doctor", "consultant"];
+    const staffTypes = [
+      "nurse",
+      "assistant",
+      "lab_technician",
+      "housekeeping",
+      "supervisor",
+      "department_manager",
+      "billing",
+    ];
+    const requestedRole = String(req.body.role ?? "").trim().toLowerCase();
+    const accountTypes = [req.body.accountType, req.body.accountRole]
+      .map(value => String(value ?? "").trim().toLowerCase())
+      .filter(Boolean);
+    if (professionalTypes.includes(requestedRole)) accountTypes.push(requestedRole);
+    if (staffTypes.includes(requestedRole) && accountTypes.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Staff roles cannot be combined with Doctor or Consultant accountType",
+        field: "role",
+      });
+    }
+    if (accountTypes.some(value => !professionalTypes.includes(value))) {
+      return res.status(400).json({
+        success: false,
+        message: "Account type must be Doctor or Consultant",
+        field: "accountType",
+      });
+    }
+    if (new Set(accountTypes).size > 1) {
+      return res.status(400).json({
+        success: false,
+        message: "Account type fields must agree: Doctor or Consultant",
+        field: "accountType",
+      });
+    }
+    const accountType = accountTypes[0] || "";
+    const requestedStaffRole = staffTypes.includes(requestedRole) ? requestedRole : "";
 
     const normalizedEmail = String(email || "").trim().toLowerCase();
     if (!fullName || !normalizedEmail || !phoneNumber || !password) {
@@ -1731,9 +2043,17 @@ export const completeRegistration = async (req, res) => {
       });
     }
 
-    if (password.length < 6) {
+    const passwordError = getStrongPasswordError(password);
+    if (passwordError) {
       return res.status(400).json({
-        message: "Password must be at least 6 characters",
+        message: passwordError,
+        success: false,
+      });
+    }
+
+    if (confirmPassword !== undefined && password !== confirmPassword) {
+      return res.status(400).json({
+        message: "Passwords do not match",
         success: false,
       });
     }
@@ -1822,6 +2142,16 @@ export const completeRegistration = async (req, res) => {
       });
     }
 
+    // Keep the authorization role distinct so the client can select the correct dashboard.
+    const hasCounsellorFields =
+      qualification && specialization && experience;
+    const role = requestedStaffRole
+      || (accountType === "doctor"
+      ? "doctor"
+      : (accountType === "consultant" || normalizeRole(requestedRole) === 'counsellor' || hasCounsellorFields)
+        ? "counsellor"
+        : "user");
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const dob = getAgeFromDateOfBirth(dateOfBirth);
     if (!dob.valid) {
@@ -1844,7 +2174,8 @@ export const completeRegistration = async (req, res) => {
       age: Number.isFinite(derivedAge) ? derivedAge : null,
       gender: gender || "male",
       role,
-      profileCompleted: true,
+      profileCompleted: !["counsellor", "doctor"].includes(role),
+      ...(accountType ? { accountType } : {}),
       isEmailVerified: true,
       isPhoneVerified: false,
       isActive: true,
@@ -1888,6 +2219,36 @@ export const completeRegistration = async (req, res) => {
         relationship: "",
         insuranceType: "",
       },
+      ...(requestedStaffRole ? {
+        staffId: staff_id,
+        nursingLicense: nursing_license,
+        shift,
+        shiftTime: shift_time,
+        shiftStartTime: shift_start_time,
+        shiftEndTime: shift_end_time,
+        assignedWard: assigned_ward,
+        yearsOfExperience: years_of_experience !== undefined && years_of_experience !== ""
+          ? Number(years_of_experience)
+          : undefined,
+        qualifications,
+        assistantId: assistant_id,
+        department,
+        supervisor,
+        technicianId: technician_id,
+        labType: lab_type,
+        staffCertifications: typeof certifications === 'string' ? certifications : JSON.stringify(certifications || []),
+        housekeepingStaffId: housekeeping_staff_id,
+        assignedArea: assigned_area,
+        housekeepingSupervisor: housekeeping_supervisor,
+        supervisorId: supervisor_id,
+        teamSize: team_size !== undefined && team_size !== "" ? Number(team_size) : undefined,
+        responsibilities,
+        managerId: manager_id,
+        employeesUnder: employees_under !== undefined && employees_under !== "" ? Number(employees_under) : undefined,
+        budgetResponsibility,
+        billingId: billing_id,
+        softwareExpertise,
+      } : {}),
     };
 
     // Profile photo handling.
@@ -1911,7 +2272,7 @@ export const completeRegistration = async (req, res) => {
       );
     }
 
-    // Both professional roles retain their submitted professional profile.
+    // Add professional fields for both counsellors and doctors.
     if (["counsellor", "doctor"].includes(role)) {
       userData.qualification = qualification;
       userData.specialization =
@@ -1929,14 +2290,28 @@ export const completeRegistration = async (req, res) => {
           ? languages.split(",").map((l) => l.trim())
           : languages || [];
       userData.aboutMe = aboutMe || "";
+      if (role === "doctor") {
+        try { Object.assign(userData, doctorProfileFields(req.body)); }
+        catch (error) { return res.status(400).json({ success: false, message: error.message }); }
+      }
+      userData.profileCompleted = isCounsellorProfileComplete(userData);
     }
 
+    // Generate before inserting so a QR failure cannot leave a partial account.
+    if (accountType === "doctor") {
+      userData._id = new mongoose.Types.ObjectId();
+      userData.doctorQrCode = await generateDoctorQrCode(userData);
+    }
     const newUser = await User.create(userData);
 
     // Clean up verification data
     verifiedUsersStore.delete(normalizedEmail);
     emailOTPStore.delete(normalizedEmail);
     phoneOTPStore.delete(normalizedEmail);
+    await RegistrationOTP.deleteMany({
+      email: normalizedEmail,
+      purpose: REGISTRATION_EMAIL_OTP_PURPOSE,
+    });
 
     return res.status(201).json({
       message: "Registration completed successfully. Please log in.",
@@ -1959,15 +2334,23 @@ export const completeRegistration = async (req, res) => {
     }
 
     // Rollback: Delete uploaded photo from Cloudinary if registration fails
-    if (req.file && profilePhotoData && profilePhotoData.publicId) {
+    if (req.file?.filename) {
       try {
-        await deleteFromCloudinary(profilePhotoData.publicId);
+        await deleteFromCloudinary(req.file.filename);
         console.log(
-          `Rollback: Deleted uploaded photo ${profilePhotoData.publicId}`,
+          `Rollback: Deleted uploaded photo ${req.file.filename}`,
         );
       } catch (deleteError) {
         console.error("Error rolling back photo upload:", deleteError);
       }
+    }
+
+    if (error?.name === "ValidationError") {
+      return res.status(400).json({
+        message: "Invalid registration details",
+        success: false,
+        fields: Object.keys(error.errors || {}),
+      });
     }
 
     return res.status(500).json({
@@ -2006,10 +2389,7 @@ export const loginUser = async (req, res) => {
   try {
     const email = normalizeEmail(req.body?.email);
     const { password } = req.body;
-    // "auto" means the frontend does not want to enforce a role — use DB role.
-    const rawRole = req.body?.role;
-    const requestedRole =
-      rawRole && rawRole !== "auto" ? normalizeRole(rawRole) : null;
+    const role = normalizeRole(req.body?.role ?? "");
 
     if (!email || !password) {
       return res.status(400).json({
@@ -2027,7 +2407,7 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    if (requestedRole && normalizeRole(user.role) !== requestedRole) {
+    if (role && normalizeRole(user.role) !== role) {
       return res.status(403).json({
         message:
           normalizeRole(user.role) === "counsellor"
@@ -2037,7 +2417,7 @@ export const loginUser = async (req, res) => {
         roleMismatch: true,
         code: "ROLE_MISMATCH",
         actualRole: user.role,
-        requestedRole,
+        requestedRole: role,
       });
     }
 
@@ -2045,13 +2425,6 @@ export const loginUser = async (req, res) => {
       return res
         .status(401)
         .json({ message: "Account is deactivated", success: false });
-    }
-
-    if (!user.password || typeof user.password !== "string") {
-      return res.status(401).json({
-        message: "No password set for this account. Please use OTP or Google login.",
-        success: false,
-      });
     }
 
     const match = await bcrypt.compare(password, user.password);
@@ -2081,15 +2454,15 @@ export const loginUser = async (req, res) => {
     }
 
     // ---- No other session → normal login ----
-    const sessionId = generateObjectId();
+    const sessionId = new mongoose.Types.ObjectId();
     const accessToken = generateAccessToken(
       user._id,
-      sessionId,
+      sessionId.toString(),
       user.role,
     );
     const refreshToken = generateRefreshToken(
       user._id,
-      sessionId,
+      sessionId.toString(),
       user.role,
     );
 
@@ -2156,17 +2529,8 @@ export const googleAuth = async (req, res) => {
       });
     }
 
-    // Every Google signup/login must identify its portal before any account or
-    // session is created. Missing/auto roles must not bypass this boundary.
-    const rawRole = role == null ? "" : normalizeRole(role);
-    const requestedRole = rawRole === "consultant" ? "counsellor" : rawRole;
-    if (!["user", "counsellor", "doctor"].includes(requestedRole)) {
-      return res.status(400).json({
-        success: false,
-        code: "INVALID_ROLE",
-        message: "Select a valid login role: user, counsellor or doctor.",
-      });
-    }
+    // Default role to "user" if not provided. Frontend should send "user" or "counsellor".
+    const requestedRole = role === "counsellor" ? "counsellor" : "user";
 
     // 1. Verify the Google ID token
     let payload;
@@ -2184,9 +2548,9 @@ export const googleAuth = async (req, res) => {
       });
     }
 
-    if (!payload || !payload.email || !payload.sub) {
+    if (!payload || !payload.email) {
       return res.status(401).json({
-        message: "Google token did not contain a valid identity and email",
+        message: "Google token did not contain email",
         success: false,
       });
     }
@@ -2198,7 +2562,7 @@ export const googleAuth = async (req, res) => {
       });
     }
 
-    const email = payload.email.trim().toLowerCase();
+    const email = payload.email.toLowerCase();
     const googleId = payload.sub;
     const fullName = payload.name || email.split("@")[0];
     const picture = payload.picture || null;
@@ -2244,8 +2608,10 @@ export const googleAuth = async (req, res) => {
     }
 
     if (user) {
-      // Reject cross-role login before linking Google or changing any sessions.
-      if (normalizeRole(user.role) !== requestedRole) {
+      // Role mismatch guard — same contract as /login. If the client said
+      // "user" but the existing account is a counsellor (or vice-versa),
+      // refuse rather than silently logging them in to the wrong dashboard.
+      if (user.role !== requestedRole) {
         return res.status(403).json({
           message: `This Google account is registered as ${user.role}. Please pick the ${user.role} role and try again.`,
           success: false,
@@ -2348,15 +2714,15 @@ export const googleAuth = async (req, res) => {
     );
 
     // 5. Create new session + tokens
-    const sessionId = generateObjectId();
+    const sessionId = new mongoose.Types.ObjectId();
     const accessToken = generateAccessToken(
       user._id,
-      sessionId,
+      sessionId.toString(),
       user.role,
     );
     const refreshToken = generateRefreshToken(
       user._id,
-      sessionId,
+      sessionId.toString(),
       user.role,
     );
 
@@ -2765,15 +3131,15 @@ export const verifyLoginOTP = async (req, res) => {
     );
 
     // OTP is valid → create a **new** session for this device
-    const sessionId = generateObjectId();
+    const sessionId = new mongoose.Types.ObjectId();
     const accessToken = generateAccessToken(
       user._id,
-      sessionId,
+      sessionId.toString(),
       user.role,
     );
     const refreshToken = generateRefreshToken(
       user._id,
-      sessionId,
+      sessionId.toString(),
       user.role,
     );
 
@@ -2835,10 +3201,6 @@ export const refreshAccessToken = async (req, res) => {
       decoded = jwt.verify(incomingRefreshToken, process.env.REFRESH_SECRET);
     } catch (err) {
       return res.status(401).json({ message: "Invalid refresh token" });
-    }
-
-    if (!decoded.sessionId || typeof decoded.sessionId !== "string" || decoded.sessionId.length < 12) {
-      return res.status(401).json({ message: "Invalid session" });
     }
 
     // Find session using sessionId from refresh token
@@ -2933,6 +3295,7 @@ export const logout = async (req, res) => {
   try {
     // Get userId from request (set by auth middleware)
     let userId = req.userId || req.user?._id;
+    const sessionId = req.sessionId;
     const refreshToken = req.cookies?.refreshToken;
 
     // console.log("🔓 Logout - UserId from request:", userId);
@@ -2963,8 +3326,8 @@ export const logout = async (req, res) => {
 
         if (result.modifiedCount === 0) {
           // If no specific session found, invalidate all active sessions for this user
-          const allResult = await Session.updateMany(
-            { userId, isActive: true },
+          const allResult = await Session.updateOne(
+            { _id: sessionId, userId, isActive: true },
             { isActive: false, logoutAt: new Date() },
           );
           console.log(
@@ -2975,8 +3338,8 @@ export const logout = async (req, res) => {
         }
       } else {
         // No refresh token provided, invalidate ALL active sessions
-        const result = await Session.updateMany(
-          { userId, isActive: true },
+        const result = await Session.updateOne(
+          { _id: sessionId, userId, isActive: true },
           { isActive: false, logoutAt: new Date() },
         );
         console.log(
@@ -3093,22 +3456,19 @@ export const getMySessions = async (req, res) => {
 };
 
 // ================= GET ALL COUNSELLORS =================
+// Completion is validated when professional profiles are saved. Keep directory
+// eligibility identical for list/detail without a second, conflicting field check.
+const professionalDirectoryFilter = () => ({
+  role: { $in: ["counsellor", "doctor"] },
+  isActive: true,
+  profileCompleted: true,
+});
+
 export const getAllCounsellors = async (req, res) => {
   try {
     const { specialization, location, consultationMode, minExperience } =
       req.query;
-    let filter = {
-      role: { $in: ["counsellor", "doctor"] },
-      isActive: true,
-      profileCompleted: true,
-      "specialization.0": { $exists: true },
-      experience: { $gt: 0 },
-      location: { $nin: ["", null] },
-      $or: [
-        { qualification: { $nin: ["", null] } },
-        { education: { $nin: ["", null] } },
-      ],
-    };
+    const filter = professionalDirectoryFilter();
 
     if (specialization) filter.specialization = { $in: [specialization] };
     if (location) filter.location = { $regex: location, $options: "i" };
@@ -3116,7 +3476,7 @@ export const getAllCounsellors = async (req, res) => {
     if (minExperience) filter.experience = { $gte: Number(minExperience) };
 
     const counsellors = await User.find(filter)
-      .select("-password")
+      .select("-password -aadhaarNumber -panNumber -permanentAddress")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -3198,17 +3558,8 @@ export const getCounsellorById = async (req, res) => {
   try {
     const { counsellorId } = req.params;
     const counsellor = await User.findOne({
+      ...professionalDirectoryFilter(),
       _id: counsellorId,
-      role: { $in: ["counsellor", "doctor"] },
-      isActive: true,
-      profileCompleted: true,
-      "specialization.0": { $exists: true },
-      experience: { $gt: 0 },
-      location: { $nin: ["", null] },
-      $or: [
-        { qualification: { $nin: ["", null] } },
-        { education: { $nin: ["", null] } },
-      ],
     });
 
     if (!counsellor) {
@@ -3261,6 +3612,21 @@ export const getMyProfile = async (req, res) => {
       age: ageFromDateOfBirth.age ?? user.age,
       gender: user.gender,
       role: user.role,
+      assignedDoctor: user.assignedDoctor ?? null,
+      ...(staffRoles.includes(user.role) ? {
+        staffId: user.staffId, nursingLicense: user.nursingLicense, shift: user.shift,
+        shiftTime: user.shiftTime, shiftStartTime: user.shiftStartTime, shiftEndTime: user.shiftEndTime,
+        assignedWard: user.assignedWard, department: user.department, supervisor: user.supervisor,
+        qualifications: user.qualifications, yearsOfExperience: user.yearsOfExperience,
+        assistantId: user.assistantId, technicianId: user.technicianId, labType: user.labType,
+        staffCertifications: user.staffCertifications, housekeepingStaffId: user.housekeepingStaffId,
+        assignedArea: user.assignedArea, housekeepingSupervisor: user.housekeepingSupervisor,
+        supervisorId: user.supervisorId, teamSize: user.teamSize, responsibilities: user.responsibilities,
+        managerId: user.managerId, employeesUnder: user.employeesUnder,
+        budgetResponsibility: user.budgetResponsibility, billingId: user.billingId, softwareExpertise: user.softwareExpertise,
+      } : {}),
+      accountType: user.accountType ?? null,
+      doctorQrCode: user.accountType === "doctor" ? user.doctorQrCode ?? null : null,
       profilePhoto: user.profilePhoto,
       isActive: user.isActive,
       profileCompleted: user.profileCompleted,
@@ -3306,6 +3672,8 @@ export const getMyProfile = async (req, res) => {
       },
     };
 
+    if (user.role === "doctor") Object.assign(formattedProfile, privateDoctorProfile(user));
+
     // Add counsellor-specific fields if user is counsellor
     if (["counsellor", "doctor"].includes(user.role)) {
       formattedProfile.qualification = user.qualification;
@@ -3320,6 +3688,10 @@ export const getMyProfile = async (req, res) => {
       formattedProfile.rating = user.rating || 0;
       formattedProfile.totalSessions = user.totalSessions || 0;
       formattedProfile.activeClients = user.activeClients || 0;
+      formattedProfile.prescriptionSignature = user.prescriptionSignature;
+      formattedProfile.prescriptionSignatureUrl = user.prescriptionSignature?.url || "";
+      formattedProfile.prescriptionSeal = user.prescriptionSeal;
+      formattedProfile.prescriptionSealUrl = user.prescriptionSeal?.url || "";
     }
 
     return res.status(200).json({
@@ -3458,10 +3830,11 @@ export const resetPassword = async (req, res) => {
         .json({ success: false, message: "Passwords do not match" });
     }
 
-    if (password.length < 6) {
+    const passwordError = getStrongPasswordError(password);
+    if (passwordError) {
       return res.status(400).json({
         success: false,
-        message: "Password must be at least 6 characters",
+        message: passwordError,
       });
     }
 
@@ -3518,8 +3891,9 @@ export const setPassword = async (req, res) => {
     if (!user) {
       return res.status(401).json({ success: false, message: "Authentication required" });
     }
-    if (!password || typeof password !== "string" || password.length < 6) {
-      return res.status(400).json({ success: false, message: "Password must be at least 6 characters" });
+    const passwordError = getStrongPasswordError(password);
+    if (passwordError) {
+      return res.status(400).json({ success: false, message: passwordError });
     }
 
     const freshUser = await User.findById(user._id);
@@ -3587,13 +3961,15 @@ export const verifyPasswordOtp = async (req, res) => {
 export const changePassword = async (req, res) => {
   try {
     const user = req.user;
-    const { oldPassword, newPassword } = req.body;
+    const oldPassword = req.body?.oldPassword ?? req.body?.current_password;
+    const newPassword = req.body?.newPassword ?? req.body?.new_password;
 
     if (!user) {
       return res.status(401).json({ success: false, message: "Authentication required" });
     }
-    if (!newPassword || typeof newPassword !== "string" || newPassword.length < 6) {
-      return res.status(400).json({ success: false, message: "New password must be at least 6 characters" });
+    const passwordError = getStrongPasswordError(newPassword, "New password");
+    if (passwordError) {
+      return res.status(400).json({ success: false, message: passwordError });
     }
 
     const freshUser = await User.findById(user._id).select('+password');
@@ -3634,8 +4010,9 @@ export const setPasswordByOtp = async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({ success: false, message: "Email and password are required" });
     }
-    if (password.length < 6) {
-      return res.status(400).json({ success: false, message: "Password must be at least 6 characters" });
+    const passwordError = getStrongPasswordError(password);
+    if (passwordError) {
+      return res.status(400).json({ success: false, message: passwordError });
     }
 
     const normalizedEmail = normalizeEmail(email);
@@ -3780,22 +4157,31 @@ export const deleteUser = async (req, res) => {
       return res
         .status(404)
         .json({ message: "User not found", success: false });
-    await Session.deleteMany({ userId: id });
-    await User.findByIdAndDelete(id);
-    // Uploaded photos are stored in Cloudinary; external avatars have no publicId.
-    // A media-service outage must not turn a successful account deletion into a 500.
-    if (user.profilePhoto?.publicId) {
+
+    const profilePhotoPublicId = user.profilePhoto?.publicId;
+    const cleanup = await cleanupAccountData({ userId: id, email: user.email });
+
+    if (profilePhotoPublicId) {
       try {
-        await deleteFromCloudinary(user.profilePhoto.publicId);
-      } catch (error) {
-        console.error("Deleted account photo cleanup failed:", error.message);
+        await deleteFromCloudinary(profilePhotoPublicId);
+      } catch (photoError) {
+        console.error(
+          "Account deletion profile photo cleanup failed:",
+          photoError?.message || photoError,
+        );
       }
     }
+
+    await User.findByIdAndDelete(id);
     return res
       .status(200)
-      .json({ message: "User deleted successfully", success: true });
+      .json({
+        message: "User deleted successfully",
+        success: true,
+        cleanup,
+      });
   } catch (error) {
-    console.error("Account deletion failed:", error.message);
+    console.error("deleteUser error:", error);
     return res
       .status(500)
       .json({ message: "Error deleting user", success: false });
@@ -3831,7 +4217,7 @@ export const checkRegistrationStatus = async (req, res) => {
 
 export const resendEmailOTP = async (req, res) => {
   try {
-    const { email } = req.body;
+    const email = normalizeEmail(req.body?.email);
     if (!email)
       return res
         .status(400)
@@ -3844,9 +4230,16 @@ export const resendEmailOTP = async (req, res) => {
         .json({ message: "No pending verification", success: false });
 
     const otp = otpService.generateOTP(email);
+    const expiresAt = new Date(Date.now() + REGISTRATION_OTP_TTL_MS);
     await otpService.sendEmailOTP(email, otp, "User");
 
-    emailOTPStore.set(email, { otp, expiresAt: Date.now() + 10 * 60 * 1000 });
+    emailOTPStore.set(email, { otp, expiresAt: expiresAt.getTime() });
+    await RegistrationOTP.create({
+      email,
+      otp: String(otp),
+      purpose: REGISTRATION_EMAIL_OTP_PURPOSE,
+      expiresAt,
+    });
 
     return res
       .status(200)
@@ -4204,64 +4597,98 @@ export const consumeVerifiedProfileChange = (userId, field, attemptedValue) => {
   return { ok: true };
 };
 
-export const getDoctorQr = async (req, res) => {
+// Compatibility handlers for the older user-controller API. They use the
+// current Mongoose user/session models instead of the retired SQL schema.
+export const register = async (req, res) => {
+  const body = req.body || {};
+  const role = String(body.role || '').trim().toLowerCase();
+  req.body = {
+    ...body,
+    fullName: body.fullName ?? body.full_name ?? body.name,
+    phoneNumber: body.phoneNumber ?? body.contact_number ?? body.phone,
+    accountType: role === 'doctor' ? 'doctor' : body.accountType,
+  };
+  return completeRegistration(req, res);
+};
+
+export const login = async (req, res) => {
+  const body = req.body || {};
+  const role = String(body.role || '').trim().toLowerCase();
+  req.body = { ...body, role: role === 'patient' ? 'user' : role };
+  return loginUser(req, res);
+};
+
+export const getUsers = async (req, res) => {
   try {
-    const { doctorId } = req.params;
-    const doctor = await User.findById(doctorId).select("-password -emailOTP -phoneOTP");
-    if (!doctor) {
-      return res.status(404).json({ success: false, message: "Doctor not found" });
-    }
-    return res.status(200).json({
-      success: true,
-      data: {
-        doctor: {
-          id: doctor.id || doctor._id,
-          _id: doctor.id || doctor._id,
-          full_name: doctor.fullName,
-          fullName: doctor.fullName,
-          name: doctor.fullName,
-          email: doctor.email,
-          phone: doctor.phoneNumber || doctor.phone || "",
-          speciality: doctor.specialization || "Doctor",
-          specialization: doctor.specialization || "Doctor",
-          profile_image: doctor.profilePhoto || doctor.profilePicture || "",
-          profileImage: doctor.profilePhoto || doctor.profilePicture || "",
-        },
-      },
-    });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: "Server error", error: err.message });
+    const requestedRole = String(req.query.role || '').trim().toLowerCase();
+    const role = requestedRole === 'patient' ? 'user' : requestedRole;
+    let filter = { role: { $in: ['doctor', 'counsellor'] }, isActive: true, profileCompleted: true };
+    if (req.user.role === 'admin') filter = role ? { role } : {};
+    else if (role === 'user') {
+      if (req.user.role === 'user') filter = { _id: req.userId || req.user._id };
+      else {
+        const appointments = await Appointment.find({ counselor: req.userId || req.user._id }).select('patient').lean();
+        filter = { _id: { $in: appointments.map(row => row.patient) } };
+      }
+    } else if (['doctor', 'counsellor'].includes(role)) filter.role = role;
+    const users = await User.find(filter).select('fullName role accountType profilePhoto qualification specialization experience location aboutMe profileCompleted').lean();
+    return res.json({ success: true, count: users.length, data: users, users });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
   }
+};
+
+export const getUserById = async (req, res) => {
+  return getUser({ ...req, params: { ...req.params, userId: req.params.id } }, res);
+};
+
+export const updateUser = async (req, res) => {
+  req.params.userId = req.params.id;
+  return updateUserById(req, res);
+};
+
+export const updateProfileById = async (req, res) => {
+  if (String(req.userId || req.user?._id) !== String(req.params.id)) {
+    return res.status(403).json({ success: false, message: 'You can only update your own profile' });
+  }
+  req.params.userId = req.params.id;
+  return updateUserById(req, res);
+};
+
+export const getProfileById = async (req, res) => {
+  const user = await User.findOne({ _id: req.params.id, role: 'doctor', isActive: true, profileCompleted: true }).select('fullName role qualification specialization experience location aboutMe profilePhoto doctorQrCode').lean();
+  if (!user) return res.status(404).json({ success: false, message: 'User profile not found' });
+  await recordDoctorAnalyticsEvent({ doctorId: user._id, eventType: 'profile_view', source: req.query.source });
+  return res.json({ success: true, data: user, user });
+};
+
+export const getDoctorQRById = async (req, res) => {
+  const doctor = await User.findOne({ _id: req.params.id, role: 'doctor' }).select('fullName email role qualification specialization doctorQrCode').lean();
+  if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
+  return res.json({ success: true, message: 'Doctor QR fetched successfully', data: doctor });
+};
+
+export const recordDoctorQrScan = async (req, res) => {
+  await recordDoctorAnalyticsEvent({ doctorId: req.params.id, eventType: 'qr_scan', source: req.body?.source });
+  return res.status(201).json({ success: true, message: 'QR scan recorded successfully' });
 };
 
 export const getDoctorQrStats = async (req, res) => {
-  try {
-    const { doctorId } = req.params;
-    const stats = await doctorQrStats.getStats(doctorId);
-
-    return res.status(200).json({
-      success: true,
-      data: stats,
-    });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: "Server error", error: err.message });
-  }
+  const doctor = await User.findOne({ _id: req.params.id, role: 'doctor' }).select('_id fullName doctorQrCode').lean();
+  if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
+  return res.json({ success: true, data: { doctorId: doctor._id, fullName: doctor.fullName, hasQrCode: Boolean(doctor.doctorQrCode), ...await getDoctorQuickStats(doctor._id) } });
 };
 
-export const recordDoctorQrVisit = async (req, res) => {
-  const { doctorId } = req.params;
-  const { visitId, source } = req.body || {};
-  if (typeof visitId !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(visitId)) {
-    return res.status(400).json({ success: false, message: "Invalid visit ID" });
-  }
+export const verifyPassword = async (req, res) => {
   try {
-    const doctor = await User.findById(doctorId);
-    if (!doctor || !["doctor", "counsellor"].includes(doctor.role)) {
-      return res.status(404).json({ success: false, message: "Doctor not found" });
-    }
-    await doctorQrStats.recordVisit(doctorId, visitId, source === "qr");
-    return res.status(200).json({ success: true });
+    const userId = req.userId || req.user?._id;
+    const password = req.body?.password ?? req.body?.current_password;
+    if (!userId || !password) return res.status(400).json({ success: false, message: 'password is required' });
+    const user = await User.findById(userId).select('+password');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    const isValid = Boolean(user.password) && await bcrypt.compare(String(password), user.password);
+    return res.json({ success: true, isValid });
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Unable to record QR visit" });
+    return res.status(500).json({ success: false, message: error.message });
   }
 };

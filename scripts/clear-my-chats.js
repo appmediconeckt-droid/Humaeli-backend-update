@@ -1,6 +1,7 @@
+import connectDB from "../src/config/db.js";
 // One-off: clear chat history for a single user.
 // Usage from backend folder:   node scripts/clear-my-chats.js <userId>
-import mongoose from "mongoose";
+import mongoose from "../src/persistence/mongoose.js";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -16,16 +17,7 @@ if (!userId) {
   process.exit(1);
 }
 
-const uri =
-  process.env.MONGODB_URI ||
-  process.env.MONGO_URI ||
-  process.env.DATABASE_URL;
-if (!uri) {
-  console.error("No MongoDB URI found in .env (MONGODB_URI / MONGO_URI / DATABASE_URL)");
-  process.exit(1);
-}
-
-await mongoose.connect(uri);
+await connectDB();
 const filter = mongoose.isValidObjectId(userId)
   ? { userId: new mongoose.Types.ObjectId(userId) }
   : { userId };

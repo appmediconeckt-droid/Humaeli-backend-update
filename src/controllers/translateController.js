@@ -94,6 +94,49 @@
 
 
 import axios from "axios";
+import OpenAI from "openai";
+
+let translationOpenAIClient = null;
+const translateWithOpenAI = async ({ trimmedText, targetLanguage }) => {
+  if (!process.env.OPENAI_API_KEY) return null;
+  if (!translationOpenAIClient) {
+    translationOpenAIClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+
+  const response = await translationOpenAIClient.chat.completions.create({
+    model: process.env.OPENAI_TRANSLATION_MODEL || "gpt-4o-mini",
+    temperature: 0,
+    max_tokens: 500,
+    messages: [
+      {
+        role: "system",
+        content:
+          "Translate the text into the requested language. Return only the translated text. Preserve meaning, names, numbers, emojis, and medical terms. Use the target language's normal native script.",
+      },
+      {
+        role: "user",
+        content: `Target language code: ${targetLanguage}\nText: ${trimmedText}`,
+      },
+    ],
+  });
+
+  const translatedText = response.choices?.[0]?.message?.content?.trim();
+  if (!translatedText) return null;
+  return {
+    originalText: trimmedText,
+    translatedText,
+    source: "openai",
+    sourceLanguage: null,
+    targetLanguage,
+  };
+};
+
+const translationChanged = (result, originalText) =>
+  Boolean(
+    result?.translatedText?.trim() &&
+      result.translatedText.trim().toLocaleLowerCase() !==
+        originalText.trim().toLocaleLowerCase(),
+  );
 
 const normalizeLanguageCode = (language) => {
   if (!language || typeof language !== "string") return undefined;
@@ -244,12 +287,17 @@ export const translatePlainText = async ({ text, to, from }) => {
 
   // Use the same Google translator flow as the mobile application before
   // falling back to MyMemory, whose public endpoint is frequently rate-limited.
+  let unchangedTranslation = null;
   try {
-    return await translateWithGoogle({
+    const googleTranslation = await translateWithGoogle({
       trimmedText,
       sourceLanguage,
       targetLanguage,
     });
+    if (translationChanged(googleTranslation, trimmedText)) {
+      return googleTranslation;
+    }
+    unchangedTranslation = googleTranslation;
   } catch (googleError) {
     console.warn("Google Translator failed, using MyMemory:", {
       status: googleError?.response?.status,
@@ -259,22 +307,37 @@ export const translatePlainText = async ({ text, to, from }) => {
 
   // Last fallback: MyMemory Translation API.
   try {
-    return await translateWithMyMemory({
+    const memoryTranslation = await translateWithMyMemory({
       trimmedText,
       sourceLanguage,
       targetLanguage,
     });
+    if (translationChanged(memoryTranslation, trimmedText)) {
+      return memoryTranslation;
+    }
+    unchangedTranslation = memoryTranslation;
   } catch (fallbackError) {
-    console.error("Fallback Translator failed:", {
+    console.warn("MyMemory Translator failed, using AI fallback:", {
       status: fallbackError?.response?.status,
       data: fallbackError?.response?.data,
       message: fallbackError.message,
     });
-
-    const error = new Error("Translation service unavailable.");
-    error.statusCode = fallbackError?.response?.status || 503;
-    throw error;
   }
+
+  try {
+    const aiTranslation = await translateWithOpenAI({
+      trimmedText,
+      targetLanguage,
+    });
+    if (aiTranslation) return aiTranslation;
+  } catch (aiError) {
+    console.warn("AI Translator fallback failed:", aiError.message);
+  }
+
+  if (unchangedTranslation) return unchangedTranslation;
+  const error = new Error("Translation service unavailable.");
+  error.statusCode = 503;
+  throw error;
 };
 
 export const translatePlainTextBatch = async ({ texts, to, from }) => {

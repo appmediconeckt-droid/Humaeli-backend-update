@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
 import Session from "../models/sessionModel.js";
+import mongoose from "../persistence/mongoose.js";
 
 export const authenticateToken = async (req, res, next) => {
   try {
@@ -99,6 +100,25 @@ export const authenticateSocket = async (socket, next) => {
       return next(err);
     }
 
+    const sessionId = decoded.sessionId;
+    if (!sessionId) {
+      const err = new Error("AUTH_TOKEN_INVALID");
+      err.data = { code: "AUTH_TOKEN_INVALID" };
+      return next(err);
+    }
+
+    const activeSession = await Session.findOne({
+      _id: sessionId,
+      userId,
+      isActive: true,
+    });
+
+    if (!activeSession) {
+      const err = new Error("AUTH_SESSION_INACTIVE");
+      err.data = { code: "AUTH_SESSION_INACTIVE" };
+      return next(err);
+    }
+
     User.findById(userId)
       .then((user) => {
         if (!user || !user.isActive) {
@@ -123,4 +143,3 @@ export const authenticateSocket = async (socket, next) => {
     next(err);
   }
 };
-

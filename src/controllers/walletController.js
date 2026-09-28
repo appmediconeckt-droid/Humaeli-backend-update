@@ -1,3 +1,4 @@
+import { sendWalletRefundStatusNotification } from "../services/walletRefundNotificationService.js";
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import User from '../models/userModel.js';
@@ -58,14 +59,29 @@ const withdrawalStatusMessage = (status) => ({
     refunded: 'Amount returned to wallet'
 }[status] || status);
 
+const clampInteger = (value, fallback, min, max) => {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(max, Math.max(min, parsed));
+};
+
+const escapeRegex = (value = '') =>
+    String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const MINIMUM_WALLET_TOP_UP = 100;
+
 // Create Razorpay Order
 export const createOrder = async (req, res) => {
     try {
-        const { amount } = req.body;
+        const amount = Number(req.body?.amount);
         const userId = req.user._id;
 
-        if (!amount || amount <= 0) {
-            return res.status(400).json({ message: 'Invalid amount' });
+        if (!Number.isFinite(amount) || amount < MINIMUM_WALLET_TOP_UP) {
+            return res.status(400).json({
+                success: false,
+                message: `Minimum wallet top-up amount is ₹${MINIMUM_WALLET_TOP_UP}`,
+                minimumAmount: MINIMUM_WALLET_TOP_UP,
+            });
         }
 
         const options = {
@@ -282,8 +298,16 @@ export const getWalletData = async (req, res) => {
         const userId = req.user._id;
         const user = await User.findById(userId);
         const transactionFilter = { userId };
+        const hasPaginationParams = req.query.page != null || req.query.limit != null;
+        const defaultLimit = req.query.from || req.query.to ? 1000 : 50;
+        const page = clampInteger(req.query.page, 1, 1, 100000);
+        const limit = clampInteger(req.query.limit, defaultLimit, 1, hasPaginationParams ? 100 : defaultLimit);
+        const skip = (page - 1) * limit;
         const from = req.query.from ? new Date(`${req.query.from}T00:00:00.000+05:30`) : null;
         const to = req.query.to ? new Date(`${req.query.to}T23:59:59.999+05:30`) : null;
+        const type = String(req.query.type || '').trim().toLowerCase();
+        const status = String(req.query.status || '').trim().toLowerCase();
+        const search = String(req.query.search || '').trim();
 
         if ((from && Number.isNaN(from.getTime())) || (to && Number.isNaN(to.getTime()))) {
             return res.status(400).json({ message: 'Invalid date range' });
@@ -296,14 +320,35 @@ export const getWalletData = async (req, res) => {
             if (from) transactionFilter.createdAt.$gte = from;
             if (to) transactionFilter.createdAt.$lte = to;
         }
+        if (['credit', 'debit', 'refund'].includes(type)) {
+            transactionFilter.type = type;
+        }
+        if (['pending', 'completed', 'failed', 'hold', 'refunded'].includes(status)) {
+            transactionFilter.status = status;
+        }
+        if (search) {
+            const regex = new RegExp(escapeRegex(search), 'i');
+            const matchingCounselors = await User.find({ fullName: regex }).select('_id').lean();
+            const counselorIds = matchingCounselors.map((counselor) => counselor._id);
+            transactionFilter.$or = [
+                { description: regex },
+                { razorpayPaymentId: regex },
+                { razorpayOrderId: regex },
+                ...(counselorIds.length ? [{ counselorId: { $in: counselorIds } }] : [])
+            ];
+        }
 
         // A selected statement range returns the complete range (up to a safe
         // export limit); the regular wallet view keeps a smaller recent list.
-        const transactions = await Transaction.find(transactionFilter)
-            .populate('counselorId', 'fullName profilePhoto specialization')
-            .sort({ createdAt: -1 })
-            .limit(from || to ? 1000 : 50)
-            .lean();
+        const [transactions, totalTransactions] = await Promise.all([
+            Transaction.find(transactionFilter)
+                .populate('counselorId', 'fullName profilePhoto specialization')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            Transaction.countDocuments(transactionFilter)
+        ]);
 
         // Calculate Monthly Spending
         const startOfMonth = new Date();
@@ -332,9 +377,33 @@ export const getWalletData = async (req, res) => {
                 .reduce((acc, curr) => acc + curr.amount, 0)
         };
 
+        const refundRecords = await Transaction.find({
+            userId,
+            type: 'refund',
+            'metadata.refundRequest': true
+        }).sort({ createdAt: -1 }).limit(20).lean();
+        const refundRequests = refundRecords.map((item) => ({
+            _id: item._id,
+            amount: item.amount,
+            status: item.metadata?.refundStatus || item.status,
+            transactionReference: item.metadata?.transactionReference || null,
+            failureReason: item.metadata?.failureReason || null,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt
+        }));
+
         res.status(200).json({
             balance: user.walletBalance || 0,
             transactions,
+            refundRequests,
+            pagination: {
+                page,
+                limit,
+                total: totalTransactions,
+                totalPages: Math.max(1, Math.ceil(totalTransactions / limit)),
+                hasNextPage: skip + transactions.length < totalTransactions,
+                hasPreviousPage: page > 1
+            },
             spendingSummary: {
                 total: totalSpent,
                 period: {
@@ -351,6 +420,105 @@ export const getWalletData = async (req, res) => {
         console.error('Error fetching wallet data:', error);
         res.status(500).json({ message: 'Internal server error' });
     }
+};
+
+export const requestWalletRefund = async (req, res) => {
+    const userId = req.user._id;
+    const amount = roundMoney(req.body.amount);
+    const accountName = String(req.body.accountName || '').trim();
+    const accountNumber = String(req.body.accountNumber || '').replace(/\s+/g, '');
+    const ifsc = String(req.body.ifsc || '').trim().toUpperCase();
+    const bankName = String(req.body.bankName || '').trim();
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({ success: false, message: 'Enter a valid refund amount' });
+    }
+    if (!accountName || !accountNumber || !ifsc || !bankName) {
+        return res.status(400).json({ success: false, message: 'Complete bank details are required' });
+    }
+    if (!/^\d{8,20}$/.test(accountNumber)) {
+        return res.status(400).json({ success: false, message: 'Account number must contain 8 to 20 digits' });
+    }
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
+        return res.status(400).json({ success: false, message: 'Enter a valid IFSC code' });
+    }
+
+    try {
+        const existing = await Transaction.findOne({
+            userId,
+            type: 'refund',
+            'metadata.refundRequest': true,
+            'metadata.refundStatus': { $in: ['pending', 'approved', 'processing'] }
+        }).lean();
+        if (existing) {
+            return res.status(409).json({ success: false, message: 'A refund request is already under review' });
+        }
+
+        const user = await User.findOneAndUpdate(
+            { _id: userId, walletBalance: { $gte: amount }, activeWalletRefundRequest: { $ne: true } },
+            { $inc: { walletBalance: -amount }, $set: { activeWalletRefundRequest: true } },
+            { returnDocument: 'after' }
+        );
+        if (!user) {
+            return res.status(409).json({ success: false, message: 'Insufficient balance or a refund request is already under review' });
+        }
+
+        let transaction;
+        try {
+            transaction = await Transaction.create({
+                userId,
+                amount,
+                type: 'refund',
+                status: 'hold',
+                description: 'Wallet refund request',
+                metadata: {
+                    refundRequest: true,
+                    refundStatus: 'pending',
+                    requestedAt: new Date(),
+                    processingDeadline: new Date(Date.now() + 48 * 60 * 60 * 1000),
+                    bankDetails: { accountName, accountNumber, ifsc, bankName, last4: accountNumber.slice(-4) }
+                }
+            });
+        } catch (error) {
+            await User.updateOne({ _id: userId }, { $inc: { walletBalance: amount }, $set: { activeWalletRefundRequest: false } });
+            throw error;
+        }
+
+        await createNotificationSafely({
+            recipientId: userId,
+            type: 'payment',
+            title: 'Refund request submitted',
+            message: `Your refund request for Rs ${amount.toFixed(2)} is under admin review.`,
+            data: { transactionId: transaction._id, amount, refundStatus: 'pending' },
+            actionUrl: '/wallet'
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: 'Your refund request was sent to the admin and will be processed within 48 hours.',
+            refundRequest: { _id: transaction._id, amount, status: 'pending', createdAt: transaction.createdAt },
+            balance: user.walletBalance
+        });
+    } catch (error) {
+        console.error('Wallet refund request error:', error);
+        return res.status(500).json({ success: false, message: 'Refund request could not be submitted' });
+    }
+};
+
+export const notifyWalletRefundStatus = async (req, res) => {
+    const suppliedSecret = String(req.headers['x-admin-notification-secret'] || '');
+    if (!process.env.ADMIN_JWT_SECRET || suppliedSecret !== process.env.ADMIN_JWT_SECRET) {
+        return res.status(401).json({ success: false, message: 'Unauthorized admin notification request' });
+    }
+
+    const transactionId = String(req.body.transactionId || '');
+    const status = String(req.body.status || '').toLowerCase();
+    if (!transactionId || !['approved', 'paid', 'rejected'].includes(status)) {
+        return res.status(400).json({ success: false, message: 'Valid transaction and refund status are required' });
+    }
+
+    const result = await sendWalletRefundStatusNotification(transactionId, status);
+    return res.status(result.success ? 200 : 404).json(result);
 };
 
 export const getCounselorWalletData = async (req, res) => {
@@ -577,7 +745,7 @@ export const requestWithdrawal = async (req, res) => {
         const updatedCounselor = await User.findOneAndUpdate(
             withdrawalFilter,
             update,
-            { new: true }
+            { returnDocument: 'after' }
         );
         if (!updatedCounselor) {
             return res.status(409).json({ message: 'Balance or instant payout eligibility changed. Please refresh and try again.' });

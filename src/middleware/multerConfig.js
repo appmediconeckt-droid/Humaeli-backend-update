@@ -18,7 +18,8 @@ const isCloudinaryConfigured = () =>
 
 const getUploadFolder = (file) => {
   if (file.fieldname === "profilePhoto") return "profile-photos";
-  if (file.fieldname === "clinic_photo") return "clinic-photos";
+  if (file.fieldname === "prescriptionSignature") return "prescription-assets";
+  if (file.fieldname === "prescriptionSeal") return "prescription-assets";
   return "certifications";
 };
 
@@ -61,6 +62,7 @@ const certificationStorage = new CloudinaryStorage({
 });
 
 // Dynamic storage based on field name
+// Dynamic storage based on field name
 const dynamicStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: (req, file) => {
@@ -72,6 +74,13 @@ const dynamicStorage = new CloudinaryStorage({
         folder: "profile-photos",
         allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
         transformation: [{ width: 500, height: 500, crop: "limit" }],
+      };
+    }
+    if (file.fieldname === "prescriptionSignature" || file.fieldname === "prescriptionSeal") {
+      return {
+        folder: "prescription-assets",
+        allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
+        transformation: [{ width: 1000, height: 500, crop: "limit" }],
       };
     }
     // Check if it's a certification document (matches certifications[0][document], etc.)
@@ -98,16 +107,21 @@ const dynamicStorage = new CloudinaryStorage({
 });
 
 // File filter for uploaded files
+// File filter for uploaded files
 const fileFilter = (req, file, cb) => {
   // Check if it's a profile photo
-  if (file.fieldname === "profilePhoto") {
+  if (
+    file.fieldname === "profilePhoto" ||
+    file.fieldname === "prescriptionSignature" ||
+    file.fieldname === "prescriptionSeal"
+  ) {
     const allowedTypes = /jpeg|jpg|png|gif|webp/;
     if (allowedTypes.test(file.mimetype)) {
       cb(null, true);
     } else {
       cb(
         new Error(
-          "Only image files (jpeg, jpg, png, gif, webp) are allowed for profile photo",
+          "Only image files (jpeg, jpg, png, gif, webp) are allowed",
         ),
       );
     }
@@ -138,6 +152,7 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
+// Create multer instance that accepts any fields
 // Create multer instance that accepts any fields
 const upload = multer({
   storage: isCloudinaryConfigured() ? dynamicStorage : localStorage,
@@ -295,41 +310,48 @@ export const uploadChatAttachment = (req, res, next) => {
   });
 };
 
-// Export individual middlewares for backward compatibility
-const clinicPhotoUpload = multer({
-  storage: isCloudinaryConfigured()
-    ? new CloudinaryStorage({
-        cloudinary,
-        params: {
-          folder: "clinic-photos",
-          allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
-          transformation: [{ width: 1200, height: 1200, crop: "limit" }],
-        },
-      })
-    : localStorage,
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (!/^image\/(jpeg|jpg|png|gif|webp)$/i.test(file.mimetype || "")) {
-      return cb(new Error("Clinic photo must be an image (jpeg, jpg, png, gif, webp)"));
+const prescriptionPdfUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.fieldname !== "attachment") return cb(new Error("Unexpected prescription file field"));
+    if (String(file.mimetype).toLowerCase() !== "application/pdf") {
+      return cb(new Error("Only PDF prescriptions are allowed"));
     }
-    cb(null, true);
+    return cb(null, true);
   },
-}).single("clinic_photo");
+});
 
-export const uploadClinicPhoto = (req, res, next) => {
-  clinicPhotoUpload(req, res, (err) => {
-    if (err) {
-      return res.status(400).json({ success: false, message: err.message });
-    }
-    if (req.file?.path && !/^https?:\/\//i.test(req.file.path)) {
-      const relativePath = path.relative(uploadsRoot, req.file.path).replace(/\\/g, "/");
-      req.file.localPath = req.file.path;
-      req.file.path = `/uploads/${relativePath}`;
-    }
-    next();
+export const uploadPrescriptionPdf = (req, res, next) => {
+  prescriptionPdfUpload.single("attachment")(req, res, (error) => {
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    return next();
   });
 };
 
+const prescriptionPhotoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 3 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = new Set(["image/jpeg", "image/png", "image/webp"]);
+    if (file.fieldname !== "photo") return cb(new Error("Unexpected photo field"));
+    if (!allowed.has(String(file.mimetype).toLowerCase())) {
+      return cb(new Error("Only JPG, PNG, or WebP photos are allowed"));
+    }
+    return cb(null, true);
+  },
+});
+
+export const uploadPrescriptionPhoto = (req, res, next) => {
+  prescriptionPhotoUpload.single("photo")(req, res, (error) => {
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    return next();
+  });
+};
+
+// Handle user upload - accept all fields
+
+// Export individual middlewares for backward compatibility
 export const uploadProfilePhoto = upload.single("profilePhoto");
 export const uploadCertificationFiles = upload.array(
   "certificationDocuments",

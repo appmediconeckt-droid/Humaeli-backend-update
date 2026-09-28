@@ -1,20 +1,18 @@
+import mongoose from "../persistence/mongoose.js";
 import Rating from "../models/Rating.js";
 import User from "../models/userModel.js";
 import RatingStatus from "../models/RatingStatus.js";
 import {
-
   refreshUserRatingEligibility,
   getPromptableStatus,
   REMIND_LATER_MS,
 } from "../services/ratingEligibilityService.js";
 
-const isValidId = (id) => id != null && String(id).length >= 12;
-
 // Recompute and persist a counselor's aggregate rating + count from the Rating
 // collection. Kept in one place so submit/delete stay consistent.
 const recomputeCounselorRating = async (counselorId) => {
   const result = await Rating.aggregate([
-    { $match: { counselorId: counselorId } },
+    { $match: { counselorId: new mongoose.Types.ObjectId(counselorId) } },
     {
       $group: {
         _id: "$counselorId",
@@ -47,7 +45,7 @@ export const submitRating = async (req, res) => {
     const { counselorId } = req.params;
     const { stars, comment = "", chatId = null } = req.body;
 
-    if (!isValidId(counselorId)) {
+    if (!mongoose.Types.ObjectId.isValid(counselorId)) {
       return res.status(400).json({ error: "Invalid counselor id" });
     }
 
@@ -113,7 +111,7 @@ export const submitRating = async (req, res) => {
 export const getCounselorRatings = async (req, res) => {
   try {
     const { counselorId } = req.params;
-    if (!isValidId(counselorId)) {
+    if (!mongoose.Types.ObjectId.isValid(counselorId)) {
       return res.status(400).json({ error: "Invalid counselor id" });
     }
 
@@ -148,7 +146,7 @@ export const submitRatingV2 = async (req, res) => {
 
     const { counselorId, rating, review = "", sessionId = null } = req.body;
 
-    if (!isValidId(counselorId)) {
+    if (!mongoose.Types.ObjectId.isValid(counselorId)) {
       return res.status(400).json({ error: "Invalid counselor id" });
     }
 
@@ -181,6 +179,14 @@ export const submitRatingV2 = async (req, res) => {
       counselorId,
     });
     if (existing || status.hasRated) {
+      // Self-heal stale status rows so future eligibility checks cannot reopen
+      // the modal for this counselor.
+      if (existing && !status.hasRated) {
+        await RatingStatus.findOneAndUpdate(
+          { userId: req.user._id, counselorId },
+          { $set: { hasRated: true, remindLaterUntil: null } }
+        );
+      }
       return res
         .status(409)
         .json({ error: "You have already rated this counselor" });
@@ -265,7 +271,7 @@ export const checkEligibility = async (req, res) => {
 export const remindLater = async (req, res) => {
   try {
     const { counselorId } = req.body;
-    if (!isValidId(counselorId)) {
+    if (!mongoose.Types.ObjectId.isValid(counselorId)) {
       return res.status(400).json({ error: "Invalid counselor id" });
     }
 
@@ -289,7 +295,7 @@ export const remindLater = async (req, res) => {
 export const neverAskAgain = async (req, res) => {
   try {
     const { counselorId } = req.body;
-    if (!isValidId(counselorId)) {
+    if (!mongoose.Types.ObjectId.isValid(counselorId)) {
       return res.status(400).json({ error: "Invalid counselor id" });
     }
 
@@ -313,7 +319,7 @@ export const neverAskAgain = async (req, res) => {
 export const getCounselorRatingSummary = async (req, res) => {
   try {
     const { counselorId } = req.params;
-    if (!isValidId(counselorId)) {
+    if (!mongoose.Types.ObjectId.isValid(counselorId)) {
       return res.status(400).json({ error: "Invalid counselor id" });
     }
 

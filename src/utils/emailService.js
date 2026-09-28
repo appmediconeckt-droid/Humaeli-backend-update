@@ -1,39 +1,8 @@
 // utils/emailService.js
-
-const FROM_NAME = "Humaeli Global Pvt Ltd";
-const VERIFIED_FALLBACK_FROM_EMAIL =
-  process.env.VERIFIED_EMAIL_FROM || "info@humaeli.com";
-const configuredFromEmail =
-  process.env.EMAIL_FROM || process.env.HUMAELI_EMAIL_FROM;
-const FROM_EMAIL =
-  configuredFromEmail === "info@humaeli.com"
-    ? VERIFIED_FALLBACK_FROM_EMAIL
-    : configuredFromEmail || VERIFIED_FALLBACK_FROM_EMAIL;
-const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "support@humaeli.com";
-
-async function sendBrevoEmail({ to, subject, html, text }) {
-  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST",
-    headers: {
-      "api-key": process.env.BREVO_API_KEY,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      sender: { name: FROM_NAME, email: FROM_EMAIL },
-      to: [{ email: to }],
-      subject,
-      htmlContent: html,
-      textContent: text,
-      replyTo: { email: SUPPORT_EMAIL, name: "Humaeli Support" },
-    }),
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data?.message || `Brevo API error ${response.status}`);
-  }
-  return data;
-}
+import {
+  SUPPORT_EMAIL,
+  sendTransactionalEmail,
+} from "../services/otpService.js";
 
 export const sendResetPasswordEmail = async (email, resetUrl) => {
   const year = new Date().getFullYear();
@@ -81,13 +50,16 @@ export const sendResetPasswordEmail = async (email, resetUrl) => {
 
   const text = `Humaeli Global Pvt Ltd\n\nReset Your Password\n\nWe received a request to reset the password for your Humaeli account.\n\nClick the link below to reset your password:\n${resetUrl}\n\nThis link is valid for 10 minutes.\n\nIf you did not request a password reset, please ignore this email.\n\nQuestions? Contact us at ${SUPPORT_EMAIL}\n\n© ${year} Humaeli Global Pvt Ltd | Bhopal, Madhya Pradesh, India`;
 
-  const data = await sendBrevoEmail({
+  const data = await sendTransactionalEmail({
     to: email,
     subject: "Reset your Humaeli password",
     html,
     text,
   });
 
-  console.log("✅ Password reset email sent:", data?.messageId);
+  console.log(
+    `✅ Password reset email sent via ${data?.provider || "mail provider"}:`,
+    data?.messageId,
+  );
   return data;
 };

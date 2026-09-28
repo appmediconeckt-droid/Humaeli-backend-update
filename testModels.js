@@ -1,5 +1,6 @@
+import connectDB from "./src/config/db.js";
 // testModels.js
-import mongoose from 'mongoose';
+import mongoose from './src/persistence/mongoose.js';
 import User from './src/models/userModel.js';
 import Conversation from './src/models/Conversation.js';
 import Message from './src/models/Message.js';
@@ -11,7 +12,7 @@ const testConversationSystem = async () => {
   let session;
   
   try {
-    await mongoose.connect(process.env.MONGO_URI);
+    await connectDB();
     console.log('✅ Connected to MongoDB\n');
 
     // Clean up previous test data

@@ -1,5 +1,4 @@
 node_modules
-package-lock.json
 
 # Env files — never commit secrets
 .env
@@ -14,3 +13,7 @@ npm-debug.log*
 
 src/config/serviceAccountKey.json
 serviceAccountKey.json
+# Local dependency cache and isolated database test data
+.npm-cache/
+.mysql-test/
+.migration-backups/

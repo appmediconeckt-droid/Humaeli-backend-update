@@ -5,6 +5,7 @@ import {
   verifyEmailOTP,
 } from "../src/controllers/authController.js";
 import User from "../src/models/userModel.js";
+import RegistrationOTP from "../src/models/registrationOtpModel.js";
 import otpService from "../src/services/otpService.js";
 
 describe("Registration email OTP controller", function () {
@@ -13,6 +14,14 @@ describe("Registration email OTP controller", function () {
   beforeEach(function () {
     sandbox = sinon.createSandbox();
     process.env.ACCESS_SECRET = process.env.ACCESS_SECRET || "test-access-secret";
+    sandbox.stub(RegistrationOTP, "create").resolves({});
+    sandbox.stub(RegistrationOTP, "deleteMany").resolves({});
+    sandbox.stub(RegistrationOTP, "exists").resolves(null);
+    sandbox.stub(RegistrationOTP, "findOne").returns({
+      sort: sinon.stub().returns({
+        lean: sinon.stub().resolves(null),
+      }),
+    });
   });
 
   afterEach(function () {
@@ -67,5 +76,28 @@ describe("Registration email OTP controller", function () {
     expect(res.json.calledWithMatch({ success: true, email })).to.equal(true);
     const payload = res.json.firstCall.args[0];
     expect(payload.emailVerificationToken).to.be.a("string").and.not.empty;
+  });
+
+  it("verifies a persisted registration email OTP after memory is unavailable", async function () {
+    const email = `persisted-${Date.now()}@example.com`;
+    RegistrationOTP.findOne.restore();
+    sandbox.stub(RegistrationOTP, "findOne").returns({
+      sort: sinon.stub().returns({
+        lean: sinon.stub().resolves({
+          email,
+          otp: "345678",
+          purpose: "registration_email",
+          expiresAt: new Date(Date.now() + 60_000),
+        }),
+      }),
+    });
+
+    const req = { body: { email, otp: "345678" } };
+    const res = createRes();
+
+    await verifyEmailOTP(req, res);
+
+    expect(res.status.calledWith(200)).to.equal(true);
+    expect(res.json.calledWithMatch({ success: true, email })).to.equal(true);
   });
 });

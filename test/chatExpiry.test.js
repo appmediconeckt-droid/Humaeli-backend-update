@@ -1,7 +1,7 @@
-// Focused tests for the 30-second chat-request expiry fix.
+// MySQL integration tests for current free-chat request and cancellation behavior.
 //
 // These tests call the controller functions directly (no Express HTTP layer)
-// and use a real MongoDB connection driven by .env. Every doc created here
+// and use an explicitly selected test database. Every doc created here
 // is tagged with TEST_TAG in fullName so afterEach can clean up safely
 // without touching real user/chat data.
 
@@ -42,13 +42,16 @@ function makeRes() {
   return res;
 }
 
-describe("Chat request 30-second expiry", function () {
+(process.env.MYSQL_TEST_DATABASE ? describe : describe.skip)("Free chat requests and cancellation", function () {
   this.timeout(20000);
 
   let user;
   let counselor;
+  let previousPaidSetting;
 
   before(async () => {
+    previousPaidSetting = process.env.PAID_COUNSELOR_SESSIONS_ENABLED;
+    process.env.PAID_COUNSELOR_SESSIONS_ENABLED = "false";
     await connectDB();
   });
 
@@ -80,6 +83,7 @@ describe("Chat request 30-second expiry", function () {
       googleId: `gid-${uniq}`,
       authProvider: "google",
       role: "counsellor",
+      profileCompleted: true, qualification: "MSc Psychology", experience: 2, specialization: ["Stress"],
       isActive: true,
       locationData: { current: { type: "Point", coordinates: coords } },
     });
@@ -114,9 +118,11 @@ describe("Chat request 30-second expiry", function () {
       await User.deleteMany({ _id: { $in: ids } });
     }
     await mongoose.disconnect();
+    if (previousPaidSetting === undefined) delete process.env.PAID_COUNSELOR_SESSIONS_ENABLED;
+    else process.env.PAID_COUNSELOR_SESSIONS_ENABLED = previousPaidSetting;
   });
 
-  it("startChat creates a chat whose expiresAt is ~30 seconds in the future (not 10)", async () => {
+  it("startChat keeps free chat requests open without an expiry", async () => {
     const before = Date.now();
     const req = {
       user: { _id: user._id, role: "user" },
@@ -130,12 +136,7 @@ describe("Chat request 30-second expiry", function () {
     expect(res.body).to.have.property("success", true);
     expect(res.body.chat).to.have.property("expiresAt");
 
-    const expiresAt = new Date(res.body.chat.expiresAt).getTime();
-    const deltaSec = (expiresAt - before) / 1000;
-
-    // Must be clearly 30s, not 10s. Allow a small buffer for DB + clock drift.
-    expect(deltaSec).to.be.greaterThan(25);
-    expect(deltaSec).to.be.lessThan(35);
+    expect(res.body.chat.expiresAt).to.equal(null);
   });
 
   it("counselor can accept a pending chat created moments ago (no 400 expired)", async () => {
@@ -187,12 +188,12 @@ describe("Chat request 30-second expiry", function () {
     expect(acceptRes.body.chat).to.have.property("status", "accepted");
   });
 
-  it("counselor accepting AFTER expiresAt still gets 400 expired (guard still works)", async () => {
-    // Chat whose expiry is already in the past
+  it("counselor cannot accept an explicitly cancelled request", async () => {
+    // Cancellation is persisted explicitly; free chats do not expire by time alone.
     const chat = await Chat.create({
       userId: user._id,
       counselorId: counselor._id,
-      status: "pending",
+      status: "cancelled",
       isActive: true,
       expiresAt: new Date(Date.now() - 1000),
       startedAt: new Date(Date.now() - 31 * 1000),
@@ -213,7 +214,7 @@ describe("Chat request 30-second expiry", function () {
     expect(reloaded.status).to.equal("cancelled");
   });
 
-  it("user-facing message text on a new chat says '30 seconds' (not '10 seconds')", async () => {
+  it("new free-chat requests persist their greeting message", async () => {
     const req = {
       user: { _id: user._id, role: "user" },
       body: { counselorId: counselor._id },
@@ -225,9 +226,7 @@ describe("Chat request 30-second expiry", function () {
     const chatId = res.body.chat.id;
     const msgs = await Message.find({ chatId }).sort({ createdAt: 1 });
     expect(msgs.length).to.be.greaterThan(0);
-    const requestMsg = msgs.find((m) => /expire/i.test(m.content));
-    expect(requestMsg, "expected a request message mentioning expiry").to.exist;
-    expect(requestMsg.content).to.match(/30 seconds/);
-    expect(requestMsg.content).to.not.match(/10 seconds/);
+    expect(msgs.some(message => /start a conversation/i.test(message.content))).to.equal(true);
+    expect(msgs.some(message => /expire/i.test(message.content))).to.equal(false);
   });
 });

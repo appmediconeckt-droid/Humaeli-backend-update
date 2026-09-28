@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import mongoose from "mongoose";
+import mongoose from "../src/persistence/mongoose.js";
 import connectDB from "../src/config/db.js";
 import Chat from "../src/models/Chat.js";
 

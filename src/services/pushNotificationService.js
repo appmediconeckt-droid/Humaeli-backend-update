@@ -1,4 +1,19 @@
-import firebaseMessaging from "../config/firebaseAdmin.js";
+import { messaging } from "../config/firebaseAdmin.js";
+
+const isCallPush = (data = {}) => {
+  const presentation = String(data.presentation || data.presentAs || "")
+    .trim()
+    .toLowerCase();
+  const notificationOnly =
+    presentation === "notification_only" ||
+    String(data.notificationOnly || "").toLowerCase() === "true";
+  if (notificationOnly) return false;
+
+  const type = String(data.type || data.notificationType || data.event || "")
+    .trim()
+    .toUpperCase();
+  return type.includes("CALL") || Boolean(data.callId || data.call_id);
+};
 
 export const sendPushNotification = async ({
   token,
@@ -10,6 +25,9 @@ export const sendPushNotification = async ({
     if (!token) {
       throw new Error('FCM token is required');
     }
+    if (!messaging) {
+      throw new Error('Firebase push notifications are not configured. Set FIREBASE_SERVICE_ACCOUNT in the server environment.');
+    }
 
     const safeData = {};
 
@@ -17,33 +35,39 @@ export const sendPushNotification = async ({
       safeData[key] = String(data[key]);
     });
 
-    const notificationType = String(safeData.type || '').toUpperCase();
-    const isCallNotification =
-      notificationType.includes('CALL') && Boolean(safeData.callId);
-
+    const callPush = isCallPush(safeData);
     const message = {
       token,
-      ...(isCallNotification
-        ? {
-            data: {
-              ...safeData,
-              title: String(title || 'Incoming call'),
-              body: String(body || 'Incoming call'),
-            },
-          }
-        : {
-            notification: { title, body },
-            data: safeData,
-          }),
+      data: safeData,
       android: {
         priority: 'high',
-        ...(isCallNotification
+        ...(callPush
           ? {}
-          : { notification: { sound: 'default' } }),
+          : {
+              notification: {
+                sound: 'default',
+                channelId: "humaeli-default",
+              },
+            }),
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+            ...(callPush ? { contentAvailable: true } : {}),
+          },
+        },
       },
     };
 
-    const response = await firebaseMessaging.send(message);
+    if (!callPush) {
+      message.notification = {
+        title,
+        body,
+      };
+    }
+
+    const response = await messaging.send(message);
 
     console.log('✅ Push notification sent successfully:');
     console.log(response);
@@ -54,4 +78,3 @@ export const sendPushNotification = async ({
     throw error;
   }
 };
-

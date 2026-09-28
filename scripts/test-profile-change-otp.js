@@ -1,3 +1,4 @@
+import connectDB from "../src/config/db.js";
 // scripts/test-profile-change-otp.js
 //
 // End-to-end test for the new profile-change OTP flow:
@@ -21,7 +22,7 @@ import "dotenv/config";
 import dns from "node:dns";
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
-import mongoose from "mongoose";
+import mongoose from "../src/persistence/mongoose.js";
 import jwt from "jsonwebtoken";
 import http from "http";
 import User from "../src/models/userModel.js";
@@ -31,10 +32,7 @@ const PORT = process.env.PORT || 5000;
 const BASE = `http://localhost:${PORT}/api/auth`;
 const ACCESS_SECRET = process.env.ACCESS_SECRET;
 
-if (!process.env.MONGO_URI) {
-  console.error("MONGO_URI missing in .env");
-  process.exit(1);
-}
+
 if (!ACCESS_SECRET) {
   console.error("ACCESS_SECRET missing in .env");
   process.exit(1);
@@ -86,7 +84,7 @@ let allOk = true;
 let userId;
 let sessionId;
 
-await mongoose.connect(process.env.MONGO_URI);
+await connectDB();
 console.log("Connected to MongoDB\n");
 
 const stamp = Date.now();

@@ -1,3 +1,4 @@
+import connectDB from "../src/config/db.js";
 // One-shot script to:
 // 1. Reactivate a known session in MongoDB (so the existing JWT works again)
 // 2. Hit all 4 location endpoints and print results
@@ -6,7 +7,7 @@
 //
 // This script is intentionally simple — no test framework, just curl-style calls.
 
-import mongoose from "mongoose";
+import mongoose from "../src/persistence/mongoose.js";
 
 const SESSION_ID = "6a0c34574a5c1a4cd4ca8038";
 const USER_ID = "69d8985fc296c4c74d1d8975";
@@ -40,7 +41,7 @@ const call = async (method, path, body) => {
 
 async function main() {
   // 1. Connect to Mongo & reactivate the session
-  await mongoose.connect(process.env.MONGO_URI);
+  await connectDB();
 
   const result = await mongoose.connection.db.collection("sessions").updateOne(
     { _id: new mongoose.Types.ObjectId(SESSION_ID) },

@@ -1,6 +1,7 @@
 // middleware/authMiddleware.js
 import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
+import { markUserOnlineAndNotify } from "../services/onlinePresenceService.js";
 import Session from "../models/sessionModel.js";
 import { generateAccessToken, generateRefreshToken } from "../utils/token.js";
 
@@ -18,14 +19,6 @@ const tryRefreshAndContinue = async (req, res, next, incomingRefreshToken) => {
         success: false,
         error: "Refresh token invalid or expired. Please log in again.",
         code: "REFRESH_INVALID",
-      });
-    }
-
-    if (!decoded.sessionId || typeof decoded.sessionId !== "string" || decoded.sessionId.length < 12) {
-      return res.status(401).json({
-        success: false,
-        error: "Invalid session. Please log in again.",
-        code: "SESSION_INVALID",
       });
     }
 
@@ -59,10 +52,7 @@ const tryRefreshAndContinue = async (req, res, next, incomingRefreshToken) => {
     }
 
     if (!user.isOnline || user.lastSeen) {
-      await User.updateOne(
-        { _id: user._id },
-        { $set: { isOnline: true, lastSeen: null } },
-      );
+      await markUserOnlineAndNotify(user._id);
       user.isOnline = true;
       user.lastSeen = null;
     }
@@ -165,14 +155,6 @@ export const authMiddleware = async (req, res, next) => {
       });
     }
 
-    if (!decoded.sessionId || typeof decoded.sessionId !== "string" || decoded.sessionId.length < 12) {
-      return res.status(401).json({
-        success: false,
-        error: "Invalid session. Please log in again.",
-        code: "SESSION_INVALID",
-      });
-    }
-
     const session = await Session.findOne({
       _id: decoded.sessionId,
       userId: decoded.userId || decoded._id,
@@ -212,10 +194,7 @@ export const authMiddleware = async (req, res, next) => {
 
     // ── 5. Attach user to request ──
     if (!user.isOnline || user.lastSeen) {
-      await User.updateOne(
-        { _id: user._id },
-        { $set: { isOnline: true, lastSeen: null } },
-      );
+      await markUserOnlineAndNotify(user._id);
       user.isOnline = true;
       user.lastSeen = null;
     }
@@ -339,3 +318,57 @@ export const adminTokenAuth = (req, res, next) => {
   }
 };
 
+// Compatibility alias for routes that use the older `protect` name. Keep the
+// session validation and refresh behavior from authMiddleware in one place.
+export const protect = async (req, res, next) => {
+  return authMiddleware(req, res, next);
+};
+
+export const allowRoles = (...roles) => {
+  const allowedRoles = roles.map((role) => String(role).toLowerCase());
+
+  return (req, res, next) => {
+    const currentRole = String(req.user?.role || "").toLowerCase();
+
+    if (!allowedRoles.includes(currentRole)) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to perform this action",
+      });
+    }
+
+    next();
+  };
+};
+
+export const requireOwnUser = (req, res, next) => {
+  const requestedUserId =
+    req.params.id ?? req.params.user_id ?? req.body?.user_id;
+  const authenticatedUserId =
+    req.userId ?? req.user?._id ?? req.user?.id ?? req.user?.userId;
+
+  if (!requestedUserId || String(requestedUserId) !== String(authenticatedUserId)) {
+    return res.status(403).json({
+      success: false,
+      message: "You can only access or update your own account",
+    });
+  }
+
+  next();
+};
+
+export const requireOwnRole = (req, res, next) => {
+  const requestedRole = req.params.user_role ?? req.body?.user_role;
+
+  if (
+    requestedRole &&
+    String(requestedRole).toLowerCase() !== String(req.user?.role || "").toLowerCase()
+  ) {
+    return res.status(403).json({
+      success: false,
+      message: "The requested role does not match the authenticated account",
+    });
+  }
+
+  next();
+};

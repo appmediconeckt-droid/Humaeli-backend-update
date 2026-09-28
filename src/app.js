@@ -251,6 +251,8 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 import cookieParser from "cookie-parser";
+import mongoose from "./persistence/mongoose.js";
+import { createDatabaseStartup } from "./config/databaseStartup.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import http from "http";
@@ -258,9 +260,11 @@ import { Server } from "socket.io";
 import authRoutes from "./routes/authRoutes.js";
 import videoRoutes from "./routes/videoRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
+import prescriptionRoutes from "./routes/prescriptionRoutes.js";
 import callRoutes from "./routes/callRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import appointmentRoutes from "./routes/appointmentRoutes.js";
+import { deleteExpiredUnresolvedAppointments } from "./controllers/appointmentController.js";
 import { getMyChatHistory } from "./controllers/chatController.js";
 import { getPaymentConfig } from "./controllers/messageController.js";
 import { settleInactiveChatSessions } from "./services/paidSessionService.js";
@@ -281,20 +285,39 @@ import translateRoutes from "./routes/translateRoutes.js";
 import avatarRoutes from "./routes/avatarRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
 import aiRealtimeRoute from "./routes/aiRealtimeRoute.js"
-import walkinRoutes from "./routes/walkinRoutes.js";
-import doctorBreakRoutes from "./routes/doctorBreakRoutes.js";
-import clinicRoutes from "./routes/clinicRoutes.js";
-import availabilityRoutes from "./routes/availabilityRoutes.js";
-import followUpRoutes from "./routes/followUpRoutes.js";
-import staffRoutes from "./routes/staffRoutes.js";
-import prescriptionRoutes from "./routes/prescriptionRoutes.js";
 import { expirePendingPaidChatRequests } from "./services/paidSessionService.js";
-import { checkHealth as checkMySQLHealth } from "./config/mysql.js";
+import { getEmailDeliveryDiagnostics } from "./services/otpService.js";
+import { apiFreshness } from "./middleware/apiFreshness.js";
+import adminAuthRoutes from "./admin/routes/simpleAuthRoutes.js";
+import adminUserRoutes from "./admin/routes/userRoutes.js";
+import adminCounselorRoutes from "./admin/routes/counselorRoutes.js";
+import adminDashboardRoutes from "./admin/routes/dashboardRoutes.js";
+import adminRevenueRoutes from "./admin/routes/revenueRoutes.js";
+import adminPayoutRoutes from "./admin/routes/payoutRoutes.js";
+import adminLocationRoutes from "./admin/routes/locationRoutes.js";
+import adminSettingsRoutes from "./admin/routes/settingsRoutes.js";
+import adminNotificationRoutes from "./admin/routes/notificationRoutes.js";
+import adminReviewRoutes from "./admin/routes/reviewRoutes.js";
+import adminPaymentRoutes from "./admin/routes/paymentRoutes.js";
+import adminSupportRoutes from "./admin/routes/supportRoutes.js";
+import adminRefundRoutes from "./admin/routes/refundRoutes.js";
+import availabilityRoutes from './routes/availabilityRoutes.js';
+import clinicRoutes from "./routes/clinicRoutes.js";
+import doctorBreakRoutes from "./routes/doctorBreakRoutes.js";
+import staffRoutes from './routes/staffRoutes.js';
+import walkinAppointmentRoutes from './routes/walkinAppointmentRoutes.js';
+import followupRoutes from './routes/followupRoutes.js';
+import leaveRoutes from './routes/leaveRoutes.js';
+import medicationRoutes from './routes/medicationRoutes.js';
+
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.disable('etag');
+app.use('/api', apiFreshness);
 
 // Use a tolerant JSON parser: accept text for application/json, keep raw body,
 // attempt strict JSON.parse, and retry after trimming a single trailing quote.
@@ -404,7 +427,6 @@ const corsOptions = {
     "X-Requested-With",
     "Accept",
   ],
-  exposedHeaders: ["X-New-Access-Token"],
   optionsSuccessStatus: 204,
 };
 
@@ -440,59 +462,62 @@ app.get("/account-deletion.css", (_req, res) => {
 // ---------------------------
 // 4. Routes
 // ---------------------------
-app.get("/api/health", async (_req, res) => {
-  const mysqlHealth = await checkMySQLHealth().catch((err) => ({ status: "unhealthy", error: err.message }));
-  const isHealthy = mysqlHealth.status === "healthy";
+app.get("/", (_req, res) => {
+  res.set('Cache-Control', 'no-store').json({
+    service: "humaeli-backend",
+    status: app.locals.databaseReady !== false && mongoose.connection.readyState === 1 ? "ready" : "database_unavailable",
+    health: "/api/health",
+  });
+});
+
+app.get("/api/health", (_req, res) => {
+  const dbState = mongoose.connection.readyState;
+  const dbStatus = DB_STATE_LABEL[dbState] || "unknown";
+  const isHealthy = dbState === 1 && app.locals.databaseReady !== false;
 
   res.status(isHealthy ? 200 : 503).json({
     success: isHealthy,
     status: isHealthy ? "ok" : "degraded",
     service: "humaeli-backend",
-    database: "mysql",
     environment: process.env.NODE_ENV || "development",
     uptimeSeconds: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
     features: {
       landingStats: true,
     },
-    mysql: mysqlHealth,
+    mail: getEmailDeliveryDiagnostics(),
+    db: {
+      engine: "mysql",
+      database: mongoose.connection.name || process.env.MYSQL_DATABASE || "humaeli",
+      state: dbStatus,
+      readyState: dbState,
+    },
   });
 });
 
-app.get("/api/health/db", async (_req, res) => {
-  try {
-    const mysqlHealth = await checkMySQLHealth();
-    const isHealthy = mysqlHealth.status === "healthy";
-    res.status(isHealthy ? 200 : 503).json({
-      success: isHealthy,
-      mysql: mysqlHealth,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (err) {
-    res.status(503).json({ success: false, error: err.message });
-  }
+// The entry point enables this gate before listening; isolated app tests may
+// still supply their own model stubs without running the database bootstrap.
+const databaseUnavailable = () => app.locals.databaseReady === false ||
+  (app.locals.databaseReady === true && mongoose.connection.readyState !== 1);
+app.use('/api', (_req, res, next) => {
+  if (!databaseUnavailable()) return next();
+  res.set('Retry-After', '5').status(503).json({
+    success: false,
+    code: 'DATABASE_UNAVAILABLE',
+    message: 'Database is temporarily unavailable. Please try again shortly.',
+  });
 });
 
 app.use("/api/auth", authRoutes);
 app.get("/api/chat/payment-config", getPaymentConfig);
 app.use("/api/chat", messageRoutes);
+app.use("/api/prescriptions", prescriptionRoutes);
 app.get("/api/ai-chat/history", authMiddleware, getMyChatHistory);
 app.use("/api/ai-chat", chatRoutes); // <--- We mounted our AI chat here!
 app.use("/api/progress", progressRoutes); // <--- Mood tracking & progress endpoints
 app.use("/api/call", callRoutes);
 app.use("/api/video", videoRoutes);
 app.use("/api/appointments", appointmentRoutes);
-app.use("/api/walkin-appointments", walkinRoutes);
-app.use("/api/walkin-appointment", walkinRoutes);
-app.use("/api/doctor-breaks", doctorBreakRoutes);
-app.use("/api/doctor-break", doctorBreakRoutes);
-app.use("/api/clinics", clinicRoutes);
-app.use("/api/clinic", clinicRoutes);
-app.use("/api/availability", availabilityRoutes);
-app.use("/api/followups", followUpRoutes);
-app.use("/api/follow-ups", followUpRoutes);
-app.use("/api/staff", staffRoutes);
-app.use("/api/prescriptions", prescriptionRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/location", locationRoutes);
@@ -503,47 +528,99 @@ app.use("/api/avatar", avatarRoutes); // <--- Avatar generation with OpenAI
 app.use('/api/auth', forgotPasswordRoutes);
 app.use('/api/translate', translateRoutes);
 app.use("/api/ai", aiRoutes);
+app.use('/api/availability', availabilityRoutes);
+app.use("/api/clinics", clinicRoutes);
+app.use("/api/doctor-breaks", doctorBreakRoutes);
+app.use('/api/staff', staffRoutes);
+app.use('/api/walkin-appointments', walkinAppointmentRoutes);
+app.use('/api/followups', followupRoutes);
+app.use('/api/leaves', leaveRoutes);
+app.use('/api/medications', medicationRoutes);
+
 app.use("/api/ai/realtime", aiRealtimeRoute);
-
-const chatBillingSettlementInterval = setInterval(() => {
+app.get("/api/admin/health", (_req, res) => {
+  res.json({ success: true, message: "Admin API is running" });
+});
+app.use("/api/admin/auth", adminAuthRoutes);
+app.use("/api/admin/users", adminUserRoutes);
+app.use("/api/admin/counselors", adminCounselorRoutes);
+app.use("/api/admin/dashboard", adminDashboardRoutes);
+app.use("/api/admin/revenue", adminRevenueRoutes);
+app.use("/api/admin/payouts", adminPayoutRoutes);
+app.use("/api/admin/location", adminLocationRoutes);
+app.use("/api/admin/settings", adminSettingsRoutes);
+app.use("/api/admin/notifications", adminNotificationRoutes);
+app.use("/api/admin/reviews", adminReviewRoutes);
+app.use("/api/admin/payments", adminPaymentRoutes);
+app.use("/api/admin/support", adminSupportRoutes);
+app.use("/api/admin/refunds", adminRefundRoutes);
+// Remove unresolved appointments only after their scheduled date/time has
+// passed. The request-time cleanup in getAppointments is a second safeguard.
+export const startDatabaseJobs = createDatabaseStartup(mongoose.connection, async () => {
+  if (process.env.NODE_ENV === "test") return;
+  await resetAllUsersPresence();
+  const appointmentCleanupInterval = setInterval(() => {
+    if (mongoose.connection.readyState !== 1) return;
+    deleteExpiredUnresolvedAppointments().catch((error) => {
+      console.error("Appointment cleanup failed:", error.message);
+    });
+  }, 60 * 1000);
+  appointmentCleanupInterval.unref?.();
+  const chatBillingSettlementInterval = setInterval(() => {
+    if (mongoose.connection.readyState !== 1) return;
+    settleInactiveChatSessions().catch((error) => {
+      console.error("Inactive chat billing settlement failed:", error.message);
+    });
+  }, 30 * 1000);
+  chatBillingSettlementInterval.unref?.();
   settleInactiveChatSessions().catch((error) => {
-    console.error("Inactive chat billing settlement failed:", error.message);
+    console.error("Initial inactive chat billing settlement failed:", error.message);
   });
-}, 30 * 1000);
-chatBillingSettlementInterval.unref?.();
-settleInactiveChatSessions().catch((error) => {
-  console.error("Initial inactive chat billing settlement failed:", error.message);
-});
+  deleteExpiredUnresolvedAppointments().catch((error) => {
+    console.error("Initial appointment cleanup failed:", error.message);
+  });
 
-
-const paidChatExpiryInterval = setInterval(() => {
+  const paidChatExpiryInterval = setInterval(() => {
+    if (mongoose.connection.readyState !== 1) return;
+    expirePendingPaidChatRequests().catch((error) => {
+      console.error("Paid chat expiry cleanup failed:", error.message);
+    });
+  }, 5 * 60 * 1000);
+  paidChatExpiryInterval.unref?.();
   expirePendingPaidChatRequests().catch((error) => {
-    console.error("Paid chat expiry cleanup failed:", error.message);
+    console.error("Initial paid chat expiry cleanup failed:", error.message);
   });
-}, 5 * 60 * 1000);
-paidChatExpiryInterval.unref?.();
-expirePendingPaidChatRequests().catch((error) => {
-  console.error("Initial paid chat expiry cleanup failed:", error.message);
 });
-
 
 // ---------------------------
 // 5. HTTP & Socket.IO server
 // ---------------------------
 const server = http.createServer(app);
 
-// Create Socket.IO server — polling-only (Render.com free tier blocks WS upgrades)
+const parseSocketTransports = (value) => {
+  const transports = String(value || "")
+    .split(",")
+    .map((transport) => transport.trim().toLowerCase())
+    .filter((transport) => transport === "websocket" || transport === "polling");
+
+  return transports.length ? transports : ["websocket", "polling"];
+};
+
+const socketTransports = parseSocketTransports(process.env.SOCKET_TRANSPORTS);
+
+// Create Socket.IO server. WebSocket is preferred for real-time delivery, with
+// polling kept as a fallback for networks/tunnels that cannot upgrade.
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
       if (isAllowedOrigin(origin)) return callback(null, true);
       return callback(new Error("Not allowed by CORS"), false);
     },
-    methods: ["GET", "POST"],
+    methods: ["GET", "POST", "OPTIONS"],
     credentials: true,
   },
-  transports: ["polling"],
-  allowUpgrades: false,
+  transports: socketTransports,
+  allowUpgrades: socketTransports.includes("websocket"),
   pingTimeout: 60000,
   pingInterval: 25000,
   path: "/socket.io/",
@@ -551,6 +628,10 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e7,
 });
 
+io.use((_socket, next) => {
+  if (databaseUnavailable()) return next(new Error('Database is temporarily unavailable'));
+  next();
+});
 io.use(authenticateSocket);
 
 // Make io accessible globally for your controllers
@@ -560,11 +641,6 @@ global.io = io;
 const socketHandler = new SocketHandler(io);
 socketHandler.initialize();
 global.socketHandler = socketHandler;
-
-// Reset all users to offline on startup
-resetAllUsersPresence().catch(err => {
-  console.error("Failed to reset presence on startup:", err);
-});
 
 export { app };
 export default server;
