@@ -3,6 +3,7 @@ import mongoose from "../persistence/mongoose.js";
 import OpenAI from "openai";
 import Chat from "../models/chatModel.js";
 import User from "../models/userModel.js";
+import { getPool } from "../config/mysql.js";
 import { generateAIResponse } from "../services/aiService.js";
 import { detectCrisis, generateCrisisResponse, CRISIS_LEVELS_EXPORT } from "../services/crisisDetectionService.js";
 import { analyzeMood, getMoodInsights, generateMoodReport } from "../services/moodTrackingService.js";
@@ -1040,10 +1041,11 @@ export const getMyChatHistory = async (req, res) => {
         .json({ success: false, message: "Authentication required" });
     }
 
-    const latestChat = await Chat.findOne({ userId })
-      .sort({ createdAt: -1 })
-      .select("sessionId")
-      .lean();
+    const [latestRows] = await getPool().query(
+      "SELECT `sessionId` FROM `aichats` WHERE `userId` = ? ORDER BY `createdAt` DESC LIMIT 1",
+      [String(userId)],
+    );
+    const latestChat = latestRows?.[0];
 
     if (!latestChat) {
       return res.status(200).json({
@@ -1053,14 +1055,15 @@ export const getMyChatHistory = async (req, res) => {
       });
     }
 
-    const query = latestChat.sessionId
-      ? { userId, sessionId: latestChat.sessionId }
-      : { userId };
-
-    const chats = await Chat.find(query)
-      .sort({ createdAt: 1 })
-      .limit(100)
-      .lean();
+    const [chats] = latestChat.sessionId
+      ? await getPool().query(
+        "SELECT `id`, `sessionId`, `userMessage`, `aiResponse`, `responseType`, `consultants`, `createdAt` FROM `aichats` WHERE `userId` = ? AND `sessionId` = ? ORDER BY `createdAt` ASC LIMIT 100",
+        [String(userId), latestChat.sessionId],
+      )
+      : await getPool().query(
+        "SELECT `id`, `sessionId`, `userMessage`, `aiResponse`, `responseType`, `consultants`, `createdAt` FROM `aichats` WHERE `userId` = ? ORDER BY `createdAt` ASC LIMIT 100",
+        [String(userId)],
+      );
 
     const history = chats.flatMap((chat) => {
       const messages = [];
@@ -1068,18 +1071,21 @@ export const getMyChatHistory = async (req, res) => {
         messages.push({
           role: "user",
           content: chat.userMessage,
-          chatId: chat._id,
+          chatId: chat.id,
           createdAt: chat.createdAt,
         });
       }
       if (chat.aiResponse) {
+        const consultants = typeof chat.consultants === "string"
+          ? JSON.parse(chat.consultants || "[]")
+          : chat.consultants || [];
         messages.push({
           role: "assistant",
           content: chat.aiResponse,
-          chatId: chat._id,
+          chatId: chat.id,
           createdAt: chat.createdAt,
           type: chat.responseType || "answer",
-          consultants: chat.consultants || [],
+          consultants,
         });
       }
       return messages;
@@ -1140,16 +1146,17 @@ export const deleteMyChatMessage = async (req, res) => {
         .json({ success: false, message: "Authentication required" });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(chatId)) {
+    if (!String(chatId || "").trim()) {
       return res
         .status(400)
         .json({ success: false, message: "Invalid chat message id" });
     }
 
-    const deletedChat = await Chat.findOneAndDelete({
-      _id: chatId,
-      userId,
-    }).lean();
+    const [rows] = await getPool().query(
+      "SELECT `id`, `sessionId` FROM `aichats` WHERE `id` = ? AND `userId` = ? LIMIT 1",
+      [String(chatId), String(userId)],
+    );
+    const deletedChat = rows?.[0];
 
     if (!deletedChat) {
       return res
@@ -1157,9 +1164,14 @@ export const deleteMyChatMessage = async (req, res) => {
         .json({ success: false, message: "Chat message not found" });
     }
 
+    await getPool().execute(
+      "DELETE FROM `aichats` WHERE `id` = ? AND `userId` = ?",
+      [String(chatId), String(userId)],
+    );
+
     return res.status(200).json({
       success: true,
-      deletedChatId: deletedChat._id,
+      deletedChatId: deletedChat.id,
       sessionId: deletedChat.sessionId,
       message: "Chat message deleted successfully.",
     });
