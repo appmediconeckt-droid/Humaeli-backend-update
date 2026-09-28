@@ -112,16 +112,78 @@ function checkUnique(documents, indexes) {
   for (const index of indexes.filter(index => index.unique)) {
     const seen = new Set();
     const fields = Object.keys(index.key);
-    const partial = index.partialFilterExpression && new Query(index.partialFilterExpression, queryOptions);
+
+    const partial =
+      index.partialFilterExpression &&
+      new Query(index.partialFilterExpression, queryOptions);
+
     for (const doc of documents) {
-      if (partial && !partial.test(doc)) continue;
       const values = fields.map(key => getPath(doc, key));
-      if (index.sparse && values.every(value => value == null)) continue;
-      // Current unique indexes contain scalar fields. Reject future multikey
-      // uniqueness rather than silently weakening a schema constraint.
-      if (values.some(Array.isArray)) throw new Error(`Multikey unique index is unsupported: ${index.name}`);
-      const key = encode(values.map(value => value ?? null));
-      if (seen.has(key)) throw duplicate(index, doc);
+
+      // ---------------------------------------------------------
+      // IMPORTANT:
+      // MySQL UNIQUE columns allow multiple NULL values.
+      //
+      // Our Mongo-compatible layer must therefore ignore documents
+      // where an indexed value is missing/null when the index is
+      // sparse or partial.
+      // ---------------------------------------------------------
+      if (
+        values.some(
+          value =>
+            value === null ||
+            value === undefined
+        )
+      ) {
+        if (index.sparse || index.partialFilterExpression) {
+          continue;
+        }
+      }
+
+      // Apply Mongo partial index condition.
+      if (partial && !partial.test(doc)) {
+        continue;
+      }
+
+      // Extra protection for {$type: "string"} partial indexes.
+      // Only actual non-empty string values participate in the
+      // unique phone/google style indexes.
+      if (index.partialFilterExpression) {
+        let matchesPartialTypes = true;
+
+        for (const field of fields) {
+          const rule = index.partialFilterExpression?.[field];
+          const value = getPath(doc, field);
+
+          if (rule?.$type === "string") {
+            if (typeof value !== "string" || value.trim() === "") {
+              matchesPartialTypes = false;
+              break;
+            }
+          }
+        }
+
+        if (!matchesPartialTypes) {
+          continue;
+        }
+      }
+
+      if (index.sparse && values.every(value => value == null)) {
+        continue;
+      }
+
+      if (values.some(Array.isArray)) {
+        throw new Error(
+          `Multikey unique index is unsupported: ${index.name}`
+        );
+      }
+
+      const key = encode(values);
+
+      if (seen.has(key)) {
+        throw duplicate(index, doc);
+      }
+
       seen.add(key);
     }
   }
