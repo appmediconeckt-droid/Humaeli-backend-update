@@ -491,6 +491,7 @@ app.get("/api/health", (_req, res) => {
       database: mongoose.connection.name || process.env.MYSQL_DATABASE || "humaeli",
       state: dbStatus,
       readyState: dbState,
+      lastError: app.locals.databaseLastError || null,
     },
   });
 });

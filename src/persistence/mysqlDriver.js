@@ -27,6 +27,22 @@ function identifier(name) {
 
 export function mysqlConfig(env = process.env) {
   let url;
+  const hasExplicitConfig = Boolean(
+    env.MYSQL_URL ||
+      env.MYSQL_HOST ||
+      env.MYSQLHOST ||
+      env.MYSQL_PORT ||
+      env.MYSQLPORT ||
+      env.MYSQL_USER ||
+      env.MYSQLUSER ||
+      env.MYSQL_PASSWORD ||
+      env.MYSQLPASSWORD ||
+      env.MYSQL_DATABASE ||
+      env.MYSQLDATABASE,
+  );
+  if (env.NODE_ENV === 'production' && !hasExplicitConfig) {
+    throw new Error('Missing MySQL configuration. Set MYSQL_URL or Railway MYSQLHOST, MYSQLPORT, MYSQLUSER, MYSQLPASSWORD and MYSQLDATABASE variables.');
+  }
   if (env.MYSQL_URL) {
     try {
       url = new URL(env.MYSQL_URL);

@@ -76,12 +76,15 @@ async function connectWithRetry() {
   let attempt = 0;
   while (true) {
     try {
-      return await connectDB();
+      const connection = await connectDB();
+      app.locals.databaseLastError = null;
+      return connection;
     } catch (error) {
       attempt += 1;
       const retryDelay = Math.min(30000, attempt * 3000);
+      app.locals.databaseLastError = databaseFailureDetails(error);
       console.error(
-        `MySQL unavailable (${databaseFailureDetails(error)}). ` +
+        `MySQL unavailable (${app.locals.databaseLastError}). ` +
           `Retrying in ${Math.ceil(retryDelay / 1000)}s; process will stay alive.`,
       );
       await new Promise((resolve) => setTimeout(resolve, retryDelay));
@@ -110,10 +113,18 @@ server.listen(PORT, "0.0.0.0", () => {
 
 connectWithRetry()
   .then(async () => {
-    await startDatabaseJobs();
-    if (process.env.NODE_ENV !== "test") startNotificationRuleScheduler();
     app.locals.databaseReady = true;
     console.log("Database initialization complete; API is ready.");
+    startDatabaseJobs().catch((error) => {
+      console.error("Database background jobs failed to start:", databaseFailureDetails(error));
+    });
+    if (process.env.NODE_ENV !== "test") {
+      try {
+        startNotificationRuleScheduler();
+      } catch (error) {
+        console.error("Notification rule scheduler failed to start:", error.message);
+      }
+    }
   })
   .catch(err => {
     console.error("Database startup failed:", databaseFailureDetails(err));
