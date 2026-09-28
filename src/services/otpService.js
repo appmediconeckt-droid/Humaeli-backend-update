@@ -26,10 +26,11 @@ const FROM_NAME = "Humaeli";
 export const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "support@humaeli.com";
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const KNOWN_VERIFIED_BREVO_SENDER = "info@mediconeckt.com";
 const DEFAULT_EMAIL_TEXT = "Please enable HTML to view this email.";
-const DEFAULT_FROM_EMAIL = "support@humaeli.com";
+const DEFAULT_FROM_EMAIL = "info@mediconeckt.com";
 const VERIFIED_FALLBACK_FROM_EMAIL = String(
-  process.env.VERIFIED_EMAIL_FROM || DEFAULT_FROM_EMAIL,
+  process.env.VERIFIED_EMAIL_FROM || KNOWN_VERIFIED_BREVO_SENDER,
 ).trim();
 const RESEND_FROM_EMAIL = String(
   process.env.RESEND_FROM_EMAIL ||
@@ -88,11 +89,16 @@ const SMTP_FROM_EMAIL = String(
     process.env.EMAIL ||
     DEFAULT_FROM_EMAIL,
 ).trim();
-const BREVO_FROM_EMAIL = String(
+const rawBrevoConfig = String(
   process.env.BREVO_FROM_EMAIL ||
     process.env.HUMAELI_BREVO_FROM_EMAIL ||
-    SMTP_FROM_EMAIL,
+    "",
 ).trim();
+const BREVO_FROM_EMAIL = (rawBrevoConfig && !rawBrevoConfig.toLowerCase().endsWith("@gmail.com"))
+  ? rawBrevoConfig
+  : (SMTP_FROM_EMAIL && !SMTP_FROM_EMAIL.toLowerCase().endsWith("@gmail.com"))
+  ? SMTP_FROM_EMAIL
+  : KNOWN_VERIFIED_BREVO_SENDER;
 const EXPLICIT_OTP_EMAIL_PROVIDER = String(process.env.OTP_EMAIL_PROVIDER || "")
   .trim()
   .toLowerCase();
@@ -111,10 +117,10 @@ const ALLOW_API_FALLBACK_AFTER_SMTP_FAILURE =
 const activeBrevoFromEmail =
   !ALLOW_UNVERIFIED_BREVO_SENDER &&
   UNVERIFIED_BREVO_SENDERS.has(BREVO_FROM_EMAIL.toLowerCase())
-    ? VERIFIED_FALLBACK_FROM_EMAIL
-    : BREVO_FROM_EMAIL || VERIFIED_FALLBACK_FROM_EMAIL;
+    ? KNOWN_VERIFIED_BREVO_SENDER
+    : BREVO_FROM_EMAIL || KNOWN_VERIFIED_BREVO_SENDER;
 const SENDER_EMAILS = [
-  ...new Set([activeBrevoFromEmail, VERIFIED_FALLBACK_FROM_EMAIL].filter(Boolean)),
+  ...new Set([activeBrevoFromEmail, KNOWN_VERIFIED_BREVO_SENDER, VERIFIED_FALLBACK_FROM_EMAIL].filter(Boolean)),
 ];
 const SMTP_AUTH_USER = SMTP_USER || GMAIL_SMTP_USER;
 const ALLOW_CUSTOM_SMTP_FROM = process.env.SMTP_ALLOW_CUSTOM_FROM === "true";
@@ -430,14 +436,37 @@ function getConfiguredProviders() {
   // successful while the recipient never sees the mail.
   // Use OTP_EMAIL_PROVIDER or OTP_EMAIL_PROVIDER_ORDER to force a different
   // live order after the sender/domain is fully verified.
+  const isRailway = Boolean(
+    process.env.RAILWAY_ENVIRONMENT ||
+    process.env.RAILWAY_PROJECT_ID ||
+    process.env.RAILWAY_SERVICE_ID ||
+    process.env.RAILWAY_STATIC_URL ||
+    process.env.RAILWAY_PUBLIC_DOMAIN,
+  );
+
   const providers = [];
-  if (hasSmtpConfig) providers.push("gmail");
-  if (hasResendConfig) providers.push("resend");
-  if (hasBrevoConfig) providers.push("brevo");
+  // Cloud platforms like Railway block outbound SMTP ports (25, 465, 587) by default.
+  // Prefer Brevo/Resend HTTPS API over raw SMTP on Railway to prevent connection timeout failures.
+  if (isRailway && (hasBrevoConfig || hasResendConfig)) {
+    if (hasBrevoConfig) providers.push("brevo");
+    if (hasResendConfig) providers.push("resend");
+    if (hasSmtpConfig) providers.push("gmail");
+  } else {
+    if (hasSmtpConfig) providers.push("gmail");
+    if (hasResendConfig) providers.push("resend");
+    if (hasBrevoConfig) providers.push("brevo");
+  }
   return providers;
 }
 
 export async function sendTransactionalEmail({ to, subject, html, text }) {
+  const isRailway = Boolean(
+    process.env.RAILWAY_ENVIRONMENT ||
+    process.env.RAILWAY_PROJECT_ID ||
+    process.env.RAILWAY_SERVICE_ID ||
+    process.env.RAILWAY_STATIC_URL ||
+    process.env.RAILWAY_PUBLIC_DOMAIN,
+  );
   const providers = getConfiguredProviders();
 
   let lastError;
@@ -459,7 +488,7 @@ export async function sendTransactionalEmail({ to, subject, html, text }) {
       return { ...data, provider: "brevo" };
     } catch (error) {
       lastError = error;
-      if (provider === "gmail" && stopAfterSmtpFailure) {
+      if (provider === "gmail" && stopAfterSmtpFailure && !isRailway) {
         const strictSmtpError = new Error(
           `SMTP/Gmail delivery failed for ${to}; refusing API fallback in production because it can report success without inbox delivery. ` +
             `Fix live EMAIL_USER/EMAIL_PASSWORD or set OTP_EMAIL_ALLOW_API_FALLBACK_AFTER_SMTP_FAILURE=true after Brevo/Resend sender verification. ` +

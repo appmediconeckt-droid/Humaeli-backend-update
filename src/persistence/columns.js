@@ -5,6 +5,8 @@ const require = createRequire(import.meta.url);
 const { BSON, ObjectId } = require('mongoose').mongo;
 const json = value => BSON.EJSON.stringify(value, { relaxed: true });
 const parse = value => BSON.EJSON.parse(typeof value === 'string' ? value : JSON.stringify(value), { relaxed: true });
+const mongoObjectIdPattern = /^[a-fA-F0-9]{24}$/;
+const warnedDecodeValues = new Set();
 
 export function quote(name) {
   if (!/^[a-zA-Z0-9_]{1,64}$/.test(name)) throw new Error(`Invalid SQL identifier: ${name}`);
@@ -104,6 +106,56 @@ function setPath(doc, path, value) {
   target[parts.at(-1)] = value;
 }
 
+function describeInvalidObjectIdValue(value) {
+  if (value == null) return String(value);
+  if (typeof value === 'string') return JSON.stringify(value.length > 120 ? value.slice(0, 117) + '...' : value);
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
+  try { return JSON.stringify(value); } catch { return String(value); }
+}
+
+function warnDecodeOnce(label, details) {
+  const key = JSON.stringify([label, details.collection, details.fieldPath, details.column, details.value, details.type]);
+  if (warnedDecodeValues.has(key)) return;
+  warnedDecodeValues.add(key);
+  console.warn(label, details);
+}
+
+function decodeObjectIdValue(value, field, context = {}) {
+  if (value?._bsontype === 'ObjectId') return value;
+  if (typeof value === 'string' && ObjectId.isValid(value) && mongoObjectIdPattern.test(value)) return new ObjectId(value);
+  warnDecodeOnce(
+    '[mysql:ObjectId] Preserving non-Mongo ObjectId value as string during row decode',
+    {
+      collection: context.collection,
+      fieldPath: field.path,
+      column: field.column,
+      value: describeInvalidObjectIdValue(value),
+      type: value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value,
+    },
+  );
+  return String(value);
+}
+
+function decodeJsonValue(value, field, context = {}) {
+  try {
+    return parse(value);
+  } catch (error) {
+    if (typeof value !== 'string') throw error;
+    warnDecodeOnce(
+      '[mysql:JSON] Preserving raw scalar string during row decode',
+      {
+        collection: context.collection,
+        fieldPath: field.path,
+        column: field.column,
+        value: describeInvalidObjectIdValue(value),
+        type: typeof value,
+        error: error.message,
+      },
+    );
+    return value;
+  }
+}
+
 export function toRow(doc, fields) {
   const row = {};
   const state = { present: [], containers: {}, stringReferences: [] };
@@ -132,15 +184,15 @@ export function toRow(doc, fields) {
   return row;
 }
 
-export function fromRow(row, fields) {
+export function fromRow(row, fields, context = {}) {
   const state = row._sql_state ? (typeof row._sql_state === 'string' ? JSON.parse(row._sql_state) : row._sql_state) : null;
   const present = new Set(state?.present || []);
   const doc = {};
   for (const field of fields) {
     let value = row[field.column];
     if (value == null) { if (state && !present.has(field.path)) continue; value = null; }
-    else if (field.kind === 'json') value = parse(value);
-    else if (field.kind === 'objectId') value = state?.stringReferences?.includes(field.path) ? value : new ObjectId(value);
+    else if (field.kind === 'json') value = decodeJsonValue(value, field, context);
+    else if (field.kind === 'objectId') value = state?.stringReferences?.includes(field.path) ? value : decodeObjectIdValue(value, field, context);
     else if (field.kind === 'boolean') value = Boolean(value);
     else if (field.kind === 'number') value = Number(value);
     else if (field.kind === 'date') value = value instanceof Date ? value : new Date(value);

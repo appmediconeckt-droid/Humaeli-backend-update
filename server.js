@@ -83,6 +83,7 @@ async function connectWithRetry() {
       attempt += 1;
       const retryDelay = Math.min(30000, attempt * 3000);
       app.locals.databaseLastError = databaseFailureDetails(error);
+      console.error(error.stack || error);
       console.error(
         `MySQL unavailable (${app.locals.databaseLastError}). ` +
           `Retrying in ${Math.ceil(retryDelay / 1000)}s; process will stay alive.`,
@@ -127,6 +128,7 @@ connectWithRetry()
     }
   })
   .catch(err => {
+    console.error(err.stack || err);
     console.error("Database startup failed:", databaseFailureDetails(err));
     process.exit(1);
   });

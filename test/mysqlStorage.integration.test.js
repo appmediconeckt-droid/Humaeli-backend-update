@@ -119,6 +119,43 @@ suite('MySQL storage integration', function () {
       error => error.code === 11000,
     );
   });
+  it('ignores blank values in partial unique indexes and refreshes compatible definitions', async () => {
+    const schema = new mongoose.Schema({
+      email: { type: String, required: true },
+      phone: String,
+    });
+    schema.index({ phone: 1 }, {
+      unique: true,
+      name: 'phone_1',
+      partialFilterExpression: { phone: { $type: 'string', $regex: /^\+?\d{7,15}$/ } },
+    });
+    const BlankPhoneAccount = mongoose.models.SQLTestBlankPhoneAccount || mongoose.model('SQLTestBlankPhoneAccount', schema);
+    await BlankPhoneAccount.createCollection();
+    await BlankPhoneAccount.deleteMany({});
+
+    await BlankPhoneAccount.create({ email: 'blank-a', phone: '' });
+    await BlankPhoneAccount.create({ email: 'blank-b', phone: '' });
+    await BlankPhoneAccount.create({ email: 'invalid-a', phone: 'pending' });
+    await BlankPhoneAccount.create({ email: 'invalid-b', phone: 'pending' });
+    await mongoose.connection.db.pool.execute(
+      'INSERT INTO `_humaeli_indexes` (collection_name, index_name, definition) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE definition = VALUES(definition)',
+      [
+        BlankPhoneAccount.collection.name,
+        'phone_1',
+        JSON.stringify({ unique: true, name: 'phone_1', partialFilterExpression: { phone: { $type: 'string' } }, key: { phone: 1 } }),
+      ],
+    );
+
+    await BlankPhoneAccount.createIndexes();
+    const refreshed = (await BlankPhoneAccount.collection.indexes()).find(index => index.name === 'phone_1');
+    assert.equal(String(refreshed.partialFilterExpression.phone.$regex), String(/^\+?\d{7,15}$/));
+
+    await BlankPhoneAccount.create({ email: 'real-a', phone: '1234567' });
+    await assert.rejects(
+      BlankPhoneAccount.create({ email: 'real-b', phone: '1234567' }),
+      error => error.code === 11000,
+    );
+  });
   it('resumes imports only while target records still match the saved baseline', async () => {
     const collection = mongoose.connection.db.collection(Account.collection.name);
     const id = new mongoose.Types.ObjectId();

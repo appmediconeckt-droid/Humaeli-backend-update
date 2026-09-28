@@ -108,6 +108,13 @@ function duplicate(index, document) {
   return error;
 }
 function getPath(document, path) { return path.split('.').reduce((value, key) => value?.[key], document); }
+function sameKey(left, right) { return encode(left) === encode(right); }
+function canRefreshIndexDefinition(existing, definition) {
+  if (!existing || existing.name !== definition.name || !sameKey(existing.key, definition.key)) return false;
+  if (!existing.unique || !definition.unique) return false;
+  const withoutPartial = ({ partialFilterExpression, ...rest }) => rest;
+  return encode(withoutPartial(existing)) === encode(withoutPartial(definition));
+}
 function checkUnique(documents, indexes) {
   for (const index of indexes.filter(index => index.unique)) {
     const seen = new Set();
@@ -202,7 +209,7 @@ class SQLCollection {
     await this.ready();
     const predicate = sqlPrefilter(filter, this.db.columns.get(this.name));
     const rows = await readRows(client, this.name, predicate);
-    const docs = rows.map(row => fromRow(row, this.db.columns.get(this.name)));
+    const docs = rows.map(row => fromRow(row, this.db.columns.get(this.name), { collection: this.name }));
     if (includeExpired) return docs;
     const ttl = (indexes || await this.indexes(client)).filter(index => index.expireAfterSeconds !== undefined);
     const now = Date.now();
@@ -399,20 +406,10 @@ class SQLCollection {
     try {
       await client.beginTransaction();
       await client.execute('SELECT collection_name FROM `_humaeli_locks` WHERE collection_name = ? FOR UPDATE', [this.name]);
-     const existing = (await this.indexes(client))
-  .find(index => index.name === name);
-
-if (existing && !sameIndexDefinition(existing, definition)) {
-  console.error("Index definition conflict:", {
-    name,
-    existing: normalizeIndexDefinition(existing),
-    requested: normalizeIndexDefinition(definition),
-  });
-
-  throw new Error(
-    `Index ${name} has conflicting options; migrate the index explicitly`
-  );
-}
+      const existing = (await this.indexes(client)).find(index => index.name === name);
+      if (existing && encode(existing) !== encode(definition) && !canRefreshIndexDefinition(existing, definition)) {
+        throw new Error(`Index ${name} has conflicting options; migrate the index explicitly`);
+      }
       checkUnique(await this.read(client), [definition]);
       await client.execute('INSERT INTO `_humaeli_indexes` (collection_name, index_name, definition) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE definition = VALUES(definition)', [this.name, name, encode(definition)]);
       await client.commit();

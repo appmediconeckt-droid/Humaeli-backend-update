@@ -252,6 +252,7 @@ import helmet from "helmet";
 import compression from "compression";
 import cookieParser from "cookie-parser";
 import mongoose from "./persistence/mongoose.js";
+import { verifyMySQLConnection } from "./config/db.js";
 import { createDatabaseStartup } from "./config/databaseStartup.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -494,6 +495,25 @@ app.get("/api/health", (_req, res) => {
       lastError: app.locals.databaseLastError || null,
     },
   });
+});
+
+app.get("/api/db-test", async (_req, res) => {
+  try {
+    const details = await verifyMySQLConnection();
+    res.json({
+      success: true,
+      message: "MySQL connection working",
+      database: details.database,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(error.stack || error);
+    res.status(500).json({
+      success: false,
+      message: "MySQL connection failed",
+      error: error.message || String(error),
+    });
+  }
 });
 
 // The entry point enables this gate before listening; isolated app tests may

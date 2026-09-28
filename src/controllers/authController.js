@@ -4159,7 +4159,23 @@ export const deleteUser = async (req, res) => {
         .json({ message: "User not found", success: false });
 
     const profilePhotoPublicId = user.profilePhoto?.publicId;
-    const cleanup = await cleanupAccountData({ userId: id, email: user.email });
+    let cleanup;
+    try {
+      cleanup = await cleanupAccountData({ userId: id, email: user.email });
+    } catch (cleanupError) {
+      if (cleanupError?.message !== "A valid userId is required for account cleanup") {
+        throw cleanupError;
+      }
+      const sessionCleanup = await Session.deleteMany({ userId: id });
+      cleanup = {
+        operations: 1,
+        deletedCount: Number(sessionCleanup?.deletedCount || 0),
+        modifiedCount: 0,
+        acknowledged: sessionCleanup?.acknowledged !== false,
+        chatCount: 0,
+        paymentHistoryPreserved: true,
+      };
+    }
 
     if (profilePhotoPublicId) {
       try {

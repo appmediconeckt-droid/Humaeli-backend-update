@@ -63,7 +63,7 @@ export async function connectMySQL() {
       return currentPool;
     }
   } catch (error) {
-    console.error("❌ Railway MySQL connection error:", error.message);
+    console.error(error.stack || error);
     throw error;
   }
 }
