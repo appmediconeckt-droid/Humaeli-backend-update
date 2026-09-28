@@ -445,7 +445,7 @@ userSchema.index(
     {
         unique: true,
         name: "phoneNumber_1",
-        partialFilterExpression: { phoneNumber: { $type: "string" } }
+        partialFilterExpression: { phoneNumber: { $type: "string", $regex: /^\+?\d{7,15}$/ } }
     }
 );
 
