@@ -10,6 +10,7 @@ import bcrypt from "bcryptjs";
 import { formatCertifications } from "../utils/certificationFormatter.js";
 import Session from "../models/sessionModel.js";
 import { generateAccessToken, generateRefreshToken } from "../utils/token.js";
+import { clearAuthCookies, setAuthCookies } from "../utils/authCookies.js";
 // import { saveLocalFile, deleteLocalFile } from "../utils/uploadHelper.js";
 import otpService from "../services/otpService.js";
 import { reverseGeocode } from "../services/geocodingService.js";
@@ -2368,7 +2369,7 @@ export const completeRegistration = async (req, res) => {
 /// ================= LOGIN USER (One‑device policy – now only *detect*) =================
 const WEB_SESSION_STALE_MS = Math.max(
   60_000,
-  Number(process.env.WEB_SESSION_STALE_MS) || 120_000,
+  Number(process.env.WEB_SESSION_STALE_MS) || 30 * 24 * 60 * 60 * 1000,
 );
 
 const expireStaleLoginSessions = async (userId) => {
@@ -2483,19 +2484,7 @@ export const loginUser = async (req, res) => {
     // Optional: if client sends GPS on login, store it (and append history event=login)
     await saveLoginLocationIfProvided({ req, userId: user._id });
 
-    // Set cookies (keep your existing options)
-    res.cookie("accessToken", accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 15 * 60 * 1000,
-    });
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    setAuthCookies(res, accessToken, refreshToken);
 
     return res.status(200).json({
       message: "Login successful",
@@ -2735,25 +2724,14 @@ export const googleAuth = async (req, res) => {
       userId: user._id,
       refreshToken,
       isActive: true,
+      lastActivityAt: new Date(),
     });
     await markUserOnline(user);
 
     // Optional: capture login location if GPS sent in body
     await saveLoginLocationIfProvided({ req, userId: user._id });
 
-    // 6. Cookies (same options as /login)
-    res.cookie("accessToken", accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 15 * 60 * 1000,
-    });
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    setAuthCookies(res, accessToken, refreshToken);
 
     return res.status(200).json({
       message: user.profileCompleted
@@ -3152,6 +3130,7 @@ export const verifyLoginOTP = async (req, res) => {
       userId: user._id,
       refreshToken,
       isActive: true,
+      lastActivityAt: new Date(),
     });
     await markUserOnline(user);
 
@@ -3161,19 +3140,7 @@ export const verifyLoginOTP = async (req, res) => {
     // Optional: if client sends GPS on OTP-login, store it (and append history event=login)
     await saveLoginLocationIfProvided({ req, userId: user._id });
 
-    // Set cookies (same options you use elsewhere)
-    res.cookie("accessToken", accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 15 * 60 * 1000,
-    });
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    setAuthCookies(res, accessToken, refreshToken);
 
     // Return the tokens and user info (useful for Postman or SPA)
     return res.status(200).json({
@@ -3229,23 +3196,11 @@ export const refreshAccessToken = async (req, res) => {
 
     // Update session with new refresh token
     session.refreshToken = newRefreshToken;
+    session.lastActivityAt = new Date();
     await session.save();
     await markUserOnline(user);
 
-    // Set cookies (for browser clients)
-    res.cookie("accessToken", newAccessToken, {
-      httpOnly: true,
-      secure: false,
-      sameSite: "lax",
-      path: "/",
-    });
-
-    res.cookie("refreshToken", newRefreshToken, {
-      httpOnly: true,
-      secure: false,
-      sameSite: "lax",
-      path: "/",
-    });
+    setAuthCookies(res, newAccessToken, newRefreshToken);
 
     // Return both tokens for Postman/frontend
     return res.json({
@@ -3356,16 +3311,7 @@ export const logout = async (req, res) => {
 
     await markUserOfflineIfNoActiveSessions(userId);
 
-    // Clear cookies regardless
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/",
-    };
-
-    res.clearCookie("accessToken", cookieOptions);
-    res.clearCookie("refreshToken", cookieOptions);
+    clearAuthCookies(res);
 
     console.log("✅ Cookies cleared successfully");
 
@@ -3378,8 +3324,7 @@ export const logout = async (req, res) => {
 
     // Even on error, try to clear cookies
     try {
-      res.clearCookie("accessToken", { path: "/" });
-      res.clearCookie("refreshToken", { path: "/" });
+      clearAuthCookies(res);
     } catch (cookieError) {
       console.error("Error clearing cookies:", cookieError);
     }
@@ -3411,16 +3356,7 @@ export const logoutAllDevices = async (req, res) => {
     );
     await markUserOfflineIfNoActiveSessions(userId);
 
-    res.clearCookie("accessToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-    });
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-    });
+    clearAuthCookies(res);
 
     return res
       .status(200)

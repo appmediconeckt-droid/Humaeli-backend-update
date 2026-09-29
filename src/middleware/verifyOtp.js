@@ -2,6 +2,7 @@ import OTP from "../models/otpModel.js";
 import User from "../models/userModel.js";
 import Session from "../models/sessionModel.js";
 import { generateAccessToken, generateRefreshToken } from "../utils/token.js";
+import { setAuthCookies } from "../utils/authCookies.js";
 
 export const verifyOtp = async (req, res) => {
   try {
@@ -28,6 +29,7 @@ export const verifyOtp = async (req, res) => {
     const newSession = new Session({
       userId: user._id,
       isActive: true,
+      lastActivityAt: new Date(),
       createdAt: new Date(),
       // Do NOT store accessToken here – only refreshToken will be added
     });
@@ -43,20 +45,7 @@ export const verifyOtp = async (req, res) => {
     // 7. Delete used OTPs
     await OTP.deleteMany({ userId: user._id });
 
-    // 8. Set cookies (works for both development and production)
-    const isProduction = process.env.NODE_ENV === "production";
-    res.cookie("accessToken", accessToken, {
-      httpOnly: true,
-      secure: isProduction,   // false on localhost (HTTP), true on HTTPS
-      sameSite: isProduction ? "none" : "lax",
-      path: "/",
-    });
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "none" : "lax",
-      path: "/",
-    });
+    setAuthCookies(res, accessToken, refreshToken);
 
     // 9. Return success with user data
     return res.status(200).json({

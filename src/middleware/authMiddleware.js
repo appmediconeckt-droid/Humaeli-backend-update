@@ -4,6 +4,7 @@ import User from "../models/userModel.js";
 import { markUserOnlineAndNotify } from "../services/onlinePresenceService.js";
 import Session from "../models/sessionModel.js";
 import { generateAccessToken, generateRefreshToken } from "../utils/token.js";
+import { setAuthCookies } from "../utils/authCookies.js";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helper: attempt silent token refresh and continue the request
@@ -63,17 +64,10 @@ const tryRefreshAndContinue = async (req, res, next, incomingRefreshToken) => {
 
     // 6. Persist new refresh token
     session.refreshToken = newRefreshToken;
+    session.lastActivityAt = new Date();
     await session.save();
 
-    // 7. Set new cookies
-    const cookieBase = {
-      httpOnly: true,
-      secure: false,
-      sameSite: "lax",
-      path: "/",
-    };
-    res.cookie("accessToken", newAccessToken);
-    res.cookie("refreshToken", newRefreshToken);
+    setAuthCookies(res, newAccessToken, newRefreshToken);
     // 8. Expose new access token in header so frontend can store it
     res.setHeader("X-New-Access-Token", newAccessToken);
 

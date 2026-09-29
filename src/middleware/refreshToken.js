@@ -5,6 +5,8 @@
 import jwt from "jsonwebtoken";
 import Session from "../models/sessionModel.js";
 import { generateAccessToken, generateRefreshToken } from "../utils/token.js";
+import User from "../models/userModel.js";
+import { setAuthCookies } from "../utils/authCookies.js";
 
 export const refreshAccessToken = async (req, res) => {
   try {
@@ -34,18 +36,21 @@ export const refreshAccessToken = async (req, res) => {
       return res.status(401).json({ success: false, message: "Token mismatch" });
     }
 
+    const user = await User.findById(decoded.userId);
+    if (!user || !user.isActive) {
+      return res.status(401).json({ success: false, message: "User not found or deactivated" });
+    }
+
     // Issue new tokens
-    const newAccessToken  = generateAccessToken(decoded.userId, session._id);
-    const newRefreshToken = generateRefreshToken(decoded.userId, session._id);
+    const newAccessToken  = generateAccessToken(user._id, session._id, user.role);
+    const newRefreshToken = generateRefreshToken(user._id, session._id, user.role);
 
     // Persist the new refresh token (rotation)
     session.refreshToken = newRefreshToken;
+    session.lastActivityAt = new Date();
     await session.save();
 
-    // Set cookies
-    const cookieBase = { httpOnly: true, secure: false, sameSite: "lax", path: "/" };
-    res.cookie("accessToken",  newAccessToken,  { ...cookieBase, maxAge: 15 * 60 * 1000 });
-    res.cookie("refreshToken", newRefreshToken, { ...cookieBase, maxAge: 7 * 24 * 60 * 60 * 1000 });
+    setAuthCookies(res, newAccessToken, newRefreshToken);
 
     return res.json({
       success: true,

@@ -11,7 +11,7 @@ export const generateRefreshToken = (userId, sessionId, role) => {
   return jwt.sign(
     { userId, sessionId, role },
     process.env.REFRESH_SECRET,
-    // { expiresIn: "7d" }
+    { expiresIn: "30d" },
   );
 };
 
@@ -74,6 +74,7 @@ export const generateAccessRefreshToken = async (user, sessionId) => {
     const refreshToken = jwt.sign(
       { userId: user._id, sessionId, role: user.role },
       process.env.REFRESH_SECRET,
+      { expiresIn: "30d" },
     );
 
     user.refreshToken = refreshToken;
