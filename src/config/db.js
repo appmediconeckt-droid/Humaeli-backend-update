@@ -21,6 +21,20 @@ function generatedLegacyChatId(chat, used) {
   return candidate;
 }
 
+function generatedLegacyMessageId(message, used) {
+  const rawTime = message.createdAt || message.updatedAt;
+  const date = rawTime instanceof Date ? rawTime : new Date(rawTime || Date.now());
+  const timestamp = Number.isFinite(date.getTime()) ? date.getTime() : Date.now();
+  const base = `msg_${timestamp}_${String(message._id).slice(-12) || Math.random().toString(36).slice(2, 11)}`;
+  let candidate = base;
+  let suffix = 1;
+  while (used.has(candidate)) {
+    candidate = `${base}_${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
 async function repairLegacyChatIds() {
   const Chat = modelStorage.models.Chat;
   if (!Chat) return;
@@ -58,6 +72,47 @@ async function repairLegacyChatIds() {
   }).then(({ repaired }) => {
     if (repaired) {
       console.warn(`Repaired ${repaired} legacy chatId value(s) before creating chat indexes.`);
+    }
+  });
+}
+
+async function repairLegacyMessageIds() {
+  const Message = modelStorage.models.Message;
+  if (!Message) return;
+
+  const collection = modelStorage.connection.db.collection(Message.collection.name);
+  await collection.mutate((messages) => {
+    let repaired = 0;
+    const used = new Set();
+    const normalized = messages
+      .map((message) => ({ message }))
+      .sort((left, right) => {
+        const leftTime = left.message.createdAt instanceof Date ? left.message.createdAt.getTime() : Number.MAX_SAFE_INTEGER;
+        const rightTime = right.message.createdAt instanceof Date ? right.message.createdAt.getTime() : Number.MAX_SAFE_INTEGER;
+        if (leftTime !== rightTime) return leftTime - rightTime;
+        return String(left.message._id).localeCompare(String(right.message._id));
+      });
+
+    for (const { message } of normalized) {
+      const value = typeof message.messageId === 'string' ? message.messageId.trim() : '';
+      if (value && !used.has(value)) {
+        if (message.messageId !== value) {
+          message.messageId = value;
+          repaired += 1;
+        }
+        used.add(value);
+        continue;
+      }
+
+      message.messageId = generatedLegacyMessageId(message, used);
+      used.add(message.messageId);
+      repaired += 1;
+    }
+
+    return { repaired };
+  }).then(({ repaired }) => {
+    if (repaired) {
+      console.warn(`Repaired ${repaired} legacy messageId value(s) before creating message indexes.`);
     }
   });
 }
@@ -256,6 +311,7 @@ export default async function connectDB() {
         await model.createCollection();
       }
       await repairLegacyChatIds();
+      await repairLegacyMessageIds();
       if (process.env.MYSQL_REPAIR_DUPLICATE_USER_PHONES === 'true') {
         await repairLegacyUserPhoneNumbers();
       }

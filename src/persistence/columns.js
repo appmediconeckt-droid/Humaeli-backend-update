@@ -112,6 +112,7 @@ function describeInvalidObjectIdValue(value) {
 }
 
 function warnDecodeOnce(label, details) {
+  if (process.env.MYSQL_DECODE_WARNINGS !== 'true') return;
   const key = JSON.stringify([label, details.collection, details.fieldPath, details.column, details.value, details.type]);
   if (warnedDecodeValues.has(key)) return;
   warnedDecodeValues.add(key);
