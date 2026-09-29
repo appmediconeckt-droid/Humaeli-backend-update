@@ -175,7 +175,7 @@ After restarting, you should see:
 ```
 ✅ Sender email configured: info@humaeli.com
 ✅ Server running on port 5001
-✅ MongoDB Connected Successfully
+✅ MySQL connected successfully
 ```
 
 **NOT:**

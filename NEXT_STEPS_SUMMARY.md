@@ -23,7 +23,7 @@
    - **Body:** `{ "message": "I'm feeling anxious", "history": [] }`
    - **Expected Response:** AI response + mood analysis + crisis detection
 
-3. Verify in MongoDB:
+3. Verify in MySQL:
    - Check if chat records are saved with mood and crisis data
 
 ### Step 2: Check Your Frontend

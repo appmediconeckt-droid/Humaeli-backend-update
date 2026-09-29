@@ -1,13 +1,13 @@
 # Combined admin and chatbot backend
 
 Run this project (`update-code(11-09-26)`) with `npm install` and `npm start`.
-Both APIs share its MongoDB connection and HTTP port. The original admin source directory is retained as a reference.
+Both APIs share its MySQL connection and HTTP port. The original admin source directory is retained as a reference.
 
 Admin endpoints use `/api/admin/...`; the chatbot notification and location endpoints retain `/api/notifications` and `/api/location`. Point the admin frontend at this server and retain its `/api/admin` route prefix.
 
 Configure `ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH` (bcrypt), and a separate `ADMIN_JWT_SECRET` in the merged deployment environment. Include the admin frontend origin in `FRONTEND_URL` or `CORS_ORIGINS`. Existing chatbot environment settings remain required. `DOTENV_PATH`, if set, is loaded before the app and used by admin password changes; password changes require a writable environment file. The local ADMIN_EMAIL and ADMIN_PASSWORD_HASH were restored from the original admin src/.env; the merged ADMIN_JWT_SECRET was preserved.
 
-Scheduled notification rules start after MongoDB connects, only when `NOTIFICATION_RULE_SCHEDULER_ENABLED=true`. `NOTIFICATION_RULE_SCHEDULER_DRY_RUN` defaults to `true`; set it to `false` to deliver. Optional interval: `NOTIFICATION_RULE_SCHEDULER_INTERVAL_MS`. The internal rule-list endpoint retains its `ADMIN_INTERNAL_JOB_SECRET` authentication.
+Scheduled notification rules start after MySQL connects, only when `NOTIFICATION_RULE_SCHEDULER_ENABLED=true`. `NOTIFICATION_RULE_SCHEDULER_DRY_RUN` defaults to `true`; set it to `false` to deliver. Optional interval: `NOTIFICATION_RULE_SCHEDULER_INTERVAL_MS`. The internal rule-list endpoint retains its `ADMIN_INTERNAL_JOB_SECRET` authentication.
 
 Promotions and refund status notifications use the shared local notification service, so `MAIN_BACKEND_URL` and `MAIN_BACKEND_INTERNAL_API_TOKEN` are no longer needed by these flows. Notification delivery saves the in-app notification; push delivery depends on the existing Firebase configuration and recipient token and is best effort. Inactivity matching uses the chatbot's `lastSeen` field.
 

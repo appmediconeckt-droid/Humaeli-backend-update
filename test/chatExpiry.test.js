@@ -6,13 +6,8 @@
 // without touching real user/chat data.
 
 import { expect } from "chai";
-import mongoose from "mongoose";
+import mongoose from "../src/persistence/mongoose.js";
 import dotenv from "dotenv";
-import dns from "dns";
-
-// Force Google DNS for SRV lookups — the default Windows resolver
-// intermittently refuses _mongodb._tcp SRV queries on this machine.
-dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 dotenv.config();
 

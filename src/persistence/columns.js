@@ -1,11 +1,9 @@
 import { createHash } from 'node:crypto';
-import { createRequire } from 'node:module';
+import { BSON, ObjectId } from 'bson';
 
-const require = createRequire(import.meta.url);
-const { BSON, ObjectId } = require('mongoose').mongo;
 const json = value => BSON.EJSON.stringify(value, { relaxed: true });
 const parse = value => BSON.EJSON.parse(typeof value === 'string' ? value : JSON.stringify(value), { relaxed: true });
-const mongoObjectIdPattern = /^[a-fA-F0-9]{24}$/;
+const objectIdHexPattern = /^[a-fA-F0-9]{24}$/;
 const warnedDecodeValues = new Set();
 
 export function quote(name) {
@@ -45,7 +43,7 @@ profilePhotoPublicId chatPermission isActive isVerified isOnline lastSeen
 walletBalance devicePlatform instantPayoutCount payoutAccount locationConsent
 locationData certifications createdAt updatedAt __v googleId
 activeWalletRefundRequest prescriptionSeal prescriptionSignature
-lastActiveAt fcmToken
+lastActiveAt fcmToken profileQrUrl doctorQrCode
 `.trim().split(/\s+/);
 
 export function collectionSchema(models, name) {
@@ -122,9 +120,9 @@ function warnDecodeOnce(label, details) {
 
 function decodeObjectIdValue(value, field, context = {}) {
   if (value?._bsontype === 'ObjectId') return value;
-  if (typeof value === 'string' && ObjectId.isValid(value) && mongoObjectIdPattern.test(value)) return new ObjectId(value);
+  if (typeof value === 'string' && ObjectId.isValid(value) && objectIdHexPattern.test(value)) return new ObjectId(value);
   warnDecodeOnce(
-    '[mysql:ObjectId] Preserving non-Mongo ObjectId value as string during row decode',
+    '[mysql:ObjectId] Preserving invalid ObjectId value as string during row decode',
     {
       collection: context.collection,
       fieldPath: field.path,
@@ -271,7 +269,7 @@ export function sqlPrefilter(filter, fields) {
       if (operator === '$in' && Array.isArray(operand) && operand.length && operand.every(safe)) {
         parts.push(`${quote(field.column)} IN (${operand.map(() => '?').join(',')})`); parameters.push(...operand.map(value));
       } else if (['$eq', '$gt', '$gte', '$lt', '$lte'].includes(operator) && safe(operand)) {
-        // Ordered string comparisons depend on Mongo's binary/type ordering;
+        // Ordered string comparisons depend on ObjectId binary/type ordering;
         // leave those to the compatibility evaluator.
         if (operator !== '$eq' && !['number', 'date'].includes(field.kind)) continue;
         const sqlOperator = { $eq: '=', $gt: '>', $gte: '>=', $lt: '<', $lte: '<=' }[operator];

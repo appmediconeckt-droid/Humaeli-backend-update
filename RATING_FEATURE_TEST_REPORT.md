@@ -151,7 +151,7 @@ curl -X GET http://localhost:5001/api/ratings/check-eligibility \
 #### Test 2: Simulate 20 Messages, Then Check Eligibility
 ```bash
 # 1. Create a chat with a counselor
-# 2. Send 20+ messages (or insert directly to MongoDB)
+# 2. Send 20+ messages (or insert directly to MySQL)
 # 3. Call check-eligibility:
 
 curl -X GET http://localhost:5001/api/ratings/check-eligibility \
@@ -382,7 +382,7 @@ If something doesn't work:
 
 ### Backend Issues
 ```
-[ ] Check MongoDB connection: logs show "MongoDB Connected"
+[ ] Check MySQL connection: logs show "MySQL connected"
 [ ] Verify token is valid: 401 errors mean bad/missing token
 [ ] Check user is role="user": counsellors can't rate
 [ ] Verify eligibility calculated: run refreshUserRatingEligibility()

@@ -1,35 +1,9 @@
-// index.js or server.js
-// import server from "./src/app.js";
-// // import dotenv from "dotenv";
-
-
-// // Add this to your app.js or server.js temporarily
-// console.log('JWT_SECRET loaded:', process.env.JWT_SECRET ? 'YES (length: ' + process.env.JWT_SECRET.length + ')' : 'NO');
-// console.log('JWT_SECRET value:', process.env.JWT_SECRET);
-// dotenv.config();
-
-// const PORT = process.env.PORT || 5000;
-
-// mongoose.connect(process.env.MONGO_URI)
-//   .then(() => {
-//     console.log("MySQL Connected");
-    
-//     server.listen(PORT, () => {
-//       console.log(`Server running on port ${PORT}`);
-//     });
-//   })
-//   .catch(err => {
-//     console.error("MySQL connection error:", err);
-//     process.exit(1);
-//   });
-
-// index.js or server.js
 import dotenv from "dotenv";
 import connectDB from "./src/config/db.js";
 import { databaseFailureDetails } from "./src/config/databaseStartup.js";
 
 // IMPORTANT: Load environment variables FIRST
-// Prefer an explicit .env path in src/ when running via nodemon from project root.
+// Prefer an explicit .env path when one is provided by the runtime.
 dotenv.config();
 if (process.env.DOTENV_PATH) {
   dotenv.config({ path: process.env.DOTENV_PATH, override: true });

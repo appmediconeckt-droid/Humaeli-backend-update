@@ -34,7 +34,7 @@ const buildChatNotificationData = ({
   return {
     type: "CHAT_MESSAGE",
     chatId: chat._id,
-    mongoChatId: chat._id,
+    storageChatId: chat._id,
     publicChatId: chat.chatId,
     userId: chat.userId?._id || chat.userId,
     counselorId: chat.counselorId?._id || chat.counselorId,

@@ -18,7 +18,7 @@ Optional fields absent from the supplied document follow at the end. Other table
 follow model declaration order. Run `npm run db:order-columns` to apply this order
 on another installation; schema verification checks order as well as names.
 
-`users` has exactly 70 columns, including `id` (the SQL name for MongoDB `_id`),
+`users` has exactly 70 columns, including `id` (the SQL name for the legacy `_id`),
 `createdAt`, `updatedAt` and `__v`. `fullName`, `email`, `phoneNumber`,
 `walletBalance`, etc. are ordinary columns. Nested objects such as `address`,
 `profilePhoto`, `payoutAccount` and `locationData` each have one JSON column, just
@@ -74,7 +74,7 @@ internal records should not be deleted when browsing or editing the database.
 
 On 2026-09-11, **2,376 current MySQL records** were converted and verified using
 full-content SHA-256 comparisons. All 30 populated/model/legacy business tables
-now use top-level columns. Changes made locally after the original MongoDB import
+now use top-level columns. Changes made locally after the original legacy import
 were preserved.
 
 The previous tables remain in this backup database:
@@ -89,7 +89,7 @@ The verified manifest, old/new column mappings and BSON-preserving data backups:
 .migration-backups/columns-20260911120758200/
 ```
 
-Earlier conversion and MongoDB import backups are also retained. Backup files
+Earlier conversion and legacy import backups are also retained. Backup files
 contain private data and are excluded from Git. Empty unused `feedbacks`, `reviews`
 and `withdrawalrequests` were archived during the earlier conversion; the active
 Review model uses `ratings`.
@@ -111,26 +111,28 @@ tables remain in a separate backup database. A successful rerun is a no-op. If
 conversion fails, retain its backups, manifest and temporary tables for recovery;
 do not discard them or run the old backend against a partially changed schema.
 
-## MongoDB source
+## Legacy source
 
-The original MongoDB source was not modified. Its earlier import was a
+The original document-store source was not modified. Its earlier import was a
 point-in-time copy; this column conversion preserves current MySQL data and does
-not synchronize a still-running remote MongoDB backend. Pause source writes and
+not synchronize a still-running remote legacy backend. Pause source writes and
 reconcile before a remote production cutover. Do not overwrite newer MySQL data
-with an old MongoDB snapshot.
+with an old legacy snapshot.
 
-The explicit import command still supports safe, conflict-detecting resumes:
+If you keep a private legacy import command, it should support safe,
+conflict-detecting resumes:
 
 ```powershell
 npm run db:migrate -- --dry-run
 npm run db:migrate
-npm run db:migrate -- --resume-from .migration-backups/<prior-mongo-snapshot>
+npm run db:migrate -- --resume-from .migration-backups/<prior-legacy-snapshot>
 ```
 
-Set `MONGO_MIGRATION_URI` or retain `MONGO_URI` only for this command. It requires
-a source supporting snapshot sessions. `MONGO_DNS_SERVERS=8.8.8.8,1.1.1.1` can be
-used if local SRV DNS resolution needs an override. Unknown empty legacy
-collections are skipped rather than recreating schema-less tables.
+Keep any legacy source connection variables isolated from runtime `.env` files.
+Runtime application startup uses `MYSQL_URL` or the `MYSQL_HOST`,
+`MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, and `MYSQL_DATABASE` variables.
+Unknown empty legacy collections are skipped rather than recreating schema-less
+tables.
 
 ## Tests
 

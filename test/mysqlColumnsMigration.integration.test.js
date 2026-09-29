@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { BSON } from 'bson';
 import mysql from 'mysql2/promise';
 import mongoose from '../src/persistence/mongoose.js';
 import { mysqlConfig } from '../src/persistence/mysqlDriver.js';
@@ -28,7 +29,7 @@ suite('Migration from document storage to SQL columns', function () {
       { _id: new mongoose.Types.ObjectId(), email: 'migration@example.test', fullName: 'Column migration', walletBalance: 23.45, isActive: true, createdAt: new Date('2024-04-03T01:02:03.456Z'), address: { city: 'Delhi', country: '' }, emailOTP: null, profilePhoto: {}, languages: ['Hindi', 'English'], profileCompleted: false },
       { _id: new mongoose.Types.ObjectId(), email: 'minimal@example.test', fullName: 'Minimal', walletBalance: 0, address: null, legacyOnlyField: { archived: true } },
     ];
-    for (const doc of documents) await client.execute('INSERT INTO users VALUES (?, ?)', [String(doc._id), mongoose.mongo.BSON.EJSON.stringify(doc, { relaxed: false })]);
+    for (const doc of documents) await client.execute('INSERT INTO users VALUES (?, ?)', [String(doc._id), BSON.EJSON.stringify(doc, { relaxed: false })]);
     await client.end();
     const priorDatabase = process.env.MYSQL_DATABASE;
     const run = async () => {

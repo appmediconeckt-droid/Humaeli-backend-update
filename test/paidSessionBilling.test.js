@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import sinon from "sinon";
-import mongoose from "mongoose";
+import mongoose from "../src/persistence/mongoose.js";
 import ChatSession from "../src/models/ChatSession.js";
 import User from "../src/models/userModel.js";
 import {

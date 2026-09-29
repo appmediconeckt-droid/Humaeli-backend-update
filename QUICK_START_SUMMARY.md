@@ -74,7 +74,7 @@ Your Humaeli platform now has a **world-class AI-powered mental health chatbot**
 
 ## 🔧 Quick Integration Steps
 
-### 1. **Update Chat Model** (MongoDB)
+### 1. **Update Chat Model** (MySQL)
 Add these fields to your Chat schema:
 ```javascript
 language: String,
@@ -223,7 +223,7 @@ Automatically provided in crises:
 
 - **AI Model:** OpenAI GPT-4o (most advanced)
 - **Language:** JavaScript/Node.js
-- **Database:** MongoDB (existing)
+- **Database:** MySQL (existing)
 - **Authentication:** JWT (existing)
 - **Services:** New services folder
 - **Performance:** <2sec response time, <100ms crisis detection

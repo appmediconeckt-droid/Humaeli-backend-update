@@ -1,6 +1,6 @@
 import connectDB from "../src/config/db.js";
 // One-shot script to:
-// 1. Reactivate a known session in MongoDB (so the existing JWT works again)
+// 1. Reactivate a known session in MySQL (so the existing JWT works again)
 // 2. Hit all 4 location endpoints and print results
 //
 // Run with:  node --env-file=.env scripts/test-location-api.js
@@ -40,7 +40,7 @@ const call = async (method, path, body) => {
 };
 
 async function main() {
-  // 1. Connect to Mongo & reactivate the session
+  // 1. Connect to MySQL & reactivate the session
   await connectDB();
 
   const result = await mongoose.connection.db.collection("sessions").updateOne(

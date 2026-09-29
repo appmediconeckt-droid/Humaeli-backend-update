@@ -234,7 +234,7 @@ System Response:
         ┌─────────────────────────┐
         │  Data Layer             │
         ├─────────────────────────┤
-        │ • MongoDB               │
+        │ • MySQL               │
         │ • Chat History          │
         │ • User Profiles         │
         │ • Counselor Database    │

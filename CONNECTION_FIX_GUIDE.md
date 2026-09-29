@@ -25,7 +25,7 @@ cat .env
 **Expected output:**
 ```
 PORT=5001
-MONGO_URI=mongodb://localhost:27017/chatbot
+MYSQL_URL=mysql://root:password@localhost:3306/humaeli
 JWT_SECRET=your-secret-key-change-this-in-production
 NODE_ENV=development
 ```
@@ -35,32 +35,32 @@ If `.env` doesn't exist, create it:
 ```bash
 cat > .env << 'EOF'
 PORT=5001
-MONGO_URI=mongodb://localhost:27017/chatbot
+MYSQL_URL=mysql://root:password@localhost:3306/humaeli
 JWT_SECRET=your-secret-key-change-this-in-production
 NODE_ENV=development
 EOF
 ```
 
-### Step 2: Verify MongoDB is Running
+### Step 2: Verify MySQL is Running
 
-**Windows - Check MongoDB Service:**
+**Windows - Check MySQL Service:**
 ```bash
-Get-Service MongoDB
+Get-Service MySQL80
 # Should show: Status: Running
 ```
 
 **If not running:**
 ```bash
-# Start MongoDB
-net start MongoDB
+# Start MySQL
+net start MySQL80
 
-# Or if using mongod directly
-mongod --dbpath "C:\Program Files\MongoDB\Server\5.0\data"
+# Or connect directly with the MySQL client
+mysql -u root -p
 ```
 
 **Quick Test:**
 ```bash
-mongo
+mysql -u root -p -e "SELECT 1;"
 # Should connect successfully
 ```
 
@@ -130,7 +130,7 @@ taskkill /PID <process-id> /F
 # PORT=5002
 ```
 
-### Issue: "MONGO_URI is not defined"
+### Issue: "MYSQL_URL is not defined"
 
 **Cause**: .env file missing or not loaded
 
@@ -142,24 +142,24 @@ ls -la .env
 
 # Ensure it has:
 # PORT=5001
-# MONGO_URI=mongodb://localhost:27017/chatbot
+# MYSQL_URL=mysql://root:password@localhost:3306/humaeli
 # JWT_SECRET=...
 ```
 
-### Issue: "Cannot connect to MongoDB"
+### Issue: "Cannot connect to MySQL"
 
-**Cause**: MongoDB not running
+**Cause**: MySQL not running
 
 **Fix:**
 ```bash
 # Check if running
-mongod --version
+mysql --version
 
-# Start MongoDB service
-net start MongoDB
+# Start MySQL service
+net start MySQL80
 
-# Or run mongod directly
-mongod --dbpath "C:\data\db"
+# Or connect directly
+mysql -u root -p
 ```
 
 ### Issue: Frontend still shows "Network Error"
@@ -183,9 +183,9 @@ export const API_BASE_URL = API_ENDPOINTS.LOCAL_5001;
 Run these checks in order:
 
 ```bash
-# 1. MongoDB running?
-mongo
-# Should connect and show prompt >
+# 1. MySQL running?
+mysql -u root -p -e "SELECT 1;"
+# Should return 1
 
 # 2. Backend starting?
 cd c:/chatbot-backend
@@ -219,7 +219,7 @@ export const API_BASE_URL = API_ENDPOINTS.LOCAL_5001;
 **Backend** (c:/chatbot-backend/.env):
 ```
 PORT=5001
-MONGO_URI=mongodb://localhost:27017/chatbot
+MYSQL_URL=mysql://root:password@localhost:3306/humaeli
 JWT_SECRET=your-secret-key
 NODE_ENV=development
 ```
@@ -234,8 +234,8 @@ NODE_ENV=development
 ## 🚀 QUICK FIX (All at Once)
 
 ```bash
-# Terminal 1: Start MongoDB
-mongod
+# Terminal 1: Start MySQL or verify it is reachable
+mysql -u root -p -e "SELECT 1;"
 
 # Terminal 2: Start Backend
 cd c:/chatbot-backend
@@ -266,7 +266,7 @@ Check the console logs:
 **Backend Console:**
 ```
 ✅ Server running on port 5001          ← Should see this
-MongoDB Connected                       ← Should see this
+MySQL connected                       ← Should see this
 ```
 
 **Frontend Console (DevTools):**
@@ -278,7 +278,7 @@ Network Error                           ← SHOULD NOT see this
 If you see "Network Error", check:
 1. Is backend running? (`ps` or task manager)
 2. Is it on port 5001? (`netstat -ano | findstr :5001`)
-3. Is MongoDB connected? (Check backend logs)
+3. Is MySQL connected? (Check backend logs)
 4. Is frontend pointing to correct URL? (Check axiosConfig.js)
 
 ---
@@ -289,13 +289,13 @@ If you see "Network Error", check:
 # Step 1: Create .env
 cat > c:/chatbot-backend/.env << 'EOF'
 PORT=5001
-MONGO_URI=mongodb://localhost:27017/chatbot
+MYSQL_URL=mysql://root:password@localhost:3306/humaeli
 JWT_SECRET=your-secret-key-change-this-in-production
 NODE_ENV=development
 EOF
 
-# Step 2: Start MongoDB
-# (Make sure MongoDB service is running)
+# Step 2: Start MySQL
+# (Make sure MySQL service is running)
 
 # Step 3: Start Backend
 cd c:/chatbot-backend

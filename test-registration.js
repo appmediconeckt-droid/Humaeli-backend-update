@@ -1,7 +1,7 @@
 // test-registration.js
 // Run with: node test-registration.js
 
-import mongoose from 'mongoose';
+import mongoose from './src/persistence/mongoose.js';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 
@@ -10,6 +10,7 @@ dotenv.config();
 // Import your models and services
 import User from './src/models/userModel.js';
 import Session from './src/models/sessionModel.js';
+import connectDB from './src/config/db.js';
 import { generateAccessToken, generateRefreshToken } from './src/utils/token.js';
 
 // Mock the OTP service and stores
@@ -352,10 +353,10 @@ async function testPreSaveMiddleware() {
 // Main test function
 async function runTests() {
     try {
-        // Connect to MongoDB
-        console.log('🔌 Connecting to MongoDB...');
-        await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/mindcrawler_test');
-        console.log('✅ Connected to MongoDB\n');
+        // Connect to MySQL through the application database layer.
+        console.log('🔌 Connecting to MySQL...');
+        await connectDB();
+        console.log('✅ Connected to MySQL\n');
         
         // Run tests
         const step1 = await testSendEmailOTP();
@@ -410,7 +411,7 @@ async function runTests() {
     } finally {
         // Close database connection
         await mongoose.disconnect();
-        console.log('\n🔌 Disconnected from MongoDB');
+        console.log('\n🔌 Disconnected from MySQL');
         process.exit(0);
     }
 }

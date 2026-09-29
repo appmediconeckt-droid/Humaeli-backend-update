@@ -93,6 +93,8 @@ const userSchema = new mongoose.Schema({
         type: String,
         enum: ["doctor", "consultant"],
     },
+    // Legacy QR field retained so older MySQL column mappings keep starting.
+    profileQrUrl: { type: String, default: null },
     doctorQrCode: { type: String },
     profileQrUrl: { type: String },
     doctorQrType: { type: String, enum: ['DOCTOR_PROFILE'] },

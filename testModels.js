@@ -13,7 +13,7 @@ const testConversationSystem = async () => {
   
   try {
     await connectDB();
-    console.log('✅ Connected to MongoDB\n');
+    console.log('✅ Connected to MySQL\n');
 
     // Clean up previous test data
     console.log('🧹 Cleaning up previous test data...');
@@ -225,7 +225,7 @@ const testConversationSystem = async () => {
     console.log('\n🔍 Debugging Information:');
     console.log('1. Check Message.js model validation');
     console.log('2. Verify all required fields are provided');
-    console.log('3. Check MongoDB connection');
+    console.log('3. Check MySQL connection');
     console.log('4. Ensure models are properly exported');
     
     process.exit(1);

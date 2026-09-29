@@ -15,7 +15,7 @@ All three operations support both URLs (same subscription data):
 
 The mobile app in the reported 404 screenshot uses the second URL. The backend now accepts that path directly; no frontend URL change is required. Restart/deploy the updated backend behind the app's configured origin to activate the alias.
 
-`counselorId` is the counselor's MongoDB `_id` (24 hex characters), not a chat ID, user ID, display name, or the text `undefined`.
+`counselorId` is the counselor's 24-character database ID, not a chat ID, user ID, display name, or the text `undefined`.
 
 | Method | Operation | Successful response |
 | --- | --- | --- |

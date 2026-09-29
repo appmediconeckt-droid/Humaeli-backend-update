@@ -530,7 +530,7 @@ export const getCounselorWalletData = async (req, res) => {
         if ((from && !datePattern.test(from)) || (to && !datePattern.test(to))) {
             return res.status(400).json({ message: 'Dates must use YYYY-MM-DD format' });
         }
-        // Dashboard dates are India calendar dates; MongoDB timestamps remain UTC.
+        // Dashboard dates are India calendar dates; stored timestamps remain UTC.
         const fromDate = from ? new Date(`${from}T00:00:00.000+05:30`) : null;
         const toDate = to ? new Date(`${to}T23:59:59.999+05:30`) : null;
         if ((fromDate && Number.isNaN(fromDate.getTime())) || (toDate && Number.isNaN(toDate.getTime()))) {

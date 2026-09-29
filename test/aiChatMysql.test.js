@@ -18,7 +18,7 @@ describe("AI chat MySQL persistence", () => {
   });
   afterEach(() => sandbox.restore());
 
-  it("returns empty history without a MongoDB connection", async () => {
+  it("returns empty history without a MySQL connection", async () => {
     query.resolves([[]]);
     const res = response();
     await getMyChatHistory({ user: { id: "patient-123456" } }, res);

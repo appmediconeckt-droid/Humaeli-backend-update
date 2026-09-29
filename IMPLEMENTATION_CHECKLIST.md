@@ -206,7 +206,7 @@
    ACTIVE_AI_PROVIDER=openai
    ```
 
-3. **Update MongoDB Chat Schema** to include new fields
+3. **Update MySQL chat schema** to include new fields
 
 4. **Test Crisis Detection**
    ```bash

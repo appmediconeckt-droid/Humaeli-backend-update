@@ -2,6 +2,9 @@ import mysql from "mysql2/promise";
 import dotenv from "dotenv";
 import { mysqlConfig } from '../persistence/mysqlDriver.js';
 dotenv.config();
+if (process.env.DOTENV_PATH) {
+  dotenv.config({ path: process.env.DOTENV_PATH, override: true });
+}
 
 let pool = null;
 let keepAliveTimer = null;

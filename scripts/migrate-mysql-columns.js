@@ -4,12 +4,13 @@ import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { BSON } from 'bson';
 import mongoose from '../src/persistence/mongoose.js';
 import { loadModels } from '../src/persistence/models.js';
 import { mysqlConfig } from '../src/persistence/mysqlDriver.js';
 import { buildColumns, quote, tableDDL, fromRow, writeRow, addSqlIndex, collectionSchema, initializeRowState, readRows } from '../src/persistence/columns.js';
 
-const EJSON = mongoose.mongo.BSON.EJSON;
+const EJSON = BSON.EJSON;
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));

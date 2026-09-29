@@ -7,14 +7,12 @@
 // session creation, controller behavior) runs for real against the .env DB.
 
 import { expect } from "chai";
-import mongoose from "mongoose";
+import mongoose from "../src/persistence/mongoose.js";
 import sinon from "sinon";
 import dotenv from "dotenv";
-import dns from "dns";
 import { OAuth2Client } from "google-auth-library";
 import otpService from "../src/services/otpService.js";
 
-dns.setServers(["8.8.8.8", "1.1.1.1"]);
 dotenv.config();
 
 import connectDB from "../src/config/db.js";

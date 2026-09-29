@@ -60,7 +60,7 @@ Follow the test cases in **RATING_FEATURE_TEST_REPORT.md**
 ### Before Testing
 - [ ] Backend running on port 5001
 - [ ] Frontend running
-- [ ] MongoDB connected
+- [ ] MySQL connected
 - [ ] Token in localStorage/AsyncStorage
 - [ ] Browser DevTools console open for logs
 
@@ -148,7 +148,7 @@ Result:
 ### Backend (chatbot-backend/server.js)
 ```javascript
 PORT = 5001 (or process.env.PORT)
-MONGO_URI = from .env file
+MYSQL_URL = from .env file
 ```
 
 ### Frontend (chatbot-app/src/axiosConfig.js)
@@ -266,12 +266,12 @@ curl -X GET http://localhost:5001/api/ratings/check-eligibility \
   -H "Content-Type: application/json"
 ```
 
-### MongoDB Check
+### MySQL Check
 ```bash
-# Connect to MongoDB and verify collections
-mongo
-> db.ratingstatuses.findOne()
-> db.ratings.findOne()
+# Connect to MySQL and verify collections
+mysql -u root -p humaeli
+SELECT * FROM ratingstatuses LIMIT 1;
+SELECT * FROM ratings LIMIT 1;
 ```
 
 ---

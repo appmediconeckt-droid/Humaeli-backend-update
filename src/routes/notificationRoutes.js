@@ -29,7 +29,7 @@ const validateCounselorId = (req, res, next) => {
     return res.status(400).json({
       success: false,
       code: 'INVALID_COUNSELOR_ID',
-      message: 'counselorId must be the counselor MongoDB _id',
+      message: 'counselorId must be a valid counselor id',
     });
   }
   return next();
@@ -53,7 +53,7 @@ router.route([
 router.post("/test", authMiddleware, testNotification);
 
 // Legacy notification API compatibility. These handlers use the current
-// Mongo-backed Notification model and authenticate ownership from req.user.
+// MySQL-backed Notification model and authenticate ownership from req.user.
 router.post(["/", "/notifications"], authMiddleware, createNotification);
 router.put(["/mark-all-read", "/notifications/mark-all-read"], authMiddleware, markAllAsRead);
 router.put(["/:id/read", "/notifications/:id/read"], authMiddleware, markAsRead);

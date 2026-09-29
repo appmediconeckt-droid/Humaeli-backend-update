@@ -53,7 +53,7 @@ export async function getTableColumns(tableName) {
 }
 
 /**
- * Builds a WHERE clause from a MongoDB-style filter object.
+ * Builds a WHERE clause from a document-style filter object.
  */
 function buildWhereClause(filter = {}, tableName = "") {
   if (!filter || Object.keys(filter).length === 0) {

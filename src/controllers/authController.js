@@ -1373,7 +1373,7 @@ export const updateUserById = async (req, res) => {
     console.error("Update user error:", error);
 
     // A concurrent update can still win between the duplicate check above
-    // and MongoDB's write. Convert that unique-index error into the same
+    // and MySQL's write. Convert that unique-index error into the same
     // user-facing validation response instead of exposing raw E11000 data.
     if (error?.code === 11000 && error?.keyPattern?.phoneNumber) {
       return res.status(409).json({
@@ -2183,7 +2183,7 @@ export const completeRegistration = async (req, res) => {
       isActive: true,
       // The 2dsphere index requires a complete GeoJSON Point. Without this,
       // the schema default creates { type: "Point" } without coordinates and
-      // MongoDB rejects the insert during registration.
+      // MySQL rejects the insert during registration.
       locationData: {
         current: { type: "Point", coordinates: [0, 0] },
         history: [],

@@ -1,12 +1,12 @@
 import { createRequire } from 'node:module';
+import { BSON, ObjectId } from 'bson';
 import mysql from 'mysql2/promise';
 import { Query, aggregate, updateMany } from 'mingo';
 import { buildColumns, tableDDL, fromRow, writeRow, addSqlIndex, sqlType, quote, collectionSchema, sqlPrefilter, initializeRowState, readRows } from './columns.js';
 
 const require = createRequire(import.meta.url);
 const BaseConnection = require('mongoose/lib/connection');
-const Collection = require('mongoose/lib/drivers/node-mongodb-native/collection');
-const { BSON, ObjectId } = require('mongoose').mongo;
+const MongooseCollection = require('mongoose/lib/collection');
 function plain(value) {
   if (value?.$__ && typeof value.toObject === 'function') return plain(value.toObject({ transform: false, depopulate: true }));
   if (Array.isArray(value)) return Array.from(value, plain);
@@ -115,6 +115,20 @@ function canRefreshIndexDefinition(existing, definition) {
   const withoutPartial = ({ partialFilterExpression, ...rest }) => rest;
   return encode(withoutPartial(existing)) === encode(withoutPartial(definition));
 }
+
+function mergeColumnDefinitions(current, required) {
+  const merged = [...current.map(field => ({ ...field }))];
+  const byPath = new Map(merged.map(field => [field.path, field]));
+  for (const field of required) {
+    if (byPath.has(field.path)) {
+      Object.assign(byPath.get(field.path), field);
+    } else {
+      merged.push(field);
+    }
+  }
+  return merged;
+}
+
 function checkUnique(documents, indexes) {
   for (const index of indexes.filter(index => index.unique)) {
     const seen = new Set();
@@ -131,7 +145,7 @@ function checkUnique(documents, indexes) {
       // IMPORTANT:
       // MySQL UNIQUE columns allow multiple NULL values.
       //
-      // Our Mongo-compatible layer must therefore ignore documents
+      // Our document-compatible layer must therefore ignore documents
       // where an indexed value is missing/null when the index is
       // sparse or partial.
       // ---------------------------------------------------------
@@ -147,7 +161,7 @@ function checkUnique(documents, indexes) {
         }
       }
 
-      // Apply Mongo partial index condition.
+      // Apply partial index condition.
       if (partial && !partial.test(doc)) {
         continue;
       }
@@ -332,6 +346,8 @@ class SQLCollection {
     }
     return { acknowledged: true, insertedCount: documents.length, insertedIds };
   }
+  async insert(documents, options = {}) { return Array.isArray(documents) ? this.insertMany(documents, options) : this.insertOne(documents, options); }
+  async save(document) { return this.replaceOne({ _id: document._id }, document, { upsert: true }); }
   async modify(filter, update, options = {}, many = false, replacement = false) {
     return this.mutate(docs => {
       let matched = new Query(filter, { ...queryOptions, collation: options.collation }).find(docs);
@@ -383,6 +399,7 @@ class SQLCollection {
   async replaceOne(filter, replacement, options) { return this.modify(filter, replacement, options, false, true); }
   async findOneAndUpdate(filter, update, options = {}) { const result = await this.modify(filter, update, options); return options.includeResultMetadata ? result : result.value; }
   async findOneAndReplace(filter, replacement, options = {}) { const result = await this.modify(filter, replacement, options, false, true); return options.includeResultMetadata ? result : result.value; }
+  async findAndModify(filter, sort, update, options = {}) { return this.findOneAndUpdate(filter, update, { ...options, sort }); }
   async remove(filter, options = {}, many = false) {
     return this.mutate(docs => {
       let matches = new Query(filter, queryOptions).find(docs);
@@ -418,8 +435,11 @@ class SQLCollection {
     } catch (error) { await client.rollback(); throw error; }
     finally { client.release(); }
   }
+  async ensureIndex(key, options = {}) { return this.createIndex(key, options); }
   async createIndexes(indexes) { const names = []; for (const { key, ...options } of indexes) names.push(await this.createIndex(key, options)); return names; }
   async dropIndex(name) { await this.db.pool.execute('DELETE FROM `_humaeli_indexes` WHERE collection_name = ? AND index_name = ?', [this.name, name]); }
+  async getIndexes() { return this.indexes(); }
+  watch() { throw new Error('Change streams are not supported by MySQL storage'); }
   async bulkWrite(operations, options = {}) {
     const result = { acknowledged: true, insertedCount: 0, matchedCount: 0, modifiedCount: 0, deletedCount: 0, upsertedCount: 0, insertedIds: {}, upsertedIds: {} };
     const errors = [];
@@ -437,6 +457,116 @@ class SQLCollection {
     }
     if (errors.length) throw Object.assign(new Error('Bulk write failed'), { writeErrors: errors, result, code: errors[0].code });
     return result;
+  }
+}
+
+class MySQLMongooseCollection extends MongooseCollection {
+  constructor(name, conn, options = {}) {
+    super(name, conn, options);
+    this.collection = this.collection || null;
+  }
+
+  onOpen() {
+    this.collection = this.conn.db.collection(this.name);
+    super.onOpen();
+    return this.collection;
+  }
+
+  _getCollection() {
+    if (this.collection) return this.collection;
+    if (this.conn.db) {
+      this.collection = this.conn.db.collection(this.name);
+      return this.collection;
+    }
+    return null;
+  }
+
+  createIndex(...args) {
+    return this._getCollection().createIndex(...args);
+  }
+
+  ensureIndex(...args) {
+    return this._getCollection().ensureIndex(...args);
+  }
+
+  createIndexes(...args) {
+    return this._getCollection().createIndexes(...args);
+  }
+
+  dropIndex(...args) {
+    return this._getCollection().dropIndex(...args);
+  }
+
+  indexes(...args) {
+    return this._getCollection().indexes(...args);
+  }
+
+  listIndexes(...args) {
+    return this._getCollection().listIndexes(...args);
+  }
+
+  getIndexes(...args) {
+    return this._getCollection().getIndexes(...args);
+  }
+
+  find(...args) {
+    return this._getCollection().find(...args);
+  }
+
+  findOne(...args) {
+    return this._getCollection().findOne(...args);
+  }
+
+  findAndModify(...args) {
+    return this._getCollection().findAndModify(...args);
+  }
+
+  findOneAndUpdate(...args) {
+    return this._getCollection().findOneAndUpdate(...args);
+  }
+
+  findOneAndDelete(...args) {
+    return this._getCollection().findOneAndDelete(...args);
+  }
+
+  findOneAndReplace(...args) {
+    return this._getCollection().findOneAndReplace(...args);
+  }
+
+  insert(...args) {
+    return this._getCollection().insert(...args);
+  }
+
+  insertOne(...args) {
+    return this._getCollection().insertOne(...args);
+  }
+
+  insertMany(...args) {
+    return this._getCollection().insertMany(...args);
+  }
+
+  save(...args) {
+    return this._getCollection().save(...args);
+  }
+
+  updateOne(...args) {
+    return this._getCollection().updateOne(...args);
+  }
+
+  updateMany(...args) {
+    return this._getCollection().updateMany(...args);
+  }
+
+  deleteOne(...args) {
+    return this._getCollection().deleteOne(...args);
+  }
+
+  deleteMany(...args) {
+    return this._getCollection().deleteMany(...args);
+  }
+
+  watch(...args) {
+    return this._getCollection().watch(...args);
   }
 }
 
@@ -470,9 +600,10 @@ class SQLDatabase {
     const required = buildColumns(this.schema(name), documents, current);
     for (const field of current) {
       const next = required.find(item => item.path === field.path);
-      if (!next || next.kind !== field.kind) throw new Error(`Column type change required for ${name}.${field.path}; use an explicit migration`);
+      if (next && next.kind !== field.kind) throw new Error(`Column type change required for ${name}.${field.path}; use an explicit migration`);
     }
-    if (required.length === current.length) return;
+    const desired = mergeColumnDefinitions(current, required);
+    if (desired.length === current.length) return;
     // DDL is performed before write transactions, and serialized across workers.
     const client = await this.pool.getConnection();
     const lock = `humaeli-columns:${this.databaseName}:${name}`.slice(0, 64);
@@ -483,7 +614,8 @@ class SQLDatabase {
       const physical = new Set(rows.map(row => row.Field));
       const [saved] = await client.execute('SELECT definition FROM `_humaeli_columns` WHERE collection_name = ?', [name]);
       const stored = typeof saved[0].definition === 'string' ? JSON.parse(saved[0].definition) : saved[0].definition;
-      const merged = buildColumns(this.schema(name), documents, stored);
+      const additions = buildColumns(this.schema(name), documents, stored);
+      const merged = mergeColumnDefinitions(stored, additions);
       for (const field of merged) if (!physical.has(field.column)) await client.query(`ALTER TABLE ${quote(name)} ADD COLUMN ${quote(field.column)} ${sqlType(field)} NULL`);
       await client.execute('UPDATE `_humaeli_columns` SET definition = ? WHERE collection_name = ?', [JSON.stringify(merged), name]);
       this.columns.set(name, merged);
@@ -513,7 +645,7 @@ class Connection extends BaseConnection {
     } catch (error) { await pool.end(); this.readyState = 0; throw error; }
   }
   async doClose() { await this.client?.close(); return this; }
-  async startSession() { throw new Error('MongoDB sessions are not supported by MySQL storage'); }
+  async startSession() { throw new Error('Database sessions are not supported by MySQL storage'); }
 }
 
-export default { Connection, Collection };
+export default { Connection, Collection: MySQLMongooseCollection };

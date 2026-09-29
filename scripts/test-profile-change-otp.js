@@ -85,7 +85,7 @@ let userId;
 let sessionId;
 
 await connectDB();
-console.log("Connected to MongoDB\n");
+console.log("Connected to MySQL\n");
 
 const stamp = Date.now();
 const ORIG_EMAIL = `otp-test-${stamp}@example.com`;

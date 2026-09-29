@@ -206,7 +206,7 @@ export const getPrescriptionFile = async (req, res) => {
 
     let pdfBuffer = record.pdf?.data ? Buffer.from(record.pdf.data) : null;
     // Backward compatibility for prescriptions created before PDFs were
-    // stored in MongoDB. New records never depend on Cloudinary delivery.
+    // stored in MySQL. New records never depend on Cloudinary delivery.
     if (!pdfBuffer?.length && record.pdf?.url) {
       const upstream = await fetch(record.pdf.url);
       if (upstream.ok) pdfBuffer = Buffer.from(await upstream.arrayBuffer());

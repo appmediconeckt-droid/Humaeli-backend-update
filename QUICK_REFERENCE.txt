@@ -91,7 +91,7 @@ Expected:       All 8/8 checks PASSED ✅
 ================================================================================
 
 Backend not starting?
-  → Check .env file has MONGO_URI
+  → Check .env file has MYSQL_URL
   → Check port 5001 is not in use
 
 Popup not showing?
@@ -105,8 +105,8 @@ API returning 401?
   → Check Authorization header
 
 Database not connected?
-  → Check MongoDB is running
-  → Verify MONGO_URI in .env
+  → Check MySQL is running
+  → Verify MYSQL_URL in .env
 
 ================================================================================
 
