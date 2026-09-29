@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Doctor queue · Humaeli</title>
+  <style>﻿:root{font-family:system-ui,-apple-system,sans-serif;color:#eaf4fc;background:#071522;color-scheme:dark}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{height:100dvh;padding:2vh 2vw;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:1.5vh;background:radial-gradient(ellipse at top right,#15334d,#071522 65%)}header,footer{display:flex;justify-content:space-between;align-items:center;gap:2vw;min-width:0}header{padding-bottom:1vh;border-bottom:1px solid #294257}.eyebrow{color:#5bdec5;letter-spacing:.12em;font-size:clamp(12px,2vh,24px);margin:0}h1{font-size:clamp(18px,3vh,36px);margin:.4vh 0}header>div:first-child{min-width:0}h1,.eyebrow{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.right{text-align:right;flex-shrink:0}#clock{font-size:clamp(16px,3vh,36px);font-variant-numeric:tabular-nums}#connection{font-size:clamp(10px,1.6vh,18px);color:#5bdec5;margin:.4vh 0}button{border:1px solid #46657c;background:#132c40;color:#d3e7f5;padding:.4vh 1vw;border-radius:6px;cursor:pointer}main{position:relative;min-height:0;overflow:hidden}#doctors{height:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:1vw;min-height:0}.doctor{min-height:0;overflow:hidden;border:1px solid #31526b;border-radius:18px;background:#10283b;padding:2vh 2vw;display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto auto auto;text-align:center}.doctor h2{font-size:clamp(18px,4vh,50px);line-height:1.1;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.details{font-size:clamp(16px,3vh,38px);font-weight:650;color:#72dfcf;margin:.8vh 0 1.5vh}.label{text-transform:uppercase;letter-spacing:.14em;color:#9db6ca;font-size:clamp(11px,1.8vh,22px);margin:0}.current{display:flex;align-items:center;justify-content:center;min-height:0;font-size:clamp(32px,16vh,180px);line-height:1;font-weight:800;color:#73f1c6;font-variant-numeric:tabular-nums;overflow:hidden}.next{font-size:clamp(20px,4.5vh,58px);font-weight:700;line-height:1.2;margin:1vh 0 1.5vh;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.counts{display:flex;justify-content:center;gap:5vw;padding-top:1.3vh;border-top:1px solid #29495f;color:#a9c3d5;font-size:clamp(11px,1.8vh,22px)}.count strong{display:block;font-size:clamp(18px,3.5vh,42px);color:#f1f8ff}.single .doctor{width:100%}footer{color:#9db6ca;font-size:clamp(10px,1.6vh,18px)}body.stale #connection{color:#ffcc8a}body.stale #doctors{opacity:.35}#message{position:absolute;z-index:1;left:0;right:0;top:0;margin:0;background:#3e3018;color:#ffe0a9;padding:1vh 2vw;border-radius:8px;font-size:clamp(12px,2vh,24px)}#message[hidden]{display:none}:fullscreen #fullscreen{display:none}@media(max-width:600px){body{padding:1.5vh 3vw}.counts{gap:7vw}.current{font-size:clamp(32px,18vw,100px)}.next{font-size:clamp(18px,6vw,38px)}footer{gap:12px}.doctor h2{font-size:clamp(18px,6vw,34px)}}
+</style>
+  
+</head>
+<body>
+  <header><div><p class="eyebrow" id="facility">HUMAELI</p><h1 id="title">Patient queue</h1></div><div class="right"><div id="clock"></div><p id="connection" role="status">Connecting…</p><button id="fullscreen" type="button">Full screen</button></div></header>
+  <main><p id="message" role="status">Loading your display…</p><div id="doctors" aria-live="polite"></div></main>
+  <footer><span>Please wait for your token to be called.</span><span id="updated">Waiting for live data</span></footer>
+<script>window.fetch=async()=>({ok:true,status:200,json:async()=>({success:true,displayType:'doctor',facility:{name:'Apollo Clinic'},doctor:{name:'Dr Amit Kumar'},roomId:'OPD-101',current:{token:'AK001'},nextTokens:['AK002','AK003','AK004','AK005'],waitingCount:4,completedCount:12,totalPatients:17})});(() => {
+  const el = id => document.getElementById(id);
+  const displayId = location.pathname.split('/').filter(Boolean).pop();
+  const queueUrl = location.pathname.startsWith('/display/clinic/')
+    ? `/api/qr/walkin/${encodeURIComponent(displayId)}/queue`
+    : `/api/displays/${encodeURIComponent(displayId)}/queue`;
+  let lastSuccess = 0;
+  const textNode = (tag, className, text) => {
+    const node = document.createElement(tag); node.className = className; node.textContent = text; return node;
+  };
+  function render(data) {
+    el('facility').textContent = data.facility?.name || 'Humaeli';
+    el('title').textContent = data.displayName || 'Patient queue';
+    let doctors;
+    if (data.displayType === 'doctor') doctors = [{ doctorName: data.doctor?.name, roomId: data.roomId,
+      current: data.current, nextTokens: data.nextTokens, waitingCount: data.waitingCount,
+      totalPatients: data.totalPatients, completedCount: data.completedCount }];
+    else doctors = data.doctors || (data.departments || []).flatMap(d => d.doctors.map(doctor => ({ ...doctor, departmentName: d.departmentName })));
+    el('doctors').classList.toggle('single', doctors.length === 1);
+    el('doctors').replaceChildren(...doctors.map(doctor => {
+      const card = textNode('section', 'doctor', '');
+      card.append(textNode('h2', '', doctor.doctorName || 'Doctor'));
+      const details = [doctor.departmentName || data.department?.name, doctor.roomId ? `Room ${doctor.roomId}` : ''].filter(Boolean).join(' · ');
+      card.append(textNode('p', 'details', details), textNode('p', 'label', 'Now serving'),
+        textNode('div', 'current', doctor.current?.token || '—'), textNode('p', 'label', 'Next tokens'),
+        textNode('div', 'next', (doctor.nextTokens || (doctor.nextToken ? [doctor.nextToken] : [])).join('  ·  ') || '—'));
+      const counts = textNode('div', 'counts', '');
+      for (const [label, value] of [['Waiting', doctor.waitingCount], ['Completed', doctor.completedCount], ['Total today', doctor.totalPatients]]) {
+        if (value === undefined) continue;
+        const count = textNode('div', 'count', label); count.append(textNode('strong', '', String(value))); counts.append(count);
+      }
+      card.append(counts); return card;
+    }));
+    el('message').hidden = doctors.length > 0;
+    el('message').textContent = 'No doctors configured for this display.';
+    lastSuccess = Date.now(); document.body.classList.remove('stale');
+    el('connection').textContent = 'Live · refreshes every 3 seconds';
+    el('updated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  }
+  async function refresh() {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(queueUrl, { cache: 'no-store', signal: controller.signal });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        if ([403, 404, 422].includes(response.status)) { el('doctors').replaceChildren(); lastSuccess = 0; }
+        throw new Error(data.code === 'DATABASE_UNAVAILABLE' ? 'Database reconnecting — retrying automatically' : data.message || 'Unable to load queue');
+      }
+      render(data);
+    } catch (error) {
+      document.body.classList.add('stale');
+      el('connection').textContent = 'Connection interrupted';
+      el('message').hidden = false;
+      el('message').textContent = error.name === 'AbortError' ? 'Connection timed out — retrying automatically' : error.message;
+    } finally { clearTimeout(timeout); setTimeout(refresh, 3000); }
+  }
+  el('fullscreen').addEventListener('click', async () => {
+    try { await document.documentElement.requestFullscreen(); }
+    catch { el('fullscreen').textContent = 'Use your browser full-screen option'; }
+  });
+  function clock() {
+    el('clock').textContent = new Date().toLocaleTimeString();
+    if (lastSuccess && Date.now() - lastSuccess > 15000) document.body.classList.add('stale');
+    if (lastSuccess && Date.now() - lastSuccess > 60000) el('doctors').replaceChildren();
+  }
+  clock(); setInterval(clock, 1000); refresh();
+})();
+setTimeout(()=>{const card=document.querySelector('.doctor').getBoundingClientRect();const footer=document.querySelector('footer').getBoundingClientRect();document.body.setAttribute('data-layout-result',JSON.stringify({height:innerHeight,width:innerWidth,noPageOverflow:document.documentElement.scrollHeight<=innerHeight&&document.documentElement.scrollWidth<=innerWidth,cardAboveFooter:card.bottom<=footer.top,footerVisible:footer.bottom<=innerHeight,cardContentFits:document.querySelector(".doctor").scrollHeight<=document.querySelector(".doctor").clientHeight,currentTokenFits:document.querySelector(".current").scrollHeight<=document.querySelector(".current").clientHeight}));},100);</script></body>
+</html>

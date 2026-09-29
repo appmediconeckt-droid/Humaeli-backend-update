@@ -1,3 +1,4 @@
+import { doctorProfileUrl } from '../src/services/qrLinks.js';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import jwt from 'jsonwebtoken';
@@ -157,11 +158,11 @@ describe('Doctor registration and optional login role', () => {
     expect(create.called).to.equal(false);
   });
 
-  it('encodes professional details only and never generates a consultant QR', async () => {
+  it('encodes a permanent profile URL and never generates a consultant QR', async () => {
     const encode = sandbox.stub(QRCode, 'toDataURL').resolves('png');
     const user = { _id: 'doctor-id', accountType: 'doctor', fullName: 'Dr Example', qualification: 'MBBS', specialization: ['Medicine'], password: 'secret', email: 'private@example.test' };
     await generateDoctorQrCode(user);
-    expect(JSON.parse(encode.firstCall.args[0])).to.deep.equal({ type: 'doctor', id: 'doctor-id', fullName: 'Dr Example', qualification: 'MBBS', specialization: ['Medicine'] });
+    expect(encode.firstCall.args[0]).to.equal(doctorProfileUrl('doctor-id'));
     expect(await generateDoctorQrCode({ ...user, accountType: 'consultant' })).to.equal(undefined);
     expect(encode.callCount).to.equal(1);
   });

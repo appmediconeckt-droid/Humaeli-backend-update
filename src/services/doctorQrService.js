@@ -1,15 +1,10 @@
 import QRCode from 'qrcode';
+import { doctorProfileUrl } from './qrLinks.js';
 
-// A registration snapshot of professional details, not a medical-verification badge.
+// Permanent profile link; clinic changes never change the doctor identifier.
 export const generateDoctorQrCode = async (user) => {
   if (user.accountType !== 'doctor') return undefined;
-  const payload = JSON.stringify({
-    type: 'doctor',
-    id: String(user._id),
-    fullName: user.fullName,
-    qualification: user.qualification,
-    specialization: user.specialization,
-  });
+  const payload = doctorProfileUrl(user._id || user.id);
   return QRCode.toDataURL(payload, {
     type: 'image/png',
     errorCorrectionLevel: 'M',

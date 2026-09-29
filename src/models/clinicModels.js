@@ -24,6 +24,7 @@ export const UnavailableDate = model('UnavailableDate', 'unavailable_dates', {
   doctor_id: ref(), unavailable_date: requiredText,
 }, [[{ doctor_id: 1, unavailable_date: 1 }, { unique: true }]]);
 export const WalkinAppointment = model('WalkinAppointment', 'walkin_appointments', {
+  clinic_id: ref('Clinic', false), doctor_clinic_id: String, facility_id: String, queue_entry_id: String,
   doctor_id: ref(), patient_id: ref('User', false), patient_name: requiredText,
   phone_number: requiredText, date_of_birth: Date, gender: { type: String, enum: ['male', 'female', 'other'] },
   symptoms: requiredText, appointment_date: requiredText, appointment_time: requiredText,

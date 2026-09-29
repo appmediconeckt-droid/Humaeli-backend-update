@@ -94,6 +94,8 @@ const userSchema = new mongoose.Schema({
         enum: ["doctor", "consultant"],
     },
     doctorQrCode: { type: String },
+    profileQrUrl: { type: String },
+    doctorQrType: { type: String, enum: ['DOCTOR_PROFILE'] },
     staffId: { type: String, trim: true },
     assignedDoctor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     nursingLicense: { type: String, trim: true },

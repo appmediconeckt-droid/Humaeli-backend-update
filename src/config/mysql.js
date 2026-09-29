@@ -1,32 +1,23 @@
 import mysql from "mysql2/promise";
 import dotenv from "dotenv";
+import { mysqlConfig } from '../persistence/mysqlDriver.js';
 dotenv.config();
 
 let pool = null;
 let keepAliveTimer = null;
 
-const MYSQL_HOST = process.env.MYSQL_HOST || "yamanote.proxy.rlwy.net";
-const MYSQL_PORT = Number(process.env.MYSQL_PORT || 12592);
-const MYSQL_USER = process.env.MYSQL_USER || "root";
-const MYSQL_PASSWORD = process.env.MYSQL_PASSWORD || "";
-const MYSQL_DATABASE = process.env.MYSQL_DATABASE || "railway";
-const MYSQL_CONNECTION_LIMIT = Number(process.env.MYSQL_CONNECTION_LIMIT || 10);
-const MYSQL_SSL = String(process.env.MYSQL_SSL || "").toLowerCase() === "true";
+let settings;
 
 export function getPool() {
   if (!pool) {
+    settings = mysqlConfig();
     pool = mysql.createPool({
-      host: MYSQL_HOST,
-      port: MYSQL_PORT,
-      user: MYSQL_USER,
-      password: MYSQL_PASSWORD,
-      database: MYSQL_DATABASE,
+      ...settings,
       waitForConnections: true,
-      connectionLimit: MYSQL_CONNECTION_LIMIT,
+      connectionLimit: settings.connectionLimit,
       queueLimit: 0,
       enableKeepAlive: true,
       keepAliveInitialDelay: 10000,
-      ssl: MYSQL_SSL ? { rejectUnauthorized: false } : undefined,
     });
 
     // Start keep-alive interval to prevent Railway TCP proxy idle disconnects
@@ -59,7 +50,7 @@ export async function connectMySQL() {
     const currentPool = getPool();
     const [rows] = await currentPool.query("SELECT 1 AS connected");
     if (rows && rows[0]?.connected === 1) {
-      console.log(`✅ Railway MySQL Connected Successfully (${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE})`);
+      console.log(`✅ Railway MySQL Connected Successfully (${settings.host}:${settings.port}/${settings.database})`);
       return currentPool;
     }
   } catch (error) {
@@ -84,9 +75,9 @@ export async function checkHealth() {
     const startTime = Date.now();
     await currentPool.query("SELECT 1");
     const latency = Date.now() - startTime;
-    return { status: "healthy", latencyMs: latency, host: MYSQL_HOST, database: MYSQL_DATABASE };
+    return { status: "healthy", latencyMs: latency, host: settings.host, database: settings.database };
   } catch (error) {
-    return { status: "unhealthy", error: error.message, host: MYSQL_HOST, database: MYSQL_DATABASE };
+    return { status: "unhealthy", error: error.message, host: settings?.host, database: settings?.database };
   }
 }
 

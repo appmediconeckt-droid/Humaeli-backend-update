@@ -1,6 +1,7 @@
 import modelStorage, { connectMySQL } from '../persistence/mongoose.js';
 import { mysqlConfig } from '../persistence/mysqlDriver.js';
 import { loadModels } from '../persistence/models.js';
+import { initQueueTables } from '../services/initQueueTables.js';
 
 let connecting;
 const phoneIndexPattern = /^\+?\d{7,15}$/;
@@ -134,6 +135,7 @@ export default async function connectDB() {
       for (const model of Object.values(modelStorage.models)) {
         await createModelIndexes(model);
       }
+      await initQueueTables();
       const details = await verifyMySQLConnection(connection);
       console.log('✅ MySQL connected successfully');
       console.log(`Database: ${details.database}`);

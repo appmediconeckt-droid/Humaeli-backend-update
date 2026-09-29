@@ -26,6 +26,8 @@ import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 import { getStrongPasswordError } from "../utils/passwordPolicy.js";
 import { generateDoctorQrCode } from "../services/doctorQrService.js";
+import { doctorProfileUrl } from '../services/qrLinks.js';
+import { profileQr, doctorClinics } from '../services/clinicQrService.js';
 import { recordDoctorAnalyticsEvent, getDoctorQuickStats } from '../services/doctorAnalyticsService.js';
 import { staffRoles } from '../utils/clinicAccess.js';
 import Appointment from '../models/appointmentModel.js';
@@ -2301,6 +2303,8 @@ export const completeRegistration = async (req, res) => {
     if (accountType === "doctor") {
       userData._id = new mongoose.Types.ObjectId();
       userData.doctorQrCode = await generateDoctorQrCode(userData);
+      userData.profileQrUrl = doctorProfileUrl(userData._id);
+      userData.doctorQrType = 'DOCTOR_PROFILE';
     }
     const newUser = await User.create(userData);
 
@@ -4675,13 +4679,14 @@ export const getProfileById = async (req, res) => {
   const user = await User.findOne({ _id: req.params.id, role: 'doctor', isActive: true, profileCompleted: true }).select('fullName role qualification specialization experience location aboutMe profilePhoto doctorQrCode').lean();
   if (!user) return res.status(404).json({ success: false, message: 'User profile not found' });
   await recordDoctorAnalyticsEvent({ doctorId: user._id, eventType: 'profile_view', source: req.query.source });
-  return res.json({ success: true, data: user, user });
+  const profile = { ...user, doctorId: String(user._id), profileQrUrl: doctorProfileUrl(user._id), clinics: await doctorClinics(String(user._id)) };
+  return res.json({ success: true, data: profile, user: profile });
 };
 
 export const getDoctorQRById = async (req, res) => {
   const doctor = await User.findOne({ _id: req.params.id, role: 'doctor' }).select('fullName email role qualification specialization doctorQrCode').lean();
   if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
-  return res.json({ success: true, message: 'Doctor QR fetched successfully', data: doctor });
+  return res.json({ success: true, message: 'Doctor QR fetched successfully', data: { ...doctor, ...await profileQr(String(doctor._id)) } });
 };
 
 export const recordDoctorQrScan = async (req, res) => {

@@ -310,6 +310,11 @@ import walkinAppointmentRoutes from './routes/walkinAppointmentRoutes.js';
 import followupRoutes from './routes/followupRoutes.js';
 import leaveRoutes from './routes/leaveRoutes.js';
 import medicationRoutes from './routes/medicationRoutes.js';
+import facilityRoutes from './routes/facilityRoutes.js';
+import queueRoutes from './routes/queueRoutes.js';
+import displayRoutes from './routes/displayRoutes.js';
+import ledPageRoutes from './routes/ledPageRoutes.js';
+import clinicQrRoutes from './routes/clinicQrRoutes.js';
 
 
 
@@ -558,6 +563,13 @@ app.use('/api/followups', followupRoutes);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/medications', medicationRoutes);
 
+// ─── Queue Management System ────────────────────────────────────────────────
+app.use('/api/facilities', facilityRoutes);
+app.use('/api/queue', queueRoutes);
+app.use('/api/displays', displayRoutes);
+app.use('/api/qr', clinicQrRoutes);
+app.use(ledPageRoutes);
+
 app.use("/api/ai/realtime", aiRealtimeRoute);
 app.get("/api/admin/health", (_req, res) => {
   res.json({ success: true, message: "Admin API is running" });
@@ -662,6 +674,33 @@ global.io = io;
 const socketHandler = new SocketHandler(io);
 socketHandler.initialize();
 global.socketHandler = socketHandler;
+
+// ─── Queue Display Socket Rooms ──────────────────────────────────────────────
+// TV displays and doctor dashboards join these rooms to receive real-time updates:
+//   doctor:{doctorId}         → doctor's own dashboard
+//   department:{departmentId} → department TV display
+//   facility:{facilityId}     → hospital-wide / floor TV display
+//
+// Joining is done client-side by emitting:
+//   socket.emit('joinQueueRoom', { type: 'doctor', id: doctorId })
+//   socket.emit('joinQueueRoom', { type: 'department', id: departmentId })
+//   socket.emit('joinQueueRoom', { type: 'facility', id: facilityId })
+io.on('connection', (socket) => {
+  socket.on('joinQueueRoom', ({ type, id }) => {
+    if (!type || !id) return;
+    const validTypes = ['doctor', 'department', 'facility'];
+    if (!validTypes.includes(type)) return;
+    const room = `${type}:${id}`;
+    socket.join(room);
+    socket.emit('joinedQueueRoom', { room });
+  });
+
+  socket.on('leaveQueueRoom', ({ type, id }) => {
+    if (!type || !id) return;
+    const room = `${type}:${id}`;
+    socket.leave(room);
+  });
+});
 
 export { app };
 export default server;
