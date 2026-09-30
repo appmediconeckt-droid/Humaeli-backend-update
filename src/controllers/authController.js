@@ -46,15 +46,46 @@ const REGISTRATION_EMAIL_OTP_PURPOSE = "registration_email";
 const REGISTRATION_OTP_TTL_MS = 10 * 60 * 1000;
 
 // Public aggregate counters used by the landing page. Only totals are exposed.
+// Public aggregate counters used by the landing page. Only totals are exposed.
 export const getLandingStats = async (_req, res) => {
   try {
-    const [patientsHelped, medicalPartners, activeSupports, completedPatients] =
-      await Promise.all([
-        User.countDocuments({ role: "user" }),
-        User.countDocuments({ role: "counsellor" }),
-        User.countDocuments({ role: "counsellor", isOnline: true }),
-        Chat.countDocuments({ status: "closed", closedAt: { $ne: null } }),
-      ]);
+    const [
+      patientRows,
+      medicalPartnerRows,
+      activeSupportRows,
+      completedChatRows,
+    ] = await Promise.all([
+      User.find({ role: "user" }).select("_id").lean(),
+      User.find({ role: "counsellor" }).select("_id").lean(),
+      User.find({
+        role: "counsellor",
+        isOnline: true,
+      })
+        .select("_id")
+        .lean(),
+      Chat.find({
+        status: "closed",
+        closedAt: { $ne: null },
+      })
+        .select("_id")
+        .lean(),
+    ]);
+
+    const patientsHelped = Array.isArray(patientRows)
+      ? patientRows.length
+      : 0;
+
+    const medicalPartners = Array.isArray(medicalPartnerRows)
+      ? medicalPartnerRows.length
+      : 0;
+
+    const activeSupports = Array.isArray(activeSupportRows)
+      ? activeSupportRows.length
+      : 0;
+
+    const completedPatients = Array.isArray(completedChatRows)
+      ? completedChatRows.length
+      : 0;
 
     return res.json({
       success: true,
@@ -67,9 +98,11 @@ export const getLandingStats = async (_req, res) => {
     });
   } catch (error) {
     console.error("Landing stats error:", error);
+
     return res.status(500).json({
       success: false,
       message: "Unable to load landing statistics",
+      error: error.message,
     });
   }
 };
@@ -389,10 +422,16 @@ const markUserOnline = async (userOrId) => {
 const markUserOfflineIfNoActiveSessions = async (userId) => {
   if (!userId) return;
 
-  const activeSessionCount = await Session.countDocuments({
-    userId,
-    isActive: true,
-  });
+  const activeSessions = await Session.find({
+  userId,
+  isActive: true,
+})
+  .select("_id")
+  .lean();
+
+const activeSessionCount = Array.isArray(activeSessions)
+  ? activeSessions.length
+  : 0;
 
   if (activeSessionCount > 0) return;
 
