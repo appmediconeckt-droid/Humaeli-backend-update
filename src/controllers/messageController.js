@@ -160,19 +160,8 @@ const buildChatNotificationData = ({
 };
 
 const visibleCounselorFilter = {
-  role: "counsellor",
+  role: { $in: ["counsellor", "doctor"] },
   isActive: true,
-  profileCompleted: true,
-  "specialization.0": { $exists: true },
-  experience: { $gt: 0 },
-  $and: [
-    {
-      $or: [
-        { qualification: { $nin: ["", null] } },
-        { education: { $nin: ["", null] } },
-      ],
-    },
-  ],
 };
 
 const assertSufficientChatBalance = async (userId, sessionType) => {

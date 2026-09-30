@@ -9,6 +9,8 @@ const doctorId = '6aa91e059b2c9409947d9396';
 const response = () => ({ status: sinon.stub().returnsThis(), json: sinon.spy() });
 const profiles = [
   { _id: doctorId, role: 'doctor', isActive: true, profileCompleted: true, experience: 0, specialization: ['Medicine'], location: 'Delhi', consultationMode: ['online'] },
+  { _id: 'consultant', role: 'consultant', isActive: true, profileCompleted: true, experience: 2 },
+  { _id: 'account-type-consultant', role: 'counsellor', accountType: 'consultant', isActive: true, profileCompleted: false, experience: 1 },
   { _id: 'counsellor', role: 'counsellor', isActive: true, profileCompleted: true, experience: 3 },
   { _id: 'inactive', role: 'doctor', isActive: false, profileCompleted: true },
   { _id: 'incomplete', role: 'doctor', isActive: true, profileCompleted: false },
@@ -29,16 +31,20 @@ describe('Professional counsellor directory', () => {
     sinon.stub(Message, 'aggregate').resolves([]);
   }
 
-  it('lists complete active doctors including zero experience and preserves counsellors and roles', async () => {
+  it('lists active doctors and consultants, including older incomplete profiles and zero experience', async () => {
     stubDirectory();
     const res = response();
     await getAllCounsellors({ query: {} }, res);
     expect(res.status.calledWith(200)).to.equal(true);
     expect(res.json.firstCall.args[0].counsellors.map(p => [p._id, p.role])).to.deep.equal([
-      [doctorId, 'doctor'], ['counsellor', 'counsellor'],
+      [doctorId, 'doctor'], ['consultant', 'consultant'], ['account-type-consultant', 'counsellor'], ['counsellor', 'counsellor'],
+      ['incomplete', 'doctor'],
     ]);
+    expect(res.json.firstCall.args[0].professionals.map(p => p._id)).to.deep.equal([doctorId, 'consultant', 'account-type-consultant', 'counsellor', 'incomplete']);
+    expect(res.json.firstCall.args[0].doctors.map(p => p._id)).to.deep.equal([doctorId, 'incomplete']);
+    expect(res.json.firstCall.args[0].consultants.map(p => p._id)).to.deep.equal(['consultant', 'account-type-consultant', 'counsellor']);
     expect(User.find.firstCall.returnValue.select.firstCall.args[0]).to.include('-aadhaarNumber');
-    expect(Message.aggregate.firstCall.args[0][0].$match.senderRole).to.deep.equal({ $in: ['counsellor', 'doctor'] });
+    expect(Message.aggregate.firstCall.args[0][0].$match.senderRole.$in).to.include.members(['consultant', 'counsellor', 'doctor']);
   });
 
   for (const profile of profiles) {
@@ -46,7 +52,7 @@ describe('Professional counsellor directory', () => {
       stubDirectory();
       const res = response();
       await getCounsellorById({ params: { counsellorId: profile._id } }, res);
-      const eligible = [doctorId, 'counsellor'].includes(profile._id);
+      const eligible = [doctorId, 'consultant', 'account-type-consultant', 'counsellor', 'incomplete'].includes(profile._id);
       expect(res.status.calledWith(eligible ? 200 : 404)).to.equal(true);
       if (eligible) expect(res.json.firstCall.args[0].counsellor.role).to.equal(profile.role);
     });
@@ -59,6 +65,6 @@ describe('Professional counsellor directory', () => {
     expect(res.json.firstCall.args[0].counsellors.map(p => p._id)).to.deep.equal([doctorId]);
     const experienced = response();
     await getAllCounsellors({ query: { minExperience: '1' } }, experienced);
-    expect(experienced.json.firstCall.args[0].counsellors.map(p => p._id)).to.deep.equal(['counsellor']);
+    expect(experienced.json.firstCall.args[0].counsellors.map(p => p._id)).to.deep.equal(['consultant', 'account-type-consultant', 'counsellor']);
   });
 });

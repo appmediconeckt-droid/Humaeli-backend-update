@@ -28,15 +28,17 @@ describe("User API repairs", () => {
   });
   afterEach(() => sandbox.restore());
 
-  it("directory admits completed doctors and counsellors while retaining completion filters", async () => {
-    const find = sandbox.stub(User, "find").returns({ select() { return this; }, sort() { return this; }, lean: async () => [{ _id: "doctor-test", role: "doctor" }, { _id: "counsellor-test", role: "counsellor" }] });
+  it("directory admits active doctors and consultants without requiring stale completion flags", async () => {
+    const find = sandbox.stub(User, "find").returns({ select() { return this; }, sort() { return this; }, lean: async () => [{ _id: "doctor-test", role: "doctor" }, { _id: "consultant-test", role: "consultant" }, { _id: "counsellor-test", role: "counsellor" }] });
     sandbox.stub(Message, "aggregate").resolves([]);
     const res = response();
     await getAllCounsellors({ query: {} }, res);
     expect(res.statusCode).to.equal(200);
-    expect(find.firstCall.args[0].role).to.deep.equal({ $in: ["counsellor", "doctor"] });
-    expect(find.firstCall.args[0]).to.include({ isActive: true, profileCompleted: true });
-    expect(res.body.counsellors.map((p) => p.role)).to.deep.equal(["doctor", "counsellor"]);
+    expect(find.firstCall.args[0].$or[0].role.$in).to.include.members(["consultant", "counsellor", "doctor"]);
+    expect(find.firstCall.args[0].$or[1].accountType.$in).to.include.members(["consultant", "doctor"]);
+    expect(find.firstCall.args[0]).to.include({ isActive: true });
+    expect(find.firstCall.args[0]).not.to.have.property("profileCompleted");
+    expect(res.body.counsellors.map((p) => p.role)).to.deep.equal(["doctor", "consultant", "counsellor"]);
   });
 
   it("doctor detail lookup uses the same supported roles as the directory", async () => {
@@ -44,7 +46,7 @@ describe("User API repairs", () => {
     const res = response();
     await getCounsellorById({ params: { counsellorId: "doctor-test" } }, res);
     expect(res.statusCode).to.equal(200);
-    expect(find.firstCall.args[0].role.$in).to.include("doctor");
+    expect(find.firstCall.args[0].$or[0].role.$in).to.include("doctor");
   });
 
   it("call history works with MySQL promises and resolves participant names", async () => {

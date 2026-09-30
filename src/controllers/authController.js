@@ -128,6 +128,51 @@ const normalizeRole = (role = "") => {
   }
   return normalized;
 };
+
+const isObjectValue = (value) =>
+  value !== null &&
+  typeof value === "object" &&
+  !(value instanceof Date) &&
+  !Buffer.isBuffer(value);
+
+const rejectPrimitiveProfileField = (res, field) =>
+  res.status(400).json({
+    success: false,
+    message: `${field} must be a single text value.`,
+    field,
+  });
+
+const normalizeIndexedObjectArray = (value) =>
+  Object.keys(value)
+    .sort((a, b) => Number(a) - Number(b))
+    .map((key) => value[key])
+    .filter((item) => item !== undefined && item !== null && item !== "")
+    .map((item) => String(item).trim())
+    .filter(Boolean);
+
+const normalizeProfileArrayField = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (isObjectValue(value)) {
+    return normalizeIndexedObjectArray(value);
+  }
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item).trim()).filter(Boolean);
+      }
+      if (isObjectValue(parsed)) {
+        return normalizeIndexedObjectArray(parsed);
+      }
+    } catch (e) {
+      // Fall back to comma-separated form values.
+    }
+    return value.split(",").map((item) => item.trim()).filter(Boolean);
+  }
+  return [String(value).trim()].filter(Boolean);
+};
 const getAgeFromDateOfBirth = (value) => {
   if (!value) return { date: null, age: null, valid: true };
 
@@ -521,6 +566,9 @@ setInterval(
 export const updateUserById = async (req, res) => {
   try {
     if (req.body?.gender !== undefined) {
+      if (isObjectValue(req.body.gender)) {
+        return rejectPrimitiveProfileField(res, "gender");
+      }
       const gender = typeof req.body.gender === 'string' ? req.body.gender.trim().toLowerCase() : '';
       if (!['male', 'female', 'other'].includes(gender)) {
         return res.status(400).json({ success: false, message: 'Gender must be male, female, or other', field: 'gender' });
@@ -1088,11 +1136,15 @@ export const updateUserById = async (req, res) => {
     ];
 
     for (const field of basicFields) {
-      if (req.body[field] === undefined || req.body[field] === "") continue;
+      const rawValue = req.body[field];
+      if (rawValue === undefined || rawValue === "") continue;
+      if (isObjectValue(rawValue)) {
+        return rejectPrimitiveProfileField(res, field);
+      }
 
       // Gate email changes through the OTP flow.
       if (field === "email") {
-        const incoming = String(req.body.email).trim().toLowerCase();
+        const incoming = String(rawValue).trim().toLowerCase();
         const current = String(currentUser.email || "").toLowerCase();
         if (incoming !== current) {
           const check = consumeVerifiedProfileChange(userId, "email", incoming);
@@ -1117,8 +1169,11 @@ export const updateUserById = async (req, res) => {
       }
 
       if (field === "phoneNumber") {
+        if (isObjectValue(req.body.phoneCountryCode)) {
+          return rejectPrimitiveProfileField(res, "phoneCountryCode");
+        }
         const incomingPhone = normalizePhoneNumber(
-          req.body.phoneNumber,
+          rawValue,
           req.body.phoneCountryCode,
         );
         if (!incomingPhone.isValid) {
@@ -1153,12 +1208,12 @@ export const updateUserById = async (req, res) => {
         if (req.body.dateOfBirth || currentUser.dateOfBirth) {
           continue;
         }
-        updates.age = req.body.age;
+        updates.age = rawValue;
         continue;
       }
 
       if (field === "dateOfBirth") {
-        const dob = getAgeFromDateOfBirth(req.body.dateOfBirth);
+        const dob = getAgeFromDateOfBirth(rawValue);
         if (!dob.valid || dob.age === null) {
           return res.status(400).json({
             success: false,
@@ -1172,7 +1227,7 @@ export const updateUserById = async (req, res) => {
       }
 
       if (field === "bloodGroup") {
-        const bloodGroup = String(req.body[field]).trim().toUpperCase();
+        const bloodGroup = String(rawValue).trim().toUpperCase();
         const validBloodGroups = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
 
         if (!validBloodGroups.includes(bloodGroup)) {
@@ -1188,7 +1243,7 @@ export const updateUserById = async (req, res) => {
         continue;
       }
 
-      updates[field] = req.body[field];
+      updates[field] = rawValue;
     }
 
     // 4. Handle nested objects
@@ -1254,25 +1309,17 @@ export const updateUserById = async (req, res) => {
         "activeClients",
       ];
 
-      counsellorFields.forEach((field) => {
+      for (const field of counsellorFields) {
         if (req.body[field] !== undefined && req.body[field] !== "") {
-          // Parse JSON strings for array fields
-          if (
-            ["specialization", "languages", "consultationMode"].includes(
-              field,
-            ) &&
-            typeof req.body[field] === "string"
-          ) {
-            try {
-              updates[field] = JSON.parse(req.body[field]);
-            } catch (e) {
-              updates[field] = req.body[field].split(",").map((s) => s.trim());
-            }
+          if (["specialization", "languages", "consultationMode"].includes(field)) {
+            updates[field] = normalizeProfileArrayField(req.body[field]);
+          } else if (isObjectValue(req.body[field])) {
+            return rejectPrimitiveProfileField(res, field);
           } else {
             updates[field] = req.body[field];
           }
         }
-      });
+      }
     }
 
     if (currentUser.role === "doctor") {
@@ -3443,13 +3490,20 @@ export const getMySessions = async (req, res) => {
 };
 
 // ================= GET ALL COUNSELLORS =================
-// Completion is validated when professional profiles are saved. Keep directory
-// eligibility identical for list/detail without a second, conflicting field check.
+// Keep directory eligibility identical for list/detail. The user-facing
+// consultant menu should show active professionals even when older accounts
+// have not recalculated the newer profileCompleted flag yet.
+const professionalDirectoryRoles = ["consultant", "counsellor", "counselor", "counsellour", "doctor"];
 const professionalDirectoryFilter = () => ({
-  role: { $in: ["counsellor", "doctor"] },
+  $or: [
+    { role: { $in: professionalDirectoryRoles } },
+    { accountType: { $in: ["doctor", "consultant"] } },
+  ],
   isActive: true,
-  profileCompleted: true,
 });
+const isDirectoryDoctor = (user) =>
+  String(user?.role || "").toLowerCase() === "doctor" ||
+  String(user?.accountType || "").toLowerCase() === "doctor";
 
 export const getAllCounsellors = async (req, res) => {
   try {
@@ -3472,7 +3526,7 @@ export const getAllCounsellors = async (req, res) => {
       {
         $match: {
           senderId: { $in: counsellorIds },
-          senderRole: { $in: ["counsellor", "doctor"] },
+          senderRole: { $in: professionalDirectoryRoles },
         },
       },
       {
@@ -3517,6 +3571,10 @@ export const getAllCounsellors = async (req, res) => {
       message: "Counsellors fetched successfully",
       success: true,
       counsellors: counsellorsWithLoginStatus,
+      counselors: counsellorsWithLoginStatus,
+      professionals: counsellorsWithLoginStatus,
+      doctors: counsellorsWithLoginStatus.filter(isDirectoryDoctor),
+      consultants: counsellorsWithLoginStatus.filter((user) => !isDirectoryDoctor(user)),
       count: counsellorsWithLoginStatus.length,
     });
   } catch (error) {
@@ -4625,7 +4683,7 @@ export const getUsers = async (req, res) => {
   try {
     const requestedRole = String(req.query.role || '').trim().toLowerCase();
     const role = requestedRole === 'patient' ? 'user' : requestedRole;
-    let filter = { role: { $in: ['doctor', 'counsellor'] }, isActive: true, profileCompleted: true };
+    let filter = professionalDirectoryFilter();
     if (req.user.role === 'admin') filter = role ? { role } : {};
     else if (role === 'user') {
       if (req.user.role === 'user') filter = { _id: req.userId || req.user._id };
@@ -4633,8 +4691,8 @@ export const getUsers = async (req, res) => {
         const appointments = await Appointment.find({ counselor: req.userId || req.user._id }).select('patient').lean();
         filter = { _id: { $in: appointments.map(row => row.patient) } };
       }
-    } else if (['doctor', 'counsellor'].includes(role)) filter.role = role;
-    const users = await User.find(filter).select('fullName role accountType profilePhoto qualification specialization experience location aboutMe profileCompleted').lean();
+    } else if (professionalDirectoryRoles.includes(role)) filter = { role, isActive: true };
+    const users = await User.find(filter).select('fullName role accountType profilePhoto qualification education specialization experience location aboutMe profileCompleted isActive languages consultationMode rating ratingCount totalSessions activeClients lastSeen').lean();
     return res.json({ success: true, count: users.length, data: users, users });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
