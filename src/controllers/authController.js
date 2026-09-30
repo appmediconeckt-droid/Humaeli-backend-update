@@ -2561,8 +2561,16 @@ export const googleAuth = async (req, res) => {
       });
     }
 
-    // Default role to "user" if not provided. Frontend should send "user" or "counsellor".
-    const requestedRole = role === "counsellor" ? "counsellor" : "user";
+    // Preserve the selected portal role; never turn Doctor into a User login.
+    const normalizedRole = typeof role === "string" ? normalizeRole(role) : "";
+    const requestedRole = normalizedRole === "consultant" ? "counsellor" : normalizedRole;
+    if (!["user", "counsellor", "doctor"].includes(requestedRole)) {
+      return res.status(400).json({
+        message: "Please select User, Counselor or Doctor to continue with Google.",
+        success: false,
+        code: "INVALID_ROLE",
+      });
+    }
 
     // 1. Verify the Google ID token
     let payload;

@@ -72,6 +72,22 @@ describe("Google authentication role boundaries", () => {
     expect(user.googleId).to.equal(null);
     expect(user.save.called).to.equal(false);
   });
+  it("rejects doctor registration for an existing local user email without logging in or linking Google", async () => {
+    const user = account("user"); user.googleId = null;
+    User.findOne.onFirstCall().resolves(null); User.findOne.onSecondCall().resolves(user);
+    const res = response(); await googleAuth(request("doctor"), res);
+    expect(res.statusCode).to.equal(403);
+    expect(res.body).to.include({ success: false, code: "ROLE_MISMATCH", actualRole: "user", requestedRole: "doctor" });
+    expect(res.body.message).to.include("registered as user");
+    expect(res.body).not.to.have.property("accessToken");
+    expect(user.googleId).to.equal(null);
+    expect(user.role).to.equal("user");
+    expect(user.save.called).to.equal(false);
+    expect(User.create.called).to.equal(false);
+    expect(Session.updateMany.called).to.equal(false);
+    expect(Session.create.called).to.equal(false);
+    expect(res.cookie.called).to.equal(false);
+  });
   for (const role of [undefined, null, "", "auto", "admin"]) {
     it(`rejects missing or non-portal role ${role} before lookup or session creation`, async () => {
       const res = response(); await googleAuth(request(role), res);
