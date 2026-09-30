@@ -443,6 +443,30 @@ const getEndOfDayIST = (date) => {
   return new Date(endOfDay.getTime() - IST_OFFSET); // Convert back to UTC
 };
 
+const APPOINTMENT_CONSULTANT_ROLES = [
+  "consultant",
+  "counsellor",
+  "counselor",
+  "counsellour",
+];
+
+export const appointmentProviderFilter = (providerId) => ({
+  _id: providerId,
+  isActive: true,
+  $or: [
+    { role: "doctor" },
+    { accountType: "doctor" },
+    {
+      role: { $in: APPOINTMENT_CONSULTANT_ROLES },
+      profileCompleted: true,
+    },
+    {
+      accountType: "consultant",
+      profileCompleted: true,
+    },
+  ],
+});
+
 export const book = async (req, res) => {
   try {
     const counselorId = req.body.counselorId || req.body.doctor_id;
@@ -499,16 +523,13 @@ export const book = async (req, res) => {
       });
     }
 
-    const counselor = await User.findOne({
-      _id: counselorId,
-      role: { $in: ["counsellor", "doctor"] },
-      isActive: true,
-      profileCompleted: true,
-    }).select("_id");
+    const counselor = await User.findOne(
+      appointmentProviderFilter(counselorId),
+    ).select("_id role accountType profileCompleted");
 
     if (!counselor) {
       return res.status(404).json({
-        message: "Counselor not found or profile is not complete yet",
+        message: "Provider not found or profile is not available yet",
       });
     }
 
