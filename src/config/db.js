@@ -305,19 +305,24 @@ export default async function connectDB() {
       const config = mysqlConfig();
       await loadModels();
       const connection = await connectMySQL(config);
+      console.log('MySQL transport connected; validating application schema.');
       await repairLegacyProfileQrUrlColumn(connection);
       // Install constraints before accepting requests; no background index races.
       for (const model of Object.values(modelStorage.models)) {
+        if (process.env.MYSQL_STARTUP_DEBUG === 'true') console.log(`MySQL startup: collection ${model.modelName}`);
         await model.createCollection();
       }
+      console.log('MySQL tables ready; checking legacy chat/message IDs.');
       await repairLegacyChatIds();
       await repairLegacyMessageIds();
       if (process.env.MYSQL_REPAIR_DUPLICATE_USER_PHONES === 'true') {
         await repairLegacyUserPhoneNumbers();
       }
       for (const model of Object.values(modelStorage.models)) {
+        if (process.env.MYSQL_STARTUP_DEBUG === 'true') console.log(`MySQL startup: indexes ${model.modelName}`);
         await createModelIndexes(model);
       }
+      console.log('MySQL model indexes ready; initializing queue tables.');
       await initQueueTables();
       const details = await verifyMySQLConnection(connection);
       console.log('✅ MySQL connected successfully');

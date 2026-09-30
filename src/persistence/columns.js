@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import { BSON, ObjectId } from 'bson';
+import { BSON } from 'bson';
+import { ObjectId, parseStoredValue } from './storageValues.js';
 
 const json = value => BSON.EJSON.stringify(value, { relaxed: true });
-const parse = value => BSON.EJSON.parse(typeof value === 'string' ? value : JSON.stringify(value), { relaxed: true });
+const parse = parseStoredValue;
 const objectIdHexPattern = /^[a-fA-F0-9]{24}$/;
 const warnedDecodeValues = new Set();
 
@@ -204,7 +205,7 @@ export function fromRow(row, fields, context = {}) {
     if (!hasChildValue) setPath(doc, path, kind === 'null' ? null : {});
   }
   if (state?.legacy) {
-    const legacy = BSON.EJSON.deserialize(state.legacy, { relaxed: true });
+    const legacy = parse(state.legacy);
     for (const [key, value] of Object.entries(legacy)) if (!Object.hasOwn(doc, key)) setPath(doc, key, value);
   }
   return doc;

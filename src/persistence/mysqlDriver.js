@@ -1,8 +1,10 @@
 import { createRequire } from 'node:module';
-import { BSON, ObjectId } from 'bson';
+import { BSON } from 'bson';
+import { ObjectId, parseStoredValue } from './storageValues.js';
 import mysql from 'mysql2/promise';
 import { Query, aggregate, updateMany } from 'mingo';
 import { buildColumns, tableDDL, fromRow, writeRow, addSqlIndex, sqlType, quote, collectionSchema, sqlPrefilter, initializeRowState, readRows } from './columns.js';
+import { recoverColumnMapping } from './columnMapping.js';
 
 const require = createRequire(import.meta.url);
 const BaseConnection = require('mongoose/lib/connection');
@@ -16,7 +18,7 @@ function plain(value) {
   return value;
 }
 const encode = value => BSON.EJSON.stringify(plain(value), { relaxed: false });
-const decode = value => BSON.EJSON.parse(typeof value === 'string' ? value : JSON.stringify(value), { relaxed: true });
+const decode = parseStoredValue;
 const clone = value => decode(encode(value));
 const queryOptions = { scriptEnabled: false };
 
@@ -517,6 +519,13 @@ class MySQLMongooseCollection extends MongooseCollection {
     return this._getCollection().findOne(...args);
   }
 
+  countDocuments(...args) { return this._getCollection().countDocuments(...args); }
+  estimatedDocumentCount(...args) { return this._getCollection().estimatedDocumentCount(...args); }
+  distinct(...args) { return this._getCollection().distinct(...args); }
+  aggregate(...args) { return this._getCollection().aggregate(...args); }
+  bulkWrite(...args) { return this._getCollection().bulkWrite(...args); }
+  replaceOne(...args) { return this._getCollection().replaceOne(...args); }
+
   findAndModify(...args) {
     return this._getCollection().findAndModify(...args);
   }
@@ -580,17 +589,40 @@ class SQLDatabase {
   }
   schema(name) { return collectionSchema(this.models(), name); }
   async ensureTable(name) {
+    quote(name);
     if (name.startsWith('_humaeli_')) throw new Error('Reserved collection name');
     if (!this.tables.has(name)) this.tables.set(name, (async () => {
-      const [tables] = await this.pool.execute('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?', [this.databaseName, name]);
-      if (tables.some(row => ['document', '_sql_state'].includes(row.COLUMN_NAME))) throw new Error(`Table ${name} uses the old storage layout. Run npm run db:columns before starting this backend.`);
-      const [saved] = await this.pool.execute('SELECT definition FROM `_humaeli_columns` WHERE collection_name = ?', [name]);
-      const fields = saved.length ? (typeof saved[0].definition === 'string' ? JSON.parse(saved[0].definition) : saved[0].definition) : buildColumns(this.schema(name));
-      if (!tables.length) await this.pool.query(tableDDL(name, fields).replace('CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS '));
-      else if (!saved.length) throw new Error(`Table ${name} has no column mapping; refusing to guess its layout`);
-      await this.pool.execute('INSERT IGNORE INTO `_humaeli_columns` (collection_name, definition) VALUES (?, ?)', [name, JSON.stringify(fields)]);
-      this.columns.set(name, fields);
-      await this.pool.execute('INSERT IGNORE INTO `_humaeli_locks` (collection_name) VALUES (?)', [name]);
+      const client = await this.pool.getConnection();
+      const lock = `humaeli-columns:${this.databaseName}:${name}`.slice(0, 64);
+      let locked = false;
+      try {
+        const [result] = await client.execute('SELECT GET_LOCK(?, 20) AS acquired', [lock]);
+        locked = Number(result[0].acquired) === 1;
+        if (!locked) throw new Error('Timed out acquiring schema lock');
+        const [tables] = await client.execute('SELECT COLUMN_NAME, DATA_TYPE, COLUMN_KEY FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?', [this.databaseName, name]);
+        if (tables.some(row => ['document', '_sql_state'].includes(row.COLUMN_NAME))) throw new Error(`Table ${name} uses the old storage layout. Run npm run db:columns before starting this backend.`);
+        const [saved] = await client.execute('SELECT definition FROM `_humaeli_columns` WHERE collection_name = ?', [name]);
+        const fields = saved.length
+          ? (typeof saved[0].definition === 'string' ? JSON.parse(saved[0].definition) : saved[0].definition)
+          : tables.length ? recoverColumnMapping(name, this.schema(name), tables) : buildColumns(this.schema(name));
+        if (!tables.length) await client.query(tableDDL(name, fields));
+        else {
+          const physical = new Set(tables.map(row => row.COLUMN_NAME));
+          for (const field of fields) {
+            if (!physical.has(field.column)) {
+              if (field.path === '_id') throw new Error(`Table ${name} is missing its mapped primary key`);
+              await client.query(`ALTER TABLE ${quote(name)} ADD COLUMN ${quote(field.column)} ${sqlType(field)} NULL`);
+            }
+          }
+        }
+        await client.execute('INSERT IGNORE INTO `_humaeli_columns` (collection_name, definition) VALUES (?, ?)', [name, JSON.stringify(fields)]);
+        await client.execute('INSERT IGNORE INTO `_humaeli_locks` (collection_name) VALUES (?)', [name]);
+        this.columns.set(name, fields);
+        if (tables.length && !saved.length) console.info(`Recovered MySQL column mapping for ${name}; existing rows preserved.`);
+      } finally {
+        try { if (locked) await client.execute('SELECT RELEASE_LOCK(?)', [lock]); }
+        finally { client.release(); }
+      }
     })().catch(error => { this.tables.delete(name); throw error; }));
     return this.tables.get(name);
   }
@@ -642,9 +674,15 @@ class Connection extends BaseConnection {
       this.client = { close: () => pool.end() };
       this.onOpen();
       return this;
-    } catch (error) { await pool.end(); this.readyState = 0; throw error; }
+    } catch (error) { await pool.end(); this.client = null; this.db = undefined; this.readyState = 0; throw error; }
   }
-  async doClose() { await this.client?.close(); return this; }
+  async doClose() {
+    const client = this.client;
+    this.client = null;
+    this.db = undefined;
+    await client?.close();
+    return this;
+  }
   async startSession() { throw new Error('Database sessions are not supported by MySQL storage'); }
 }
 
