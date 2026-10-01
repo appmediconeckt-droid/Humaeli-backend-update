@@ -9,7 +9,7 @@ import Walkin from "../src/models/walkinAppointmentModel.js";
 import Notification from "../src/models/Notification.js";
 import { clinicStaffRepository } from "../src/services/clinicStaffService.js";
 
-const date = "2026-09-22";
+const date = "2099-09-22";
 const range = { clinic_id: "clinic-1", availability_date: date, start_time: "10:00:00", end_time: "14:00:00", slot_duration: 15 };
 const res = () => ({ statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } });
 
@@ -60,14 +60,14 @@ describe("Availability-based appointment tokens", () => {
   it("supports weekday recurrence without treating null as Sunday", () => {
     expect(buildDaySlots([{ ...range, availability_date: null, weekday: 2 }], date)).to.have.length(16);
     expect(buildDaySlots([{ ...range, availability_date: null, weekday: null }], "2026-09-27")).to.have.length(0);
-    expect(buildDaySlots([{ ...range, weekday: 2 }], "2026-09-29")).to.have.length(0);
+    expect(buildDaySlots([{ ...range, weekday: 2 }], "2099-09-29")).to.have.length(0);
   });
   it("excludes incomplete end slots and validates dates/time formats", () => {
     expect(buildDaySlots([{ ...range, end_time: "10:40" }], date)).to.have.length(2);
     expect(timeMinutes("4:00 PM")).to.equal(960);
     expect(timeMinutes("25:00")).to.equal(null);
     expect(() => buildDaySlots([], "2026-02-30")).to.throw("Invalid appointment date");
-    expect(indiaDateTime("2026-09-21T20:00:00Z")).to.deep.equal({ date, time: "01:30:00" });
+    expect(indiaDateTime("2099-09-21T20:00:00Z")).to.deep.equal({ date, time: "01:30:00" });
   });
   for (const invalid of ["10:07", "14:00", "09:45"]) {
     it(`rejects times outside slot boundaries: ${invalid}`, async () => {

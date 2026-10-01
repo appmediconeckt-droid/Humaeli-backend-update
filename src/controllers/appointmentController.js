@@ -354,12 +354,11 @@ import Appointment from '../models/appointmentModel.js';
 import User from '../models/userModel.js';
 import { createNotificationSafely } from '../services/notificationService.js';
 import { getAnonymousUserName, sanitizeUserForCounselor } from '../utils/anonymousUser.js';
-import { nextAppointmentToken } from '../services/appointmentTokenService.js';
 import { getActiveBreakDelayForAppointment } from '../services/doctorBreakService.js';
 import { withAppointmentBooking } from '../services/appointmentConflictService.js';
+import { withAppointmentSlot } from '../services/appointmentSlotService.js';
 import { normalizeBookingSource } from '../services/doctorAnalyticsService.js';
 import { getConsultationTiming, emitQueueUpdated as emitTimingQueueUpdated } from '../services/consultationTimingService.js';
-import { Clinic, Availability, UnavailableDate } from '../models/clinicModels.js';
 import { handle, doctorScope, actorId, fail, jsonRecord, pick, todayIST, dateOnly } from '../utils/clinicAccess.js';
 // Delete appointments that never became a completed/confirmed session once
 // their scheduled date/time is past. Support both American and British
@@ -536,53 +535,30 @@ export const book = async (req, res) => {
     const localDate = new Date(appointmentDate.getTime() + 19800000).toISOString();
     const appointment_date = localDate.slice(0, 10), appointment_time = localDate.slice(11, 19);
     const clinic_id = req.body.clinic_id;
-    if (await UnavailableDate.exists({ doctor_id: counselorId, unavailable_date: appointment_date })) {
-      return res.status(409).json({ message: 'Doctor is unavailable on this date' });
-    }
-    if (clinic_id) {
-      if (!await Clinic.exists({ _id: clinic_id, doctor_id: counselorId })) return res.status(404).json({ message: 'Clinic not found for this doctor' });
-      const ranges = await Availability.find({ clinic_id }).lean();
-      const specific = ranges.filter(r => r.availability_date === appointment_date);
-      const applicable = specific.length ? specific : ranges.filter(r => !r.availability_date && r.weekday === new Date(appointment_date + 'T00:00:00Z').getUTCDay());
-      const minutes = time => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
-      if (appointment_time.slice(6) !== '00' || !applicable.some(r => !r.is_unavailable && appointment_time.slice(0, 5) >= r.start_time && minutes(appointment_time) + r.slot_duration <= minutes(r.end_time) && (minutes(appointment_time) - minutes(r.start_time)) % r.slot_duration === 0)) {
-        return res.status(409).json({ message: 'Requested clinic slot is unavailable' });
-      }
-    }
-    const appointment = await withAppointmentBooking({ doctorId: counselorId, patientId: req.user._id,
-      appointmentDate: appointment_date, appointmentTime: appointment_time }, async () => {
-      const token_number = await nextAppointmentToken(counselorId, appointment_date);
-    return Appointment.create({
-  patient: req.user._id,
-
-  counselor: counselorId,
-
-  date: appointmentDate,
-
-  notes,
-
-  clinic_id,
-
-  appointment_date,
-
-  appointment_time,
-
-  token_number,
-
-  slot_key: `${counselorId}:${appointmentDate.toISOString()}`,
-
-  booking_source: normalizeBookingSource(
-    req.body.booking_source || req.body.source
-  ),
-
-  symptoms: req.body.symptoms,
-
-  // Queue
-  queue_status: "booked",
-
-  priority: "normal",
-});
-    });
+    const appointment = await withAppointmentSlot({
+      doctorId: counselorId,
+      date: appointment_date,
+      time: appointment_time,
+      clinicId: clinic_id,
+    }, async (slot) => Appointment.create({
+      patient: req.user._id,
+      counselor: counselorId,
+      date: appointmentDate,
+      notes,
+      clinic_id: slot.clinicId || clinic_id,
+      appointment_date,
+      appointment_time,
+      token_number: slot.token,
+      slot_key: `${counselorId}:${appointmentDate.toISOString()}`,
+      booking_source: normalizeBookingSource(
+        req.body.booking_source || req.body.source
+      ),
+      symptoms: req.body.symptoms,
+      patient_location: req.body.patient_location || req.body.appointment_location || req.body.location,
+      consultation_mode: req.body.consultation_mode,
+      queue_status: "booked",
+      priority: "normal",
+    }));
 
     // Notify the counselor via socket if global.io exists
     if (global.io) {
@@ -609,7 +585,8 @@ export const book = async (req, res) => {
     return res.status(201).json(appointment);
   } catch (err) {
     console.error("❌ book appointment error", err);
-    return res.status(err.code === 11000 ? 409 : err.statusCode || (['ValidationError', 'CastError'].includes(err.name) ? 400 : 500)).json({ message: err.code === 11000 ? 'Appointment slot is already booked' : err.statusCode ? err.message : 'Unable to book appointment', ...(err.code === 'DUPLICATE_APPOINTMENT' ? { code: err.code } : {}) });
+    const status = err.code === 11000 ? 409 : err.statusCode || err.status || (['ValidationError', 'CastError'].includes(err.name) ? 400 : 500);
+    return res.status(status).json({ message: err.code === 11000 ? 'Appointment slot is already booked' : (err.statusCode || err.status) ? err.message : 'Unable to book appointment', ...(err.code === 'DUPLICATE_APPOINTMENT' ? { code: err.code } : {}) });
   }
 };
 

@@ -2,6 +2,8 @@ import { Clinic, Availability, UnavailableDate } from '../models/clinicModels.js
 import LegacyDateRange from '../models/dateRangeModel.js';
 import LegacyUnavailableDate from '../models/unavailableDateModel.js';
 import LegacyClinic from '../models/clinicModel.js';
+import Appointment from '../models/appointmentModel.js';
+import WalkinAppointment from '../models/walkinAppointmentModel.js';
 import User from '../models/userModel.js';
 import mongoose from '../persistence/mongoose.js';
 import { buildDaySlots, indiaDateTime } from '../services/appointmentSlotService.js';
@@ -10,12 +12,44 @@ const format = row => ({ ...jsonRecord(row), date: row.availability_date || null
   recurrence: row.availability_date ? 'date' : 'weekly',
   time_period: Number(row.start_time.slice(0, 2)) < 12 ? 'morning' : Number(row.start_time.slice(0, 2)) < 17 ? 'afternoon' : 'evening' });
 const scope = req => doctorScope(req, req.body?.doctor_id || req.query?.doctor_id);
+const activeStatus = value => !['canceled', 'cancelled', 'rejected', 'reject'].includes(String(value || '').toLowerCase());
 const clinicId = value => {
   if (typeof value !== 'string' || !mongoose.isObjectIdOrHexString(value.trim())) {
     throw Object.assign(fail(400, 'clinic_id must be the clinic id returned by GET /api/clinics. Do not send a list position or numeric ID such as 1.'),
       { code: 'INVALID_CLINIC_ID', field: 'clinic_id' });
   }
   return value.trim();
+};
+const bookedSlotsFor = async (doctorId, clinicId) => {
+  const today = todayIST();
+  const onlineFilter = {
+    counselor: doctorId,
+    appointment_date: { $gte: today },
+    appointment_time: { $nin: [null, ''] },
+  };
+  const walkinFilter = {
+    doctor_id: doctorId,
+    appointment_date: { $gte: today },
+    appointment_time: { $nin: [null, ''] },
+  };
+  if (clinicId && clinicId !== 'all') {
+    onlineFilter.clinic_id = clinicId;
+    walkinFilter.clinic_id = clinicId;
+  }
+
+  const [online, walkins] = await Promise.all([
+    Appointment.find(onlineFilter).select('appointment_date appointment_time clinic_id status priority').lean(),
+    WalkinAppointment.find(walkinFilter).select('appointment_date appointment_time clinic_id appointment_status priority').lean(),
+  ]);
+
+  return [
+    ...online
+      .filter(row => activeStatus(row.status) && !(String(row.priority || '').toLowerCase() === 'emergency' && !row.appointment_time))
+      .map(row => ({ date: String(row.appointment_date || '').slice(0, 10), time: String(row.appointment_time || '').slice(0, 5), clinic_id: row.clinic_id ? String(row.clinic_id) : '', source: 'appointment' })),
+    ...walkins
+      .filter(row => activeStatus(row.appointment_status))
+      .map(row => ({ date: String(row.appointment_date || '').slice(0, 10), time: String(row.appointment_time || '').slice(0, 5), clinic_id: row.clinic_id ? String(row.clinic_id) : '', source: 'walkin' })),
+  ].filter(slot => slot.date && slot.time);
 };
 async function payload(req) {
   const b = req.body;
@@ -46,11 +80,12 @@ const read = availableOnly => handle(async (req, res) => {
     doctor_id = await scope(req);
   }
   if (clinic_id && !await Clinic.exists({ _id: clinic_id, doctor_id })) throw fail(404, 'Clinic not found for this doctor');
-  const [rows, excluded] = await Promise.all([
+  const [rows, excluded, bookedSlots] = await Promise.all([
     Availability.find({ doctor_id, ...(clinic_id ? { clinic_id } : {}), ...(availableOnly ? { is_unavailable: false } : {}) }).sort({ weekday: 1, start_time: 1 }).lean(),
     UnavailableDate.find({ doctor_id }).lean(),
+    bookedSlotsFor(doctor_id, clinic_id),
   ]);
-  res.json({ success: true, [availableOnly ? 'availableRanges' : 'existingRanges']: rows.map(format), unavailableDates: excluded.map(r => r.unavailable_date) });
+  res.json({ success: true, [availableOnly ? 'availableRanges' : 'existingRanges']: rows.map(format), unavailableDates: excluded.map(r => r.unavailable_date), bookedSlots });
 });
 
 const legacyUnavailableDatesFor = async (doctorId, clinicId, existingRanges = null) => {
@@ -75,8 +110,11 @@ export const getAvailableRanges = async (req, res) => {
     const filter = { doctor_id: doctorId, is_unavailable: 0 };
     if (clinicId && clinicId !== 'all') filter.clinic_id = clinicId;
     const ranges = await LegacyDateRange.find(filter);
-    const unavailableDates = await legacyUnavailableDatesFor(doctorId, clinicId);
-    return res.status(200).json({ success: true, data: ranges, ranges, existingRanges: ranges, unavailableDates });
+    const [unavailableDates, bookedSlots] = await Promise.all([
+      legacyUnavailableDatesFor(doctorId, clinicId),
+      bookedSlotsFor(doctorId, clinicId),
+    ]);
+    return res.status(200).json({ success: true, data: ranges, ranges, existingRanges: ranges, unavailableDates, bookedSlots });
   } catch (error) {
     console.error('Error fetching available ranges:', error);
     return res.status(500).json({ success: false, message: 'Failed to fetch available ranges', error: error.message });
@@ -93,7 +131,10 @@ export const getAvailabilityRanges = async (req, res) => {
     const filter = { doctor_id: doctorId };
     if (clinicId && clinicId !== "all") filter.clinic_id = clinicId;
     const ranges = await LegacyDateRange.find(filter).sort({ createdAt: -1 });
-    const unavailableDates = await legacyUnavailableDatesFor(doctorId, clinicId, ranges);
+    const [unavailableDates, bookedSlots] = await Promise.all([
+      legacyUnavailableDatesFor(doctorId, clinicId, ranges),
+      bookedSlotsFor(doctorId, clinicId),
+    ]);
     return res.status(200).json({
       success: true,
       data: ranges,
@@ -101,6 +142,7 @@ export const getAvailabilityRanges = async (req, res) => {
       existingRanges: ranges,
       unavailableDates,
       unavailable_dates: unavailableDates,
+      bookedSlots,
       count: ranges.length,
     });
   } catch (error) {
