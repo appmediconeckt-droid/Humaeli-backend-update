@@ -356,7 +356,7 @@ import { createNotificationSafely } from '../services/notificationService.js';
 import { getAnonymousUserName, sanitizeUserForCounselor } from '../utils/anonymousUser.js';
 import { getActiveBreakDelayForAppointment } from '../services/doctorBreakService.js';
 import { withAppointmentBooking } from '../services/appointmentConflictService.js';
-import { withAppointmentSlot } from '../services/appointmentSlotService.js';
+import { timeMinutes, withAppointmentSlot } from '../services/appointmentSlotService.js';
 import { normalizeBookingSource } from '../services/doctorAnalyticsService.js';
 import { getConsultationTiming, emitQueueUpdated as emitTimingQueueUpdated } from '../services/consultationTimingService.js';
 import { handle, doctorScope, actorId, fail, jsonRecord, pick, todayIST, dateOnly } from '../utils/clinicAccess.js';
@@ -1045,6 +1045,11 @@ const sortQueue = (appointments = []) =>
     const priorityDifference = queuePriority(a) - queuePriority(b);
     if (priorityDifference !== 0) return priorityDifference;
 
+    const timeDifference =
+      (timeMinutes(a.appointment_time) ?? 1440) -
+      (timeMinutes(b.appointment_time) ?? 1440);
+    if (timeDifference !== 0) return timeDifference;
+
     return Number(a.token_number || 0) - Number(b.token_number || 0);
   });
 
@@ -1146,7 +1151,7 @@ export const getMyTokenStatus = async (req, res) => {
       }
 
       const doctorAppointments = await Appointment.find(queueFilter)
-        .sort({ token_number: 1 })
+        .sort({ appointment_time: 1, token_number: 1 })
         .lean();
 
       const currentAppointment =
@@ -1305,7 +1310,7 @@ export const getDoctorQueue = handle(async (req, res) => {
       "fullName profilePhoto profileImage",
     )
     .populate("clinic_id", "name address")
-    .sort({ token_number: 1 })
+    .sort({ appointment_time: 1, token_number: 1 })
     .lean();
 
   const currentPatient =

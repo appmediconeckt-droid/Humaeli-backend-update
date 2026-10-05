@@ -3,9 +3,11 @@ import sinon from "sinon";
 import { buildDaySlots, timeMinutes, indiaDateTime, withAppointmentSlot, slotRepository } from "../src/services/appointmentSlotService.js";
 import { book } from "../src/controllers/appointmentController.js";
 import { createWalkinAppointment, updateWalkinAppointment } from "../src/controllers/walkinController.js";
+import { createWalkinAppointment as createPublicWalkinAppointment } from "../src/controllers/walkinAppointmentController.js";
 import User from "../src/models/userModel.js";
 import Appointment from "../src/models/appointmentModel.js";
 import Walkin from "../src/models/walkinAppointmentModel.js";
+import { WalkinAppointment as PublicWalkin } from "../src/models/clinicModels.js";
 import Notification from "../src/models/Notification.js";
 import { clinicStaffRepository } from "../src/services/clinicStaffService.js";
 
@@ -24,6 +26,7 @@ describe("Availability-based appointment tokens", () => {
     sandbox.stub(slotRepository, "unavailable").resolves(null);
     sandbox.stub(slotRepository, "online").resolves([]);
     sandbox.stub(slotRepository, "walkins").resolves([]);
+    sandbox.stub(User, "exists").resolves(true);
   });
   afterEach(() => sandbox.restore());
   const reserve = (time, options = {}) => withAppointmentSlot({ doctorId: "doctor-1", date, time, ...options }, async (slot) => slot);
@@ -35,7 +38,7 @@ describe("Availability-based appointment tokens", () => {
     ]);
     try { await reserve("10:00", { clinicId: "clinic-1" }); throw new Error("Should reject"); }
     catch (error) { expect(error.message).to.include("unavailable at this clinic"); }
-    expect((await reserve("14:00", { clinicId: "clinic-2" })).token).to.equal(17);
+    expect((await reserve("14:00", { clinicId: "clinic-2" })).token).to.equal(1);
     expect((await reserve(null)).clinicId).to.equal("clinic-2");
   });
 
@@ -52,10 +55,34 @@ describe("Availability-based appointment tokens", () => {
     expect((await reserve("10:15")).token).to.equal(2);
     expect((await reserve("10:00")).token).to.equal(1);
   });
-  it("sorts split shifts and deduplicates overlapping ranges", () => {
+  it("starts token numbering again for each split shift and deduplicates overlapping ranges", () => {
     const slots = buildDaySlots([{ ...range, start_time: "15:00", end_time: "16:00" }, range, range], date);
     expect(slots).to.have.length(20);
-    expect(slots[16]).to.include({ token: 17, time: "15:00:00" });
+    expect(slots[16]).to.include({ token: 1, time: "15:00:00" });
+  });
+  it("uses token 1 for both morning and evening first slots on the same date", () => {
+    const slots = buildDaySlots([
+      range,
+      { ...range, start_time: "18:00:00", end_time: "22:00:00" },
+    ], date);
+    expect(slots.find((slot) => slot.time === "10:00:00")).to.include({ token: 1 });
+    expect(slots.find((slot) => slot.time === "13:45:00")).to.include({ token: 16 });
+    expect(slots.find((slot) => slot.time === "18:00:00")).to.include({ token: 1 });
+    expect(slots.find((slot) => slot.time === "21:45:00")).to.include({ token: 16 });
+  });
+  it("restarts token numbers for every saved range on the same date", () => {
+    const slots = buildDaySlots([
+      { ...range, start_time: "21:28", end_time: "23:30", slot_duration: 10 },
+      { ...range, start_time: "17:00", end_time: "20:02", slot_duration: 10 },
+      { ...range, start_time: "12:30", end_time: "14:30", slot_duration: 20 },
+    ], date);
+    expect(slots).to.have.length(36);
+    expect(slots.find((slot) => slot.time === "12:30:00")).to.include({ token: 1 });
+    expect(slots.find((slot) => slot.time === "14:10:00")).to.include({ token: 6 });
+    expect(slots.find((slot) => slot.time === "17:00:00")).to.include({ token: 1 });
+    expect(slots.find((slot) => slot.time === "19:50:00")).to.include({ token: 18 });
+    expect(slots.find((slot) => slot.time === "21:28:00")).to.include({ token: 1 });
+    expect(slots.find((slot) => slot.time === "23:18:00")).to.include({ token: 12 });
   });
   it("supports weekday recurrence without treating null as Sunday", () => {
     expect(buildDaySlots([{ ...range, availability_date: null, weekday: 2 }], date)).to.have.length(16);
@@ -132,6 +159,23 @@ describe("Availability-based appointment tokens", () => {
     expect(response.statusCode).to.equal(201);
     expect(response.body.token_number).to.equal(16);
     expect(Walkin.create.firstCall.args[0].clinic_id).to.equal("clinic-1");
+  });
+  it("public walk-in appointment API uses doctor availability slots for tokens", async () => {
+    sandbox.stub(PublicWalkin, "create").callsFake(async (data) => ({ _id: "walkin-2", ...data }));
+    const response = res();
+    await createPublicWalkinAppointment({ query: {}, body: {
+      doctor_id: "doctor-1",
+      patient_name: "Test",
+      phone_number: "9100000003",
+      symptoms: "Headache",
+      appointment_date: date,
+      appointment_time: "10:15",
+      token_number: 99,
+    } }, response);
+    expect(response.statusCode).to.equal(201);
+    expect(response.body.token_number).to.equal(2);
+    expect(response.body.appointmentTime).to.equal("10:15:00");
+    expect(PublicWalkin.create.firstCall.args[0]).to.include({ token_number: 2, appointment_time: "10:15:00" });
   });
   it("rescheduling a walk-in recalculates its token", async () => {
     sandbox.stub(Walkin, "findById").resolves({ _id: "walkin-1", doctor_id: "doctor-1", appointment_date: date, appointment_time: "13:45:00", token_number: 16 });

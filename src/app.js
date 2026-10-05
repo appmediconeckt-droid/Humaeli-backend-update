@@ -315,6 +315,7 @@ import queueRoutes from './routes/queueRoutes.js';
 import displayRoutes from './routes/displayRoutes.js';
 import ledPageRoutes from './routes/ledPageRoutes.js';
 import clinicQrRoutes from './routes/clinicQrRoutes.js';
+import { corsOptions, isAllowedOrigin } from "./config/cors.js";
 
 
 
@@ -323,6 +324,8 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 app.disable('etag');
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 app.use('/api', apiFreshness);
 
 // Use a tolerant JSON parser: accept text for application/json, keep raw body,
@@ -369,75 +372,6 @@ const DB_STATE_LABEL = {
   2: "connecting",
   3: "disconnecting",
 };
-
-const splitEnvOrigins = (...values) =>
-  values
-    .flatMap((value) => String(value || "").split(","))
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-// ---------------------------
-// 1. CORS configuration
-// ---------------------------
-const configuredOrigins = splitEnvOrigins(
-  process.env.CLIENT_URL,
-  process.env.TUNNEL_URL,
-  process.env.FRONTEND_URL,
-  process.env.CORS_ORIGINS,
-);
-
-const allowedOrigins = [
-  "http://localhost:4173",
-  "http://localhost:3000",
-  "http://localhost:5173",
-  "http://192.168.0.138:5173",
-  "https://your-frontend-domain.com",
-  "https://www.humaeli.com",
-  "https://humaeli.com",
-  ...configuredOrigins,
-];
-
-const normalizeOrigin = (origin) => origin?.replace(/\/$/, "");
-const isDevTunnelOrigin = (origin) =>
-  /^https:\/\/[a-z0-9-]+-\d+\.inc\d+\.devtunnels\.ms$/i.test(origin);
-const isLocalOrigin = (origin) =>
-  /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+|[a-z0-9-]+\.local):\d+$/i.test(
-    origin,
-  );
-
-const isAllowedOrigin = (origin) => {
-  const normalized = normalizeOrigin(origin);
-  if (!normalized) return true;
-
-  const exactMatch = allowedOrigins.some(
-    (allowedOrigin) => normalizeOrigin(allowedOrigin) === normalized,
-  );
-
-  return (
-    exactMatch || isDevTunnelOrigin(normalized) || isLocalOrigin(normalized)
-  );
-};
-
-const corsOptions = {
-  origin(origin, callback) {
-    if (isAllowedOrigin(origin)) return callback(null, true);
-
-    console.warn(`CORS blocked origin: ${origin}`);
-    callback(new Error("Not allowed by CORS"), false);
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "X-Requested-With",
-    "Accept",
-  ],
-  optionsSuccessStatus: 204,
-};
-
-app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
 
 app.use(express.urlencoded({ extended: true }));
 app.use(helmet());

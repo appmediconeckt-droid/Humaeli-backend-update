@@ -11,7 +11,7 @@ export const jsonRecord = row => {
 export const handle = fn => async (req, res) => {
   try { return await fn(req, res); }
   catch (error) {
-    const status = error.statusCode || (['ValidationError', 'CastError'].includes(error.name) ? 400 : error.code === 11000 ? 409 : 500);
+    const status = error.statusCode || error.status || (['ValidationError', 'CastError'].includes(error.name) ? 400 : error.code === 11000 ? 409 : 500);
     if (status === 500) console.error('Clinic API error:', error);
     return res.status(status).json({ success: false, message: status === 500 ? 'Unable to complete request' : error.message,
       ...(error.code === 'DUPLICATE_APPOINTMENT' ? { code: error.code } : {}),

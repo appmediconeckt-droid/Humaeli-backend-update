@@ -1,6 +1,7 @@
 import Appointment from '../models/appointmentModel.js';
 import { WalkinAppointment } from '../models/clinicModels.js';
 import { query } from '../config/mysql.js';
+import { timeMinutes } from './appointmentSlotService.js';
 
 // Read the dashboard's appointment source as well as check-ins. Do not create
 // new bookings/tokens during display refresh or guess a clinic for unassigned rows.
@@ -14,6 +15,7 @@ export async function clinicDisplayQueue(link, date) {
     .select('token_number appointment_status queue_entry_id appointment_time').lean();
   for (const row of [...scheduled, ...walkins]) {
     const key = String(row._id), previous = entries.get(key);
+    const fallbackPosition = ((timeMinutes(row.appointment_time) ?? 1440) * 10000) + Number(row.token_number ?? 9999);
     const lifecycle = row.status || row.appointment_status;
     let status = ['canceled', 'cancelled', 'rejected'].includes(lifecycle) ? 'cancelled'
       : lifecycle === 'completed' ? 'completed' : (row.queue_status && row.queue_status !== 'booked' ? row.queue_status : previous?.status) || 'waiting';
@@ -21,7 +23,7 @@ export async function clinicDisplayQueue(link, date) {
     if (status === 'in_progress') status = 'in_consultation';
     if (status === 'canceled') status = 'cancelled';
     entries.set(key, { tokenNumber: previous?.tokenNumber ?? row.token_number ?? null,
-      status, priority: row.priority || 'normal', queuePosition: previous?.queuePosition ?? row.token_number ?? Number.MAX_SAFE_INTEGER });
+      status, priority: row.priority || 'normal', queuePosition: previous?.queuePosition ?? fallbackPosition });
   }
   const all = [...entries.values()].filter(row => row.status !== 'cancelled');
   const rank = row => row.priority === 'emergency' ? 0 : row.priority === 'urgent' ? 1 : 2;

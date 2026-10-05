@@ -74,9 +74,11 @@ supports the existing lifecycle; PATCH `/:id/check-in` accepts nurse vitals;
 PATCH `/:id` edits clinical notes/status. DELETE `/:id` is doctor/admin only.
 Patients, doctors and staff cannot read another doctor's records.
 
-Tokens are allocated atomically per doctor and India calendar date, shared between
-scheduled and walk-in appointments. Failed bookings may leave token-number gaps;
-numbers are never reused. Date-specific availability overrides weekly ranges.
+Tokens for scheduled and walk-in appointments come from the doctor's availability
+slots for the selected India calendar date. For example, with 15-minute slots,
+10:00 is token 1 and 10:15 is token 2. Each separate availability range starts
+again at token 1, so 10:00-14:00 and 18:00-22:00 both begin with token 1.
+Date-specific availability overrides weekly ranges.
 
 ## Walk-ins, follow-ups, leaves, medications
 

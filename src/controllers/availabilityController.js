@@ -13,6 +13,11 @@ const format = row => ({ ...jsonRecord(row), date: row.availability_date || null
   time_period: Number(row.start_time.slice(0, 2)) < 12 ? 'morning' : Number(row.start_time.slice(0, 2)) < 17 ? 'afternoon' : 'evening' });
 const scope = req => doctorScope(req, req.body?.doctor_id || req.query?.doctor_id);
 const activeStatus = value => !['canceled', 'cancelled', 'rejected', 'reject'].includes(String(value || '').toLowerCase());
+const appointmentIdValue = value => {
+  const text = String(value || '').trim();
+  if (!mongoose.isObjectIdOrHexString(text)) return text;
+  return { $in: [text, new mongoose.Types.ObjectId(text)] };
+};
 const clinicId = value => {
   if (typeof value !== 'string' || !mongoose.isObjectIdOrHexString(value.trim())) {
     throw Object.assign(fail(400, 'clinic_id must be the clinic id returned by GET /api/clinics. Do not send a list position or numeric ID such as 1.'),
@@ -23,22 +28,22 @@ const clinicId = value => {
 const bookedSlotsFor = async (doctorId, clinicId) => {
   const today = todayIST();
   const onlineFilter = {
-    counselor: doctorId,
     appointment_date: { $gte: today },
     appointment_time: { $nin: [null, ''] },
   };
+  onlineFilter.counselor = appointmentIdValue(doctorId);
   const walkinFilter = {
     doctor_id: doctorId,
     appointment_date: { $gte: today },
     appointment_time: { $nin: [null, ''] },
   };
   if (clinicId && clinicId !== 'all') {
-    onlineFilter.clinic_id = clinicId;
+    onlineFilter.clinic_id = appointmentIdValue(clinicId);
     walkinFilter.clinic_id = clinicId;
   }
 
   const [online, walkins] = await Promise.all([
-    Appointment.find(onlineFilter).select('appointment_date appointment_time clinic_id status priority').lean(),
+    Appointment.collection.find(onlineFilter).project({ appointment_date: 1, appointment_time: 1, clinic_id: 1, status: 1, priority: 1 }).toArray(),
     WalkinAppointment.find(walkinFilter).select('appointment_date appointment_time clinic_id appointment_status priority').lean(),
   ]);
 
