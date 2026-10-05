@@ -6,6 +6,7 @@ import { createNotificationSafely } from "../services/notificationService.js";
 import {
   ANONYMOUS_USER_NAME,
   getAnonymousUserName,
+  getUserPhotoUrl,
   sanitizeUserForCounselor,
 } from "../utils/anonymousUser.js";
 import {
@@ -86,13 +87,6 @@ const restoreChatForBothParticipants = (chat) => {
   return wasRestored;
 };
 
-const getUserPhotoUrl = (user) => {
-  const photo = user?.profilePhoto || user?.avatar || null;
-  if (!photo) return null;
-  if (typeof photo === "string") return photo;
-  return photo.secure_url || photo.url || photo.path || null;
-};
-
 const serializeChatPerson = (user, fallbackId = null) => {
   if (!user) return fallbackId ? { id: String(fallbackId), _id: String(fallbackId) } : null;
   const id = user._id || user.id || fallbackId;
@@ -160,19 +154,8 @@ const buildChatNotificationData = ({
 };
 
 const visibleCounselorFilter = {
-  role: "counsellor",
+  role: { $in: ["counsellor", "doctor"] },
   isActive: true,
-  profileCompleted: true,
-  "specialization.0": { $exists: true },
-  experience: { $gt: 0 },
-  $and: [
-    {
-      $or: [
-        { qualification: { $nin: ["", null] } },
-        { education: { $nin: ["", null] } },
-      ],
-    },
-  ],
 };
 
 const assertSufficientChatBalance = async (userId, sessionType) => {
@@ -730,7 +713,7 @@ export const acceptChat = async (req, res) => {
           name: populatedChat.userId.anonymous || ANONYMOUS_USER_NAME,
           anonymous: populatedChat.userId.anonymous,
           email: "",
-          avatar: null,
+          avatar: getUserPhotoUrl(populatedChat.userId),
           isOnline: populatedChat.userId.isActive,
         },
         counselor: {
@@ -913,7 +896,9 @@ export const getPendingRequests = async (req, res) => {
           name: user.anonymous || ANONYMOUS_USER_NAME,
           anonymous: user.anonymous || "",
           email: "",
-          Image: null,
+          profilePhoto: getUserPhotoUrl(user),
+          avatarUrl: getUserPhotoUrl(user),
+          Image: getUserPhotoUrl(user),
         },
         requestMessage: messageMap[chat._id.toString()] || "No message",
         requestedAt: chat.startedAt,
@@ -1003,9 +988,7 @@ export const getChats = async (req, res) => {
         const otherPartyName = isCounselorViewingUser
           ? getAnonymousUserName(otherParty)
           : otherParty.fullName;
-        const otherPartyAvatar = isCounselorViewingUser
-          ? null
-          : otherParty.profilePhoto?.url || null;
+        const otherPartyAvatar = getUserPhotoUrl(otherParty);
 
         return {
           id: chat._id,
@@ -1020,6 +1003,8 @@ export const getChats = async (req, res) => {
             name: otherPartyName,
             anonymous: otherParty.anonymous,
             avatar: otherPartyAvatar,
+            profilePhoto: otherPartyAvatar,
+            avatarUrl: otherPartyAvatar,
             age: otherParty.age ?? null,
             gender: otherParty.gender || null,
             dateOfBirth: otherParty.dateOfBirth || null,

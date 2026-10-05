@@ -351,39 +351,80 @@
 
 
 import Appointment from '../models/appointmentModel.js';
+import WalkinAppointment from '../models/walkinAppointmentModel.js';
 import User from '../models/userModel.js';
 import { createNotificationSafely } from '../services/notificationService.js';
 import { getAnonymousUserName, sanitizeUserForCounselor } from '../utils/anonymousUser.js';
 import { nextAppointmentToken } from '../services/appointmentTokenService.js';
 import { getActiveBreakDelayForAppointment } from '../services/doctorBreakService.js';
 import { withAppointmentBooking } from '../services/appointmentConflictService.js';
+import { indiaDateTime, slotRepository } from '../services/appointmentSlotService.js';
 import { normalizeBookingSource } from '../services/doctorAnalyticsService.js';
-import { getConsultationTiming, emitQueueUpdated as emitTimingQueueUpdated } from '../services/consultationTimingService.js';
+import { getAppointmentSlotDuration, getConsultationTiming, emitQueueUpdated as emitTimingQueueUpdated } from '../services/consultationTimingService.js';
 import { Clinic, Availability, UnavailableDate } from '../models/clinicModels.js';
 import { handle, doctorScope, actorId, fail, jsonRecord, pick, todayIST, dateOnly } from '../utils/clinicAccess.js';
-// Delete appointments that never became a completed/confirmed session once
-// their scheduled date/time is past. Support both American and British
-// cancellation spellings because older clients store both variants.
-const EXPIRED_UNRESOLVED_STATUS_PATTERN = /^(pending|rejected|reject|canceled|cancelled)$/i;
+// Expire unstarted appointments only after their full scheduled slot. Keep the
+// row as no-show history; cancelled and completed appointments are never deleted.
+export const markExpiredAppointmentsNoShow = async (now = new Date()) => {
+  const candidates = await Appointment.find({
+    status: { $in: ["pending", "confirmed"] },
+    queue_status: { $nin: ["in_progress", "completed", "no_show", "canceled", "cancelled"] },
+    consultation_started_at: null,
+    date: { $lte: now },
+  }).lean();
+  const rangesByDoctor = new Map();
+  let noShowCount = 0;
 
-// Pending/rejected/canceled appointments are no longer actionable once their
-// scheduled time has passed. deleteMany is idempotent, so it is safe to run
-// from both the recurring cleanup job and the appointments API request path.
-export const deleteExpiredUnresolvedAppointments = async () => {
-  const result = await Appointment.deleteMany({
-    // Existing records can contain "reject" / uppercase values from older
-    // UI versions, so keep this check case-insensitive and backward-safe.
-    status: EXPIRED_UNRESOLVED_STATUS_PATTERN,
-    date: { $lt: new Date() },
-  });
+  for (const appointment of candidates) {
+    const status = String(appointment.status || "").toLowerCase();
+    const queueStatus = String(appointment.queue_status || "").toLowerCase();
+    if (
+      !["pending", "confirmed"].includes(status) ||
+      ["in_progress", "completed", "no_show", "canceled", "cancelled"].includes(queueStatus) ||
+      appointment.consultation_started_at ||
+      appointment.consultation_timing?.startedAt
+    ) {
+      continue;
+    }
 
-  if (result.deletedCount > 0) {
-    console.log(
-      `Appointment cleanup: removed ${result.deletedCount} expired unresolved appointment(s)`,
+    const doctorId = String(appointment.counselor || "");
+    if (!rangesByDoctor.has(doctorId)) {
+      rangesByDoctor.set(
+        doctorId,
+        await slotRepository.ranges(appointment.counselor),
+      );
+    }
+
+    const durationMinutes = Number(
+      appointment.consultation_timing?.durationMinutes ||
+      await getAppointmentSlotDuration(appointment, rangesByDoctor.get(doctorId)),
     );
+    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) continue;
+
+    const scheduledAt = new Date(appointment.date).getTime();
+    if (!Number.isFinite(scheduledAt) || scheduledAt + durationMinutes * 60000 > now.getTime()) {
+      continue;
+    }
+
+    const result = await Appointment.updateOne(
+      {
+        _id: appointment._id,
+        status: { $in: ["pending", "confirmed"] },
+        queue_status: { $nin: ["in_progress", "completed", "no_show", "canceled", "cancelled"] },
+        consultation_started_at: null,
+      },
+      { $set: { queue_status: "no_show" } },
+    );
+    if (result.modifiedCount || result.nModified) {
+      noShowCount += 1;
+      await emitTimingQueueUpdated({ ...appointment, queue_status: "no_show" });
+    }
   }
 
-  return result.deletedCount;
+  if (noShowCount > 0) {
+    console.log(`Appointment cleanup: marked ${noShowCount} expired appointment(s) as no-show`);
+  }
+  return noShowCount;
 };
 
 // IST (India Standard Time) is UTC+5:30
@@ -443,6 +484,30 @@ const getEndOfDayIST = (date) => {
   return new Date(endOfDay.getTime() - IST_OFFSET); // Convert back to UTC
 };
 
+const APPOINTMENT_CONSULTANT_ROLES = [
+  "consultant",
+  "counsellor",
+  "counselor",
+  "counsellour",
+];
+
+export const appointmentProviderFilter = (providerId) => ({
+  _id: providerId,
+  isActive: true,
+  $or: [
+    { role: "doctor" },
+    { accountType: "doctor" },
+    {
+      role: { $in: APPOINTMENT_CONSULTANT_ROLES },
+      profileCompleted: true,
+    },
+    {
+      accountType: "consultant",
+      profileCompleted: true,
+    },
+  ],
+});
+
 export const book = async (req, res) => {
   try {
     const counselorId = req.body.counselorId || req.body.doctor_id;
@@ -499,16 +564,13 @@ export const book = async (req, res) => {
       });
     }
 
-    const counselor = await User.findOne({
-      _id: counselorId,
-      role: { $in: ["counsellor", "doctor"] },
-      isActive: true,
-      profileCompleted: true,
-    }).select("_id");
+    const counselor = await User.findOne(
+      appointmentProviderFilter(counselorId),
+    ).select("_id role accountType profileCompleted");
 
     if (!counselor) {
       return res.status(404).json({
-        message: "Counselor not found or profile is not complete yet",
+        message: "Provider not found or profile is not available yet",
       });
     }
 
@@ -594,7 +656,7 @@ export const book = async (req, res) => {
 
 export const getAppointments = async (req, res) => {
   try {
-    await deleteExpiredUnresolvedAppointments();
+    await markExpiredAppointmentsNoShow();
 
     const userId = req.user._id;
     const { filter, date } = req.query;
@@ -661,13 +723,59 @@ export const getAppointments = async (req, res) => {
 export const updateStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const rawStatus = req.body.status;
-    const status = rawStatus === "cancelled" ? "canceled" : rawStatus;
+    const rawStatus = String(
+      req.body.status ||
+        req.body.appointment_status ||
+        req.body.queue_status ||
+        (req.body.consultation_action === "start" ? "in-progress" : ""),
+    ).toLowerCase();
+    const starting = ["in-progress", "in_progress"].includes(rawStatus);
     const userId = req.user._id;
 
-    const appointment = await Appointment.findById(id);
+    let appointment = await Appointment.findById(id);
     if (!appointment) {
-      return res.status(404).json({ message: "Appointment not found" });
+      const walkin = await WalkinAppointment.findById(id);
+      if (!walkin) {
+        return res.status(404).json({ message: "Appointment not found" });
+      }
+
+      if (String(walkin.doctor_id) !== String(userId)) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      const walkinStatus = starting
+        ? "in-progress"
+        : rawStatus === "canceled"
+          ? "cancelled"
+          : rawStatus;
+      if (
+        ![
+          "pending",
+          "booked",
+          "confirmed",
+          "accepted",
+          "in-progress",
+          "completed",
+          "cancelled",
+          "rejected",
+        ].includes(walkinStatus)
+      ) {
+        return res.status(400).json({ message: "Invalid appointment status" });
+      }
+
+      walkin.consultation_timing = await getConsultationTiming(walkin, {
+        ...req.body,
+        status: walkinStatus,
+      });
+      walkin.appointment_status =
+        walkinStatus === "accepted" ? "confirmed" : walkinStatus;
+      await walkin.save();
+      await emitTimingQueueUpdated(walkin);
+
+      return res.json({
+        message: `Appointment ${walkinStatus} successfully`,
+        appointment: walkin,
+      });
     }
 
     if (
@@ -677,8 +785,14 @@ export const updateStatus = async (req, res) => {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
+    const status =
+      rawStatus === "cancelled"
+        ? "canceled"
+        : ["accepted", "booked"].includes(rawStatus)
+          ? "confirmed"
+          : rawStatus;
     if (
-      String(status).toLowerCase() === "confirmed" &&
+      status === "confirmed" &&
       new Date(appointment.date).getTime() <= Date.now()
     ) {
       return res.status(400).json({
@@ -686,19 +800,65 @@ export const updateStatus = async (req, res) => {
       });
     }
 
-    appointment.status = status;
+    const allowedStatuses = [
+      "pending",
+      "confirmed",
+      "canceled",
+      "rejected",
+      "completed",
+    ];
+    if (!starting && !allowedStatuses.includes(status)) {
+      return res.status(400).json({ message: "Invalid appointment status" });
+    }
+
+    if (starting) {
+      const otherRunning = await Appointment.findOne({
+        _id: { $ne: appointment._id },
+        counselor: appointment.counselor,
+        appointment_date: appointment.appointment_date,
+        queue_status: "in_progress",
+      }).lean();
+      if (otherRunning) {
+        return res.status(409).json({
+          message: `Token ${otherRunning.token_number} consultation is already in progress`,
+        });
+      }
+
+      if (appointment.status === "pending") appointment.status = "confirmed";
+      appointment.queue_status = "in_progress";
+      appointment.consultation_started_at =
+        appointment.consultation_started_at || new Date();
+      appointment.consultation_timing = await getConsultationTiming(
+        appointment,
+        { ...req.body, status: "in-progress" },
+      );
+    } else {
+      appointment.status = status;
+    }
 
     // Keep appointment status and live queue status in sync where appropriate.
-    if (status === "completed") {
+    if (!starting && status === "completed") {
       appointment.queue_status = "completed";
       appointment.consultation_ended_at =
         appointment.consultation_ended_at || new Date();
-    } else if (["canceled", "rejected"].includes(status)) {
+    } else if (!starting && ["canceled", "rejected"].includes(status)) {
       appointment.queue_status = "canceled";
       appointment.slot_key = undefined;
-    } else {
+    } else if (!starting) {
       appointment.slot_key =
         `${appointment.counselor}:${new Date(appointment.date).toISOString()}`;
+    }
+
+    if (
+      !starting &&
+      ["completed", "cancelled", "canceled"].includes(
+        String(req.body.consultation_action || "").toLowerCase(),
+      )
+    ) {
+      appointment.consultation_timing = await getConsultationTiming(
+        appointment,
+        { ...req.body, status },
+      );
     }
 
     await saveOnlineAppointment(appointment);
@@ -730,13 +890,14 @@ export const updateStatus = async (req, res) => {
         err.code === 11000
           ? 409
           : err.statusCode ||
+            err.status ||
             (["ValidationError", "CastError"].includes(err.name) ? 400 : 500),
       )
       .json({
         message:
           err.code === 11000
             ? "Appointment slot is already booked"
-            : err.statusCode
+            : err.statusCode || err.status
               ? err.message
               : "Unable to update appointment status",
       });

@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import sinon from "sinon";
 import { buildDaySlots, timeMinutes, indiaDateTime, withAppointmentSlot, slotRepository } from "../src/services/appointmentSlotService.js";
-import { book } from "../src/controllers/appointmentController.js";
+import { book, markExpiredAppointmentsNoShow } from "../src/controllers/appointmentController.js";
 import { createWalkinAppointment, updateWalkinAppointment } from "../src/controllers/walkinController.js";
 import User from "../src/models/userModel.js";
 import Appointment from "../src/models/appointmentModel.js";
@@ -140,5 +140,51 @@ describe("Availability-based appointment tokens", () => {
     await updateWalkinAppointment({ params: { id: "walkin-1" }, body: { appointment_time: "10:15", token_number: 99 } }, response);
     expect(response.statusCode).to.equal(200);
     expect(update.firstCall.args[1].$set.token_number).to.equal(2);
+  });
+
+  it("keeps an unstarted appointment through its full slot and then marks it no-show", async () => {
+    const appointment = {
+      _id: "appointment-1",
+      counselor: "doctor-1",
+      date: new Date(`${date}T10:00:00+05:30`),
+      appointment_date: date,
+      appointment_time: "10:00:00",
+      status: "pending",
+      queue_status: "booked",
+    };
+    sandbox.stub(Appointment, "find").returns({ lean: async () => [appointment] });
+    const update = sandbox.stub(Appointment, "updateOne").resolves({ modifiedCount: 1 });
+    const slotEnd = new Date(`${date}T10:15:00+05:30`);
+
+    expect(await markExpiredAppointmentsNoShow(new Date(slotEnd.getTime() - 1))).to.equal(0);
+    expect(update.called).to.equal(false);
+    expect(await markExpiredAppointmentsNoShow(slotEnd)).to.equal(1);
+    expect(update.firstCall.args[0]._id).to.equal(appointment._id);
+    expect(update.firstCall.args[1].$set.queue_status).to.equal("no_show");
+  });
+
+  it("keeps started and cancelled appointments instead of expiring or deleting them", async () => {
+    const started = {
+      _id: "started",
+      counselor: "doctor-1",
+      date: new Date(`${date}T10:00:00+05:30`),
+      appointment_date: date,
+      appointment_time: "10:00:00",
+      status: "confirmed",
+      queue_status: "in_progress",
+    };
+    const cancelled = {
+      ...started,
+      _id: "cancelled",
+      status: "canceled",
+      queue_status: "canceled",
+    };
+    sandbox.stub(Appointment, "find").returns({ lean: async () => [started, cancelled] });
+    const update = sandbox.stub(Appointment, "updateOne");
+    const remove = sandbox.stub(Appointment, "deleteMany");
+
+    expect(await markExpiredAppointmentsNoShow(new Date(`${date}T11:00:00+05:30`))).to.equal(0);
+    expect(update.called).to.equal(false);
+    expect(remove.called).to.equal(false);
   });
 });

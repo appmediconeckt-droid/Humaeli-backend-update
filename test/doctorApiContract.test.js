@@ -12,9 +12,11 @@ import User from "../src/models/userModel.js";
 import Session from "../src/models/sessionModel.js";
 import Chat from "../src/models/Chat.js";
 import Appointment from "../src/models/appointmentModel.js";
+import WalkinAppointment from "../src/models/walkinAppointmentModel.js";
 import DateRange from "../src/models/dateRangeModel.js";
 import UnavailableDate from "../src/models/unavailableDateModel.js";
 import { expandConsultationNotes } from "../src/controllers/appointmentController.js";
+import { slotRepository } from "../src/services/appointmentSlotService.js";
 
 // Mount actual routers without app.js startup jobs or writes to the real DB.
 const app = express();
@@ -116,6 +118,32 @@ describe("Doctor frontend API contracts", () => {
     expect(appointment.status).to.equal("completed");
     expect(expandConsultationNotes({ notes: appointment.notes })).to.include({ notes: "Patient notes", medicine: "Test medicine", follow_up_required: false });
     expect(res.body.appointment.medicine).to.equal("Test medicine");
+  });
+
+  it("starts a walk-in appointment through the appointment status endpoint", async () => {
+    const walkin = {
+      _id: "walkin-appointment-1",
+      doctor_id: doctor._id,
+      appointment_date: "2026-10-05",
+      appointment_time: "10:00:00",
+      appointment_status: "booked",
+      save: sandbox.stub().resolves(),
+    };
+    sandbox.stub(Appointment, "findById").resolves(null);
+    sandbox.stub(WalkinAppointment, "findById").resolves(walkin);
+    sandbox.stub(slotRepository, "ranges").resolves([
+      { availability_date: "2026-10-05", start_time: "09:00", end_time: "17:00", slot_duration: 15 },
+    ]);
+
+    const res = await request(app)
+      .patch(`/api/appointments/${walkin._id}/status`)
+      .auth(token, { type: "bearer" })
+      .send({ status: "in-progress" });
+
+    expect(res.status).to.equal(200);
+    expect(walkin.appointment_status).to.equal("in-progress");
+    expect(walkin.consultation_timing).to.include({ state: "consulting", durationMinutes: 15 });
+    expect(Date.parse(walkin.consultation_timing.startedAt)).to.be.greaterThan(0);
   });
 
   for (const method of ["patch", "delete"]) {

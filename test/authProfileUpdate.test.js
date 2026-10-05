@@ -47,6 +47,49 @@ describe("Counsellor profile update certification validation", function () {
     expect(res.json.firstCall.args[0].fields).to.deep.equal(['gender']);
   });
 
+  it('rejects object-shaped primitive profile fields before coercion', async () => {
+    const objectWithoutPrimitive = Object.create(null);
+    objectWithoutPrimitive.value = 'Test User';
+    const find = sandbox.stub(User, 'findById').resolves({ _id: 'user123', role: 'user' });
+    const update = sandbox.stub(User, 'findByIdAndUpdate');
+    const res = { status: sinon.stub().returnsThis(), json: sinon.spy() };
+
+    await updateUserById({ params: { userId: 'user123' }, body: { fullName: objectWithoutPrimitive }, files: {} }, res);
+
+    expect(res.status.calledWith(400)).to.equal(true);
+    expect(res.json.firstCall.args[0]).to.include({ success: false, field: 'fullName' });
+    expect(find.calledOnce).to.equal(true);
+    expect(update.called).to.equal(false);
+  });
+
+  it('normalizes parser-shaped counselor array fields', async () => {
+    const currentUser = {
+      _id: 'user123',
+      role: 'counsellor',
+      certifications: [],
+    };
+    sandbox.stub(User, 'findById').resolves(currentUser);
+    const findByIdAndUpdateStub = sandbox.stub(User, 'findByIdAndUpdate').returns({
+      select: sinon.stub().resolves({ ...currentUser, specialization: ['Stress'], languages: ['English'] }),
+    });
+    const res = { status: sinon.stub().returnsThis(), json: sinon.spy() };
+
+    await updateUserById({
+      params: { userId: 'user123' },
+      body: {
+        specialization: { 0: 'Stress', 1: ' Anxiety ' },
+        languages: { 0: 'English' },
+        consultationMode: '["video","chat"]',
+      },
+      files: {},
+    }, res);
+
+    expect(res.status.calledWith(200)).to.equal(true);
+    expect(findByIdAndUpdateStub.firstCall.args[1].$set.specialization).to.deep.equal(['Stress', 'Anxiety']);
+    expect(findByIdAndUpdateStub.firstCall.args[1].$set.languages).to.deep.equal(['English']);
+    expect(findByIdAndUpdateStub.firstCall.args[1].$set.consultationMode).to.deep.equal(['video', 'chat']);
+  });
+
   it("rejects profile updates when more than five certification documents are submitted", async function () {
     const currentUser = {
       _id: "user123",

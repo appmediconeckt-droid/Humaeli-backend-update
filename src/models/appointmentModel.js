@@ -137,6 +137,10 @@ const appointmentSchema = new mongoose.Schema(
     consultation_ended_at: {
       type: Date,
     },
+
+    consultation_timing: {
+      type: mongoose.Schema.Types.Mixed,
+    },
   },
   {
     timestamps: true,

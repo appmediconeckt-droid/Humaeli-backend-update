@@ -11,6 +11,7 @@ import Transaction from "../src/models/transactionModel.js";
 import Prescription from "../src/models/mysql/PrescriptionModel.js";
 import prescriptionRoutes from "../src/routes/prescriptionRoutes.js";
 import { getAllCounsellors, getCounsellorById } from "../src/controllers/authController.js";
+import { appointmentProviderFilter } from "../src/controllers/appointmentController.js";
 import { videoCallController } from "../src/controllers/videoCallController.js";
 import { reconcileWalletPayment, walletGateway } from "../src/controllers/walletController.js";
 
@@ -28,15 +29,17 @@ describe("User API repairs", () => {
   });
   afterEach(() => sandbox.restore());
 
-  it("directory admits completed doctors and counsellors while retaining completion filters", async () => {
-    const find = sandbox.stub(User, "find").returns({ select() { return this; }, sort() { return this; }, lean: async () => [{ _id: "doctor-test", role: "doctor" }, { _id: "counsellor-test", role: "counsellor" }] });
+  it("directory admits active doctors and consultants without requiring stale completion flags", async () => {
+    const find = sandbox.stub(User, "find").returns({ select() { return this; }, sort() { return this; }, lean: async () => [{ _id: "doctor-test", role: "doctor" }, { _id: "consultant-test", role: "consultant" }, { _id: "counsellor-test", role: "counsellor" }] });
     sandbox.stub(Message, "aggregate").resolves([]);
     const res = response();
     await getAllCounsellors({ query: {} }, res);
     expect(res.statusCode).to.equal(200);
-    expect(find.firstCall.args[0].role).to.deep.equal({ $in: ["counsellor", "doctor"] });
-    expect(find.firstCall.args[0]).to.include({ isActive: true, profileCompleted: true });
-    expect(res.body.counsellors.map((p) => p.role)).to.deep.equal(["doctor", "counsellor"]);
+    expect(find.firstCall.args[0].$or[0].role.$in).to.include.members(["consultant", "counsellor", "doctor"]);
+    expect(find.firstCall.args[0].$or[1].accountType.$in).to.include.members(["consultant", "doctor"]);
+    expect(find.firstCall.args[0]).to.include({ isActive: true });
+    expect(find.firstCall.args[0]).not.to.have.property("profileCompleted");
+    expect(res.body.counsellors.map((p) => p.role)).to.deep.equal(["doctor", "consultant", "counsellor"]);
   });
 
   it("doctor detail lookup uses the same supported roles as the directory", async () => {
@@ -44,7 +47,19 @@ describe("User API repairs", () => {
     const res = response();
     await getCounsellorById({ params: { counsellorId: "doctor-test" } }, res);
     expect(res.statusCode).to.equal(200);
-    expect(find.firstCall.args[0].role.$in).to.include("doctor");
+    expect(find.firstCall.args[0].$or[0].role.$in).to.include("doctor");
+  });
+
+  it("appointment booking accepts active doctors without the stale counselor completion flag", () => {
+    const filter = appointmentProviderFilter("doctor-test");
+    expect(filter).to.include({ _id: "doctor-test", isActive: true });
+    expect(filter).not.to.have.property("profileCompleted");
+    expect(filter.$or).to.deep.include({ role: "doctor" });
+    expect(filter.$or).to.deep.include({ accountType: "doctor" });
+    expect(filter.$or).to.deep.include({
+      role: { $in: ["consultant", "counsellor", "counselor", "counsellour"] },
+      profileCompleted: true,
+    });
   });
 
   it("call history works with MySQL promises and resolves participant names", async () => {

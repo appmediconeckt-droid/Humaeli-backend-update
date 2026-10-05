@@ -2,7 +2,7 @@ import { expect } from "chai";
 import sinon from "sinon";
 import { consultationTransition, emitQueueUpdated } from "../src/services/consultationTimingService.js";
 import { formatTokenStatus } from "../src/controllers/tokenStatusController.js";
-import { updateDoctorAppointment } from "../src/controllers/appointmentController.js";
+import { markExpiredAppointmentsNoShow, updateDoctorAppointment } from "../src/controllers/appointmentController.js";
 import { updateWalkinAppointment } from "../src/controllers/walkinController.js";
 import Appointment from "../src/models/appointmentModel.js";
 import Walkin from "../src/models/walkinAppointmentModel.js";
@@ -64,6 +64,70 @@ describe("Persisted consultation timing and live queue", () => {
     expect(result.current).to.include({ elapsedSeconds: 180, doctorStatus: "break" });
     expect(result.queue.estimatedTurnTime).to.equal(null);
     expect(formatTokenStatus(mine, [current, mine], {}, [], breaks, at("10:10:00").getTime()).current.elapsedSeconds).to.equal(300);
+  });
+  it("marks an unstarted appointment no-show only after its complete slot duration", async () => {
+    const appointment = {
+      _id: "missed",
+      counselor: "doctor",
+      status: "pending",
+      queue_status: "booked",
+      date: at("10:00:00"),
+      appointment_date: "2026-09-22",
+      appointment_time: "10:00:00",
+    };
+    const find = sandbox.stub(Appointment, "find").returns({
+      lean: async () => [appointment],
+    });
+    const updateOne = sandbox.stub(Appointment, "updateOne").resolves({ modifiedCount: 1 });
+    sandbox.stub(slotRepository, "ranges").resolves([{
+      availability_date: "2026-09-22",
+      start_time: "10:00",
+      end_time: "11:00",
+      slot_duration: 15,
+    }]);
+
+    expect(await markExpiredAppointmentsNoShow(at("10:14:59"))).to.equal(0);
+    expect(updateOne.called).to.equal(false);
+    expect(await markExpiredAppointmentsNoShow(at("10:15:00"))).to.equal(1);
+    expect(updateOne.calledOnce).to.equal(true);
+    expect(updateOne.firstCall.args[0]).to.include({
+      consultation_started_at: null,
+    });
+    expect(updateOne.firstCall.args[1]).to.deep.equal({
+      $set: { queue_status: "no_show" },
+    });
+    expect(find.firstCall.args[0].status).to.deep.equal({
+      $in: ["pending", "confirmed"],
+    });
+  });
+  it("never marks a started or cancelled appointment as no-show", async () => {
+    sandbox.stub(Appointment, "find").returns({
+      lean: async () => [
+        {
+          _id: "started",
+          counselor: "doctor",
+          status: "confirmed",
+          queue_status: "booked",
+          consultation_started_at: at("10:05:00"),
+          date: at("10:00:00"),
+          appointment_date: "2026-09-22",
+          appointment_time: "10:00:00",
+        },
+        {
+          _id: "cancelled",
+          counselor: "doctor",
+          status: "canceled",
+          queue_status: "canceled",
+          date: at("10:00:00"),
+          appointment_date: "2026-09-22",
+          appointment_time: "10:00:00",
+        },
+      ],
+    });
+    const updateOne = sandbox.stub(Appointment, "updateOne");
+
+    expect(await markExpiredAppointmentsNoShow(at("10:30:00"))).to.equal(0);
+    expect(updateOne.called).to.equal(false);
   });
   for (const source of ["online", "walkin"]) {
     it(`doctor start persists real timing for ${source} appointments`, async () => {

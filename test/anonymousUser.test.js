@@ -36,8 +36,9 @@ describe("anonymousUser privacy helpers", function () {
     expect(safeUser.name).to.equal("Anonymous_1234");
     expect(safeUser.fullName).to.equal("");
     expect(safeUser.email).to.equal("");
-    expect(safeUser.profilePhoto).to.equal(null);
-    expect(safeUser.avatar).to.equal(null);
+    expect(safeUser.profilePhoto).to.deep.equal({ url: "https://example.com/patient.jpg" });
+    expect(safeUser.avatar).to.equal("https://example.com/patient.jpg");
+    expect(safeUser.avatarUrl).to.equal("https://example.com/patient.jpg");
     expect(safeUser.gender).to.equal("female");
     expect(safeUser.age).to.equal(28);
   });

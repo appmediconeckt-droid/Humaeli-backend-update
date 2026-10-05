@@ -28,6 +28,21 @@ export const consultationTransition = (previous, action, duration, now = new Dat
   return timing;
 };
 
+export const getAppointmentSlotDuration = async (appointment, availableRanges) => {
+  const doctorId = appointment.doctor_id || appointment.counselor;
+  const fallback = appointment.date ? indiaDateTime(appointment.date) : {};
+  const date = appointment.appointment_date || fallback.date;
+  const time = appointment.appointment_time || fallback.time;
+  if (!doctorId || !date || !time) return 0;
+
+  const ranges = availableRanges || await slotRepository.ranges(doctorId);
+  const range = ranges.find((item) =>
+    (!appointment.clinic_id || !item.clinic_id || String(item.clinic_id) === String(appointment.clinic_id)) &&
+    buildDaySlots([item], date).some((slot) => timeMinutes(slot.time) === timeMinutes(time))
+  );
+  return Number(range?.slot_duration) || 0;
+};
+
 export const getConsultationTiming = async (appointment, body) => {
   if (body.consultation_action && !["pause", "resume"].includes(body.consultation_action)) {
     throw Object.assign(new Error("Invalid consultation action"), { status: 400 });
@@ -38,15 +53,7 @@ export const getConsultationTiming = async (appointment, body) => {
   if (!["start", "pause", "resume", "end"].includes(action)) throw Object.assign(new Error("Invalid consultation action"), { status: 400 });
   let duration = appointment.consultation_timing?.durationMinutes;
   if (action === "start" && !appointment.consultation_timing?.startedAt) {
-    const doctorId = appointment.doctor_id || appointment.counselor;
-    const fallback = appointment.date ? indiaDateTime(appointment.date) : {};
-    const date = appointment.appointment_date || fallback.date;
-    const time = appointment.appointment_time || fallback.time;
-    const ranges = await slotRepository.ranges(doctorId);
-    const range = date && ranges.find((range) =>
-      (!appointment.clinic_id || !range.clinic_id || String(range.clinic_id) === String(appointment.clinic_id)) &&
-      buildDaySlots([range], date).some((slot) => timeMinutes(slot.time) === timeMinutes(time)));
-    duration = range ? Number(range.slot_duration) : null;
+    duration = await getAppointmentSlotDuration(appointment);
   }
   return consultationTransition(appointment.consultation_timing, action, duration);
 };

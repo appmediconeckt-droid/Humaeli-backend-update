@@ -265,7 +265,7 @@ import prescriptionRoutes from "./routes/prescriptionRoutes.js";
 import callRoutes from "./routes/callRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import appointmentRoutes from "./routes/appointmentRoutes.js";
-import { deleteExpiredUnresolvedAppointments } from "./controllers/appointmentController.js";
+import { markExpiredAppointmentsNoShow } from "./controllers/appointmentController.js";
 import { getMyChatHistory } from "./controllers/chatController.js";
 import { getPaymentConfig } from "./controllers/messageController.js";
 import { settleInactiveChatSessions } from "./services/paidSessionService.js";
@@ -587,14 +587,14 @@ app.use("/api/admin/reviews", adminReviewRoutes);
 app.use("/api/admin/payments", adminPaymentRoutes);
 app.use("/api/admin/support", adminSupportRoutes);
 app.use("/api/admin/refunds", adminRefundRoutes);
-// Remove unresolved appointments only after their scheduled date/time has
-// passed. The request-time cleanup in getAppointments is a second safeguard.
+// Mark unstarted appointments as no-show only after their full slot duration;
+// keep all appointment rows so completed/cancelled history remains available.
 export const startDatabaseJobs = createDatabaseStartup(mongoose.connection, async () => {
   if (process.env.NODE_ENV === "test") return;
   await resetAllUsersPresence();
   const appointmentCleanupInterval = setInterval(() => {
     if (mongoose.connection.readyState !== 1) return;
-    deleteExpiredUnresolvedAppointments().catch((error) => {
+    markExpiredAppointmentsNoShow().catch((error) => {
       console.error("Appointment cleanup failed:", error.message);
     });
   }, 60 * 1000);
@@ -609,7 +609,7 @@ export const startDatabaseJobs = createDatabaseStartup(mongoose.connection, asyn
   settleInactiveChatSessions().catch((error) => {
     console.error("Initial inactive chat billing settlement failed:", error.message);
   });
-  deleteExpiredUnresolvedAppointments().catch((error) => {
+  markExpiredAppointmentsNoShow().catch((error) => {
     console.error("Initial appointment cleanup failed:", error.message);
   });
 
