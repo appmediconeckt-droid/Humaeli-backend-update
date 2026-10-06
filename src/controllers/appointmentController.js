@@ -362,8 +362,6 @@ import { normalizeBookingSource } from '../services/doctorAnalyticsService.js';
 import { getAppointmentSlotDuration, getConsultationTiming, emitQueueUpdated as emitTimingQueueUpdated } from '../services/consultationTimingService.js';
 import { Clinic, Availability, UnavailableDate } from '../models/clinicModels.js';
 import { timeMinutes, withAppointmentSlot } from '../services/appointmentSlotService.js';
-import { normalizeBookingSource } from '../services/doctorAnalyticsService.js';
-import { getConsultationTiming, emitQueueUpdated as emitTimingQueueUpdated } from '../services/consultationTimingService.js';
 import { handle, doctorScope, actorId, fail, jsonRecord, pick, todayIST, dateOnly } from '../utils/clinicAccess.js';
 // Expire unstarted appointments only after their full scheduled slot. Keep the
 // row as no-show history; cancelled and completed appointments are never deleted.
