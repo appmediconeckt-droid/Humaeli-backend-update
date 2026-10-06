@@ -9,6 +9,7 @@ import { fail } from '../utils/clinicAccess.js';
 import { queueToday } from '../utils/queueDate.js';
 import { withQueueMutex } from './queueMutex.js';
 import { doctorProfileUrl, clinicWalkinUrl } from './qrLinks.js';
+import { timeMinutes, withAppointmentSlot } from './appointmentSlotService.js';
 
 const id = () => randomBytes(12).toString('hex');
 const rows = async (db, sql, params = []) => (await db.query(sql, params))[0];
@@ -151,28 +152,35 @@ export async function bookClinicWalkin(linkId, body) {
   if (typeof body.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,64}$/.test(body.requestId)) throw fail(400, 'A valid requestId is required');
   const date = queueToday();
   if (body.appointmentDate && body.appointmentDate !== date) throw fail(400, 'Clinic walk-in is available for today only');
+  const requestedTime = body.appointmentTime ?? body.appointment_time ?? null;
+  const currentTime = new Intl.DateTimeFormat('en-GB', { timeZone: process.env.QUEUE_TIMEZONE || 'Asia/Kolkata', hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23' }).format(new Date());
+  const earliestTime = requestedTime ? null : timeMinutes(currentTime);
   const storage = mongoose.connection.db;
   if (!storage) throw fail(503, 'Database is not ready');
   const table = WalkinAppointment.collection.name;
   await WalkinAppointment.createCollection();
-  const result = await withQueueMutex(first.link.facility_id, first.link.doctor_id, date, async connection => {
+  const [previousRows] = await query(`SELECT e.* FROM clinic_qr_requests r JOIN queue_entries e ON e.id=CONVERT(r.queue_entry_id USING utf8mb4) COLLATE utf8mb4_unicode_ci WHERE r.doctor_clinic_id=? AND r.request_id=?`, [linkId, body.requestId]);
+  const result = previousRows[0] || await withAppointmentSlot({
+    doctorId: first.link.doctor_id,
+    date,
+    time: requestedTime,
+    clinicId: first.link.clinic_id || undefined,
+    earliestTime,
+  }, slot => withQueueMutex(first.link.facility_id, first.link.doctor_id, date, async connection => {
     try {
       await connection.beginTransaction();
-      const { link, doctor } = await resolveWalkin(linkId, connection, true);
+      const { link } = await resolveWalkin(linkId, connection, true);
       const previous = await one(connection, `SELECT e.* FROM clinic_qr_requests r JOIN queue_entries e ON e.id=CONVERT(r.queue_entry_id USING utf8mb4) COLLATE utf8mb4_unicode_ci WHERE r.doctor_clinic_id=? AND r.request_id=?`, [linkId, body.requestId]);
       if (previous) { await connection.commit(); return previous; }
       const active = await one(connection, "SELECT id FROM queue_entries WHERE facilityId=? AND doctorId=? AND queueDate=? AND patientPhone=? AND status IN ('waiting','called','in_consultation')", [link.facility_id, link.doctor_id, date, phone]);
       if (active) throw fail(409, 'This patient is already checked in at this clinic today');
-      const max = await one(connection, 'SELECT COALESCE(MAX(queuePosition),0) AS lastNumber FROM queue_entries WHERE facilityId=? AND doctorId=? AND queueDate=?', [link.facility_id, link.doctor_id, date]);
-      const position = Number(max.lastNumber) + 1;
-      const parts = String(doctor.fullName || 'Doctor').replace(/^Dr\.?\s*/i, '').trim().split(/\s+/);
-      const prefix = (parts.length > 1 ? parts[0][0] + parts[1][0] : parts[0].slice(0, 2)).toUpperCase();
-      const token = `${prefix}${String(position).padStart(3, '0')}`, entryId = id();
+      const token = String(slot.token), entryId = id();
+      const position = (slot.minutes * 10000) + slot.token;
       const appointment = new WalkinAppointment({ doctor_id: link.doctor_id, clinic_id: link.clinic_id || undefined,
         doctor_clinic_id: link.id, facility_id: link.facility_id, queue_entry_id: entryId,
         patient_name: name, phone_number: phone, symptoms, appointment_date: date,
-        appointment_time: new Intl.DateTimeFormat('en-GB', { timeZone: process.env.QUEUE_TIMEZONE || 'Asia/Kolkata', hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23' }).format(new Date()),
-        token_number: position, booking_source: 'qr', createdAt: new Date(), updatedAt: new Date() });
+        appointment_time: slot.time,
+        token_number: slot.token, booking_source: 'qr', createdAt: new Date(), updatedAt: new Date() });
       await appointment.validate();
       // Respect the existing model adapter's write lock and row-state metadata.
       await connection.query('SELECT collection_name FROM _humaeli_locks WHERE collection_name=? FOR UPDATE', [table]);
@@ -183,7 +191,7 @@ export async function bookClinicWalkin(linkId, body) {
       const entry = await one(connection, 'SELECT * FROM queue_entries WHERE id=?', [entryId]);
       await connection.commit(); return entry;
     } catch (error) { await connection.rollback(); throw error; }
-  });
+  }));
   // No patient data in the public confirmation or event.
   const response = { appointmentId: result.appointmentId, queueEntryId: result.id, doctorClinicId: linkId,
     doctorId: result.doctorId, facilityId: result.facilityId, clinicId: first.link.clinic_id,

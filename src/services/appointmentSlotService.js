@@ -29,6 +29,7 @@ export const buildDaySlots = (ranges, date) => {
     throw slotError("Invalid appointment date");
   }
   const slots = new Map();
+  const applicableRanges = [];
   for (const range of ranges) {
     if (range.is_unavailable === true || Number(range.is_unavailable) === 1) continue;
     const specificDate = String(range.availability_date || range.date || "").slice(0, 10);
@@ -39,15 +40,20 @@ export const buildDaySlots = (ranges, date) => {
     const end = timeMinutes(range.end_time);
     const duration = Number(range.slot_duration);
     if (start === null || end === null || !Number.isInteger(duration) || duration < 1 || end <= start) continue;
-    for (let minute = start; minute + duration <= end; minute += duration) {
-      const slot = slots.get(minute) || { minutes: minute, time: clockTime(minute), clinicIds: [] };
+    applicableRanges.push({ range, start, end, duration });
+  }
+  applicableRanges.sort((a, b) => a.start - b.start || a.end - b.end || a.duration - b.duration);
+  for (const { range, start, end, duration } of applicableRanges) {
+    let token = 1;
+    for (let minute = start; minute + duration <= end; minute += duration, token += 1) {
+      const slot = slots.get(minute) || { minutes: minute, time: clockTime(minute), clinicIds: [], token, slot_duration: duration };
       const clinic = String(range.clinic_id || "");
       if (!slot.clinicIds.includes(clinic)) slot.clinicIds.push(clinic);
       slots.set(minute, slot);
     }
   }
   return [...slots.values()].sort((a, b) => a.minutes - b.minutes)
-    .map((slot, index) => ({ ...slot, token: index + 1, date }));
+    .map((slot) => ({ ...slot, date }));
 };
 
 export const slotRepository = {

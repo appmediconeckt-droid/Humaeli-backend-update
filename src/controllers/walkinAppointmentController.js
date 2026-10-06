@@ -1,10 +1,10 @@
 import { WalkinAppointment, FollowUp } from '../models/clinicModels.js';
 import User from '../models/userModel.js';
-import { nextAppointmentToken, getCurrentDatabaseDateTime } from '../services/appointmentTokenService.js';
 import { normalizeDateOfBirth } from '../services/patientDateOfBirthService.js';
 import { normalizeBookingSource } from '../services/doctorAnalyticsService.js';
 import { getActiveBreakDelayForAppointment } from '../services/doctorBreakService.js';
 import { withAppointmentBooking, bookingMinute } from '../services/appointmentConflictService.js';
+import { withAppointmentSlot, indiaDateTime, timeMinutes } from '../services/appointmentSlotService.js';
 import { handle, doctorScope, pick, fail, jsonRecord, bool, dateOnly } from '../utils/clinicAccess.js';
 const scope = req => doctorScope(req, req.query?.doctor_id || req.body?.doctor_id);
 export const createWalkinAppointment = handle(async (req, res) => {
@@ -15,30 +15,36 @@ export const createWalkinAppointment = handle(async (req, res) => {
   const phone_number = String(b.phone_number ?? b.phone ?? b.contact_number ?? '').trim();
   if (!patient_name || !/^\+?[\d ()-]{7,20}$/.test(phone_number) || !b.symptoms) throw fail(400, 'patient_name, valid phone_number and symptoms are required');
   const dob = normalizeDateOfBirth(b.date_of_birth ?? b.dob);
-  const current = await getCurrentDatabaseDateTime();
+  const current = indiaDateTime();
   const requestedDate = b.appointment_date ?? b.appointmentDate;
   const requestedTime = b.appointment_time ?? b.appointmentTime;
-  if ((requestedDate === undefined) !== (requestedTime === undefined)) throw fail(400, 'appointment_date and appointment_time must be provided together');
-  const appointment_date = dateOnly(requestedDate ?? current.appointment_date);
-  const appointment_time = bookingMinute(requestedTime ?? current.appointment_time) + ':00';
-  const row = await withAppointmentBooking({ doctorId: doctor_id, phoneNumber: phone_number,
-    appointmentDate: appointment_date, appointmentTime: appointment_time }, async () => {
-    const token_number = await nextAppointmentToken(doctor_id, appointment_date);
-    // Public intake never creates a verified login or overwrites an existing patient.
+  const appointment_date = dateOnly(requestedDate ?? current.date);
+  const selected_time = requestedTime === undefined ? null : bookingMinute(requestedTime);
+  const nowMinutes = timeMinutes(current.time);
+  const row = await withAppointmentSlot({ doctorId: doctor_id, date: appointment_date,
+    time: selected_time, clinicId: b.clinic_id ?? b.clinicId,
+    earliestTime: !selected_time && appointment_date === current.date ? nowMinutes : null }, async (slot) => {
+    // Public intake never creates a verified login, overwrites an existing patient,
+    // or trusts a client-supplied token. The selected availability slot owns both.
     return WalkinAppointment.create({ doctor_id, patient_name, phone_number, symptoms: b.symptoms,
       gender: b.gender || undefined, date_of_birth: dob.provided ? dob.value : undefined,
-      appointment_date, appointment_time, token_number, booking_source: normalizeBookingSource(b.booking_source ?? b.source ?? req.query?.source) });
+      clinic_id: slot.clinicId || undefined, appointment_date: slot.date,
+      appointment_time: slot.time, token_number: slot.token,
+      booking_source: normalizeBookingSource(b.booking_source ?? b.source ?? req.query?.source) });
   });
   const token_number = row.token_number;
   res.status(201).json({ success: true, message: 'Walk-in appointment created', id: String(row._id),
     doctor_id: String(doctor_id), tokenNumber: token_number, token_number, appointmentDate: appointment_date,
-    appointmentTime: appointment_time, bookingSource: row.booking_source, booking_source: row.booking_source, date_of_birth: dob.value });
+    appointmentTime: row.appointment_time, clinic_id: row.clinic_id || null,
+    bookingSource: row.booking_source, booking_source: row.booking_source, date_of_birth: dob.value });
 });
 const enrich = async row => ({ ...jsonRecord(row), ...await getActiveBreakDelayForAppointment(row.doctor_id,
   new Date(row.appointment_date + 'T' + row.appointment_time + '+05:30')) });
 export const getWalkinAppointments = handle(async (req, res) => {
   const doctor_id = await scope(req);
-  const rows = await WalkinAppointment.find({ doctor_id, ...(req.query.date ? { appointment_date: dateOnly(req.query.date) } : {}) }).sort({ createdAt: -1 }).lean();
+  const rows = await WalkinAppointment.find({ doctor_id, ...(req.query.date ? { appointment_date: dateOnly(req.query.date) } : {}) })
+    .sort({ appointment_date: 1, appointment_time: 1, token_number: 1, createdAt: -1 })
+    .lean();
   res.json({ success: true, data: await Promise.all(rows.map(enrich)), total: rows.length });
 });
 export const getWalkinAppointmentById = handle(async (req, res) => {

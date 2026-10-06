@@ -28,7 +28,8 @@ export const getWalkinAppointments = async (req, res) => {
       filter.appointment_status = String(rawStatus).toLowerCase();
     }
 
-    const appointments = await WalkinAppointment.find(filter).sort({ createdAt: -1 });
+    const appointments = await WalkinAppointment.find(filter)
+      .sort({ appointment_date: 1, appointment_time: 1, token_number: 1, createdAt: -1 });
     const targetDate = req.query.date || indiaDateTime().date;
     const enriched = await enrichAppointmentsWithDelay(appointments, doctorId, targetDate);
 
