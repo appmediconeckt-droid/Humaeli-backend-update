@@ -21,14 +21,24 @@ describe("User token status route", () => {
     today = indiaDateTime().date;
     own = { id: "my-booking", patient: "patient-1", counselor: "doctor-1", appointment_date: today, appointment_time: "11:00:00", token_number: 5, status: "pending" };
     token = jwt.sign({ userId: "patient-1", sessionId: "session-test-123", role: "user" }, process.env.ACCESS_SECRET);
-    sandbox.stub(Session, "findOne").resolves({ isActive: true });
+    sandbox.stub(Session, "findOne").resolves({ _id: "session-test-123", isActive: true });
+    sandbox.stub(Session, "updateOne").resolves({ modifiedCount: 1 });
     sandbox.stub(Appointment, "find").resolves([own]);
     sandbox.stub(Walkin, "find").resolves([]);
     sandbox.stub(slotRepository, "online").resolves([own]);
     sandbox.stub(slotRepository, "walkins").resolves([]);
     sandbox.stub(slotRepository, "ranges").resolves([]);
     sandbox.stub(tokenTimingRepository, "breaks").resolves([]);
-    sandbox.stub(User, "findById").returns({ select() { return this; }, lean: async () => ({ fullName: "Test Doctor" }) });
+    sandbox.stub(User, "findById").callsFake((id) => ({
+      _id: id,
+      role: String(id) === "patient-1" ? "user" : "doctor",
+      isActive: true,
+      isOnline: true,
+      lastSeen: null,
+      fullName: String(id) === "patient-1" ? "Test Patient" : "Test Doctor",
+      select() { return this; },
+      lean: async () => ({ _id: id, fullName: String(id) === "patient-1" ? "Test Patient" : "Test Doctor" }),
+    }));
   });
   afterEach(() => sandbox.restore());
   const get = () => request(app).get("/api/appointments/my-token-status?patient_id=someone-else").auth(token, { type: "bearer" });
@@ -57,13 +67,17 @@ describe("User token status route", () => {
     expect(res.body.appointments[0].emergency).to.include({ active: true, totalEmergencyPatients: 1, emergencyPatientsAhead: 1 });
     expect(JSON.stringify(res.body)).not.to.include("PRIVATE NAME");
   });
-  it("retains completed appointments without live queue timing", async () => {
+  it("does not return completed appointments in the live token list", async () => {
     Appointment.find.resolves([{ ...own, status: "completed" }]);
     const res = await get();
     expect(res.status).to.equal(200);
-    expect(res.body.appointments[0].appointment.status).to.equal("completed");
-    expect(res.body.appointments[0].queue.estimatedTurnTime).to.equal(null);
-    expect(res.body.appointments[0].current.consultationStartedAt).to.equal(null);
+    expect(res.body.appointments).to.deep.equal([]);
+  });
+  it("does not return appointments whose consultation has already ended", async () => {
+    Appointment.find.resolves([{ ...own, status: "pending", consultation_ended_at: new Date() }]);
+    const res = await get();
+    expect(res.status).to.equal(200);
+    expect(res.body.appointments).to.deep.equal([]);
   });
   it("prioritizes an online emergency appointment without exposing its reason to other patients", async () => {
     slotRepository.online.resolves([own, { ...own, id: "emergency-booking", patient: "patient-2", priority: "emergency", emergency_reason: "PRIVATE MEDICAL REASON", appointment_time: "11:15:00" }]);
@@ -82,7 +96,25 @@ describe("User token status route", () => {
     expect(res.body.appointments[0].token.myToken).to.equal(null);
     expect(res.body.appointments[0].emergency.active).to.equal(true);
   });
-  it("includes historical and cancelled appointments with newest bookings first", async () => {
+  it("handles AM/PM appointment times without throwing a 500", async () => {
+    const amPm = { ...own, appointment_time: "11:00 AM" };
+    Appointment.find.resolves([amPm]);
+    slotRepository.online.resolves([amPm]);
+    const res = await get();
+    expect(res.status).to.equal(200);
+    expect(res.body.appointments[0].appointment.appointmentTime).to.equal("11:00:00");
+    expect(res.body.appointments[0].appointment.scheduledStartAt).to.be.a("string");
+  });
+  it("skips invalid legacy dates instead of failing the whole token response", async () => {
+    const legacy = { ...own, appointment_date: "", appointment_time: "", date: "not-a-date" };
+    Appointment.find.resolves([legacy]);
+    slotRepository.online.resolves([legacy]);
+    const res = await get();
+    expect(res.status).to.equal(200);
+    expect(res.body.appointments[0].appointment.appointmentDate).to.equal("");
+    expect(res.body.appointments[0].appointment.scheduledStartAt).to.equal(null);
+  });
+  it("excludes terminal appointments and keeps active tokens newest first", async () => {
     Appointment.find.resolves([
       { ...own, id: "old", appointment_date: "2020-01-01", status: "completed", createdAt: "2020-01-01T00:00:00Z" },
       { ...own, id: "new", status: "cancelled", createdAt: "2026-09-23T00:00:00Z" },
@@ -91,7 +123,16 @@ describe("User token status route", () => {
     const res = await get();
     expect(res.status).to.equal(200);
     expect(Appointment.find.firstCall.args[0]).to.deep.equal({ patient: "patient-1" });
-    expect(res.body.appointments.map(item => item.appointment._id)).to.deep.equal(["new", "middle", "old"]);
+    expect(res.body.appointments.map(item => item.appointment._id)).to.deep.equal(["middle"]);
+  });
+  it("reuses the same doctor lookup promise for multiple active appointments", async () => {
+    const second = { ...own, id: "second-booking", appointment_time: "11:15:00", token_number: 6 };
+    Appointment.find.resolves([own, second]);
+    slotRepository.online.resolves([own, second]);
+    const res = await get();
+    expect(res.status).to.equal(200);
+    expect(res.body.appointments).to.have.length(2);
+    expect(User.findById.withArgs("doctor-1").calledOnce).to.equal(true);
   });
   it("does not mix queues from different dates or doctors", async () => {
     slotRepository.online.resolves([own, { ...own, id: "wrong-day", appointment_date: "2099-01-01" }, { ...own, id: "wrong-doctor", counselor: "doctor-2" }]);

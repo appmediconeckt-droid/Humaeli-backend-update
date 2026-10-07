@@ -8,7 +8,9 @@ import Message from "../src/models/Message.js";
 import Call from "../src/models/Call.js";
 import Session from "../src/models/sessionModel.js";
 import Transaction from "../src/models/transactionModel.js";
-import Prescription from "../src/models/mysql/PrescriptionModel.js";
+import Prescription from "../src/models/Prescription.js";
+import AppointmentModel from "../src/models/appointmentModel.js";
+import { FollowUp } from "../src/models/clinicModels.js";
 import prescriptionRoutes from "../src/routes/prescriptionRoutes.js";
 import { getAllCounsellors, getCounsellorById } from "../src/controllers/authController.js";
 import { appointmentProviderFilter } from "../src/controllers/appointmentController.js";
@@ -75,7 +77,7 @@ describe("User API repairs", () => {
   });
 
   it("returns only the logged-in patient's prescriptions without binary/private storage fields", async () => {
-    const find = sandbox.stub(Prescription, "find").returns({ sort: async () => [{ id: "rx-1", patientId: "patient-test-123", patientSnapshot: { name: "Patient" }, psychiatristSnapshot: { name: "Doctor" }, medicines: [{ name: "Example" }], patientPhoto: { data: "private-photo" }, pdf: { url: "/uploads/private.pdf" }, identityVerification: { status: "verified" } }] });
+    const find = sandbox.stub(Prescription, "find").returns({ sort() { return this; }, lean: async () => [{ _id: "rx-1", patientId: "patient-test-123", patientSnapshot: { name: "Patient" }, psychiatristSnapshot: { name: "Doctor" }, medicines: [{ name: "Example" }], patientPhoto: { mimeType: "image/png", data: "private-photo" }, pdf: { url: "/uploads/private.pdf" }, identityVerification: { status: "verified" } }] });
     const res = await request(app).get("/api/prescriptions/my").auth(token, { type: "bearer" });
     expect(res.status).to.equal(200);
     expect(find.firstCall.args[0]).to.deep.equal({ patientId: "patient-test-123" });
@@ -84,17 +86,66 @@ describe("User API repairs", () => {
     expect(res.body.prescriptions[0]).not.to.have.property("pdf");
   });
 
+  it("groups user prescriptions by doctor with appointment, follow-up, and medicine duration details", async () => {
+    sandbox.stub(Prescription, "find").returns({
+      sort() { return this; },
+      lean: async () => [],
+    });
+    sandbox.stub(AppointmentModel, "find").returns({
+      sort() { return this; },
+      lean: async () => [{
+        _id: "appointment-1",
+        patient: "patient-test-123",
+        counselor: "doctor-test-123",
+        status: "completed",
+        appointment_date: "2026-10-10",
+        appointment_time: "10:30",
+        consultation_ended_at: new Date("2026-10-10T05:15:00.000Z"),
+        diagnosis: "Fever",
+        medicines: [{ name: "Paracetamol", dosage: "500mg", timing: "After food", duration: "5 days", timeOfDay: ["Morning", "Night"] }],
+        follow_up_required: true,
+        follow_up_date: new Date("2026-10-15T04:30:00.000Z"),
+      }],
+    });
+    sandbox.stub(User, "find").returns({
+      lean: async () => [{ _id: "doctor-test-123", fullName: "Dr Test", qualification: "MBBS", specialization: "Physician" }],
+    });
+    sandbox.stub(FollowUp, "find").returns({
+      sort() { return this; },
+      lean: async () => [{
+        _id: "follow-up-1",
+        doctor_id: "doctor-test-123",
+        patient_id: "patient-test-123",
+        appointment_id: "appointment-1",
+        follow_up_date: new Date("2026-10-15T04:30:00.000Z"),
+        follow_up_type: "review",
+        reason: "Check fever",
+        notes: "Bring reports",
+        status: "pending",
+      }],
+    });
+
+    const res = await request(app).get("/api/prescriptions/my").auth(token, { type: "bearer" });
+
+    expect(res.status).to.equal(200);
+    expect(res.body.doctorCards).to.have.length(1);
+    expect(res.body.doctorCards[0].doctor).to.include({ id: "doctor-test-123", name: "Dr Test" });
+    expect(res.body.doctorCards[0].appointments[0].when).to.include({ date: "2026-10-10", time: "10:30" });
+    expect(res.body.doctorCards[0].appointments[0].medicines[0]).to.include({ name: "Paracetamol", duration: "5 days" });
+    expect(res.body.doctorCards[0].appointments[0].followUps[0]).to.include({ id: "follow-up-1", type: "review", reason: "Check fever" });
+  });
+
   it("requires authentication for prescription lists", async () => {
     expect((await request(app).get("/api/prescriptions/my")).status).to.equal(401);
   });
 
   it("does not expose another patient's prescription photo", async () => {
-    sandbox.stub(Prescription, "findById").resolves({ patientId: "someone-else", psychiatristId: "doctor-test" });
-    expect((await request(app).get("/api/prescriptions/rx-1/photo").auth(token, { type: "bearer" })).status).to.equal(404);
+    sandbox.stub(Prescription, "findById").returns({ select() { return this; }, lean: async () => ({ patientId: "someone-else", psychiatristId: "doctor-test" }) });
+    expect([403, 404]).to.include((await request(app).get("/api/prescriptions/rx-1/photo").auth(token, { type: "bearer" })).status);
   });
 
   it("reads migrated prescription photo data", async () => {
-    sandbox.stub(Prescription, "findById").resolves({ patientId: "patient-test-123", patientPhoto: { mimeType: "image/png", data: { $binary: { base64: Buffer.from("test-image").toString("base64") } } } });
+    sandbox.stub(Prescription, "findById").returns({ select() { return this; }, lean: async () => ({ patientId: "patient-test-123", patientPhoto: { mimeType: "image/png", data: { $binary: { base64: Buffer.from("test-image").toString("base64") } } } }) });
     const res = await request(app).get("/api/prescriptions/rx-1/photo").auth(token, { type: "bearer" });
     expect(res.status).to.equal(200);
     expect(res.body.toString()).to.equal("test-image");

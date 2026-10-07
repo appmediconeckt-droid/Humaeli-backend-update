@@ -2,7 +2,7 @@
 import WalkinAppointment from "../models/walkinAppointmentModel.js";
 import { ensureClinicStaffSchema } from "../services/clinicStaffService.js";
 import { withAppointmentSlot, indiaDateTime } from "../services/appointmentSlotService.js";
-import { getConsultationTiming, emitQueueUpdated } from "../services/consultationTimingService.js";
+import { getConsultationTiming, emitQueueUpdated, notifyUpcomingQueuePatients, findOtherActiveConsultation } from "../services/consultationTimingService.js";
 import { enrichAppointmentsWithDelay } from "../services/appointmentDelayService.js";
 
 export const getWalkinAppointments = async (req, res) => {
@@ -216,8 +216,19 @@ export const updateWalkinAppointment = async (req, res) => {
       if (String(req.userId || req.user?._id || "") !== String(appointment.doctor_id)) {
         return res.status(403).json({ message: "Only the assigned doctor can update consultation timing" });
       }
+      const wasStarted = Boolean(appointment.consultation_timing?.startedAt || appointment.consultation_started_at);
+      const wasEnded = Boolean(appointment.consultation_timing?.endedAt || appointment.consultation_ended_at);
       const timing = await getConsultationTiming(appointment, req.body);
+      if (timing?.startedAt && !wasStarted) {
+        const otherRunning = await findOtherActiveConsultation(appointment);
+        if (otherRunning) {
+          return res.status(409).json({
+            message: `Token ${otherRunning.record.token_number || ""} consultation is already in progress`.trim(),
+          });
+        }
+      }
       if (timing) updates.consultation_timing = timing;
+      updates.__notifyQueueSoon = (!wasStarted && timing?.startedAt) || (!wasEnded && timing?.endedAt);
     }
 
     // Normalize status fields
@@ -235,6 +246,8 @@ export const updateWalkinAppointment = async (req, res) => {
       updates.date_of_birth = new Date(updates.date_of_birth);
     }
 
+    const notifyQueueSoon = Boolean(updates.__notifyQueueSoon);
+    delete updates.__notifyQueueSoon;
     const changesSlot = updates.appointment_date !== undefined || updates.appointment_time !== undefined || updates.clinic_id !== undefined;
     const updated = changesSlot
       ? await withAppointmentSlot({
@@ -249,6 +262,7 @@ export const updateWalkinAppointment = async (req, res) => {
       : await WalkinAppointment.findByIdAndUpdate(id, { $set: updates }, { new: true });
 
     await emitQueueUpdated(updated);
+    if (notifyQueueSoon) await notifyUpcomingQueuePatients(updated);
     return res.status(200).json({
       success: true,
       message: "Walk-in appointment updated successfully",

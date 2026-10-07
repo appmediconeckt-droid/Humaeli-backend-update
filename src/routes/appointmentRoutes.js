@@ -45,10 +45,10 @@ import {
   updateAppointment,
   deleteDoctorAppointment,
   deleteAppointment,
-  getMyTokenStatus,
   getDoctorQueue,
   setAppointmentEmergency,
 } from "../controllers/appointmentController.js";
+import { getMyTokenStatus } from "../controllers/tokenStatusController.js";
 
 import {
   authenticateToken,

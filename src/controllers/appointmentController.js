@@ -359,7 +359,7 @@ import { getActiveBreakDelayForAppointment } from '../services/doctorBreakServic
 import { withAppointmentBooking } from '../services/appointmentConflictService.js';
 import { indiaDateTime, slotRepository } from '../services/appointmentSlotService.js';
 import { normalizeBookingSource } from '../services/doctorAnalyticsService.js';
-import { getAppointmentSlotDuration, getConsultationTiming, emitQueueUpdated as emitTimingQueueUpdated } from '../services/consultationTimingService.js';
+import { getAppointmentSlotDuration, getConsultationTiming, emitQueueUpdated as emitTimingQueueUpdated, notifyUpcomingQueuePatients, findOtherActiveConsultation } from '../services/consultationTimingService.js';
 import { Clinic, Availability, UnavailableDate } from '../models/clinicModels.js';
 import { timeMinutes, withAppointmentSlot } from '../services/appointmentSlotService.js';
 import { handle, doctorScope, actorId, fail, jsonRecord, pick, todayIST, dateOnly } from '../utils/clinicAccess.js';
@@ -638,6 +638,14 @@ export const getAppointments = async (req, res) => {
 
     const userId = req.user._id;
     const { filter, date } = req.query;
+    const role = String(req.user.role || "").toLowerCase();
+    const isProvider = ["doctor", "counsellor", "counselor"].includes(role);
+    const requestedDoctorId = req.query?.doctor_id || req.body?.doctor_id;
+    const scopedDoctorId = isProvider
+      ? requestedDoctorId && String(requestedDoctorId) !== String(userId)
+        ? await doctorScope(req, requestedDoctorId)
+        : userId
+      : null;
 
     let dateFilter = {};
     const now = new Date();
@@ -670,16 +678,20 @@ export const getAppointments = async (req, res) => {
       };
     }
 
+    const ownerFilter = scopedDoctorId
+      ? { counselor: scopedDoctorId }
+      : { patient: userId };
+
     const appointments = await Appointment.find({
-      $or: [{ patient: userId }, { counselor: userId }],
+      ...ownerFilter,
       ...dateFilter,
     })
-      .populate("patient", "fullName profilePhoto anonymous")
-      .populate("counselor", "fullName profilePhoto anonymous")
+      .populate("patient", "fullName profilePhoto anonymous phoneNumber dateOfBirth age gender bloodGroup address locationData")
+      .populate("counselor", "fullName name profilePhoto anonymous role accountType specialization experience qualification rating consultationMode")
       .sort({ date: -1 })
       .lean();
 
-    if (["counsellor", "doctor"].includes(req.user.role)) {
+    if (isProvider) {
       return res.json(
         appointments.map((appointment) => ({
           ...appointment,
@@ -740,7 +752,17 @@ export const updateStatus = async (req, res) => {
       ) {
         return res.status(400).json({ message: "Invalid appointment status" });
       }
+      if (walkinStatus === "in-progress") {
+        const otherRunning = await findOtherActiveConsultation(walkin);
+        if (otherRunning) {
+          return res.status(409).json({
+            message: `Token ${otherRunning.record.token_number || ""} consultation is already in progress`.trim(),
+          });
+        }
+      }
 
+      const wasStarted = Boolean(walkin.consultation_timing?.startedAt || walkin.consultation_started_at);
+      const wasEnded = Boolean(walkin.consultation_timing?.endedAt || walkin.consultation_ended_at);
       walkin.consultation_timing = await getConsultationTiming(walkin, {
         ...req.body,
         status: walkinStatus,
@@ -749,6 +771,9 @@ export const updateStatus = async (req, res) => {
         walkinStatus === "accepted" ? "confirmed" : walkinStatus;
       await walkin.save();
       await emitTimingQueueUpdated(walkin);
+      if ((!wasStarted && walkin.consultation_timing?.startedAt) || (!wasEnded && walkin.consultation_timing?.endedAt)) {
+        await notifyUpcomingQueuePatients(walkin);
+      }
 
       return res.json({
         message: `Appointment ${walkinStatus} successfully`,
@@ -789,16 +814,14 @@ export const updateStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid appointment status" });
     }
 
+    const hadStarted = Boolean(appointment.consultation_timing?.startedAt || appointment.consultation_started_at);
+    const hadEnded = Boolean(appointment.consultation_timing?.endedAt || appointment.consultation_ended_at);
+
     if (starting) {
-      const otherRunning = await Appointment.findOne({
-        _id: { $ne: appointment._id },
-        counselor: appointment.counselor,
-        appointment_date: appointment.appointment_date,
-        queue_status: "in_progress",
-      }).lean();
+      const otherRunning = await findOtherActiveConsultation(appointment);
       if (otherRunning) {
         return res.status(409).json({
-          message: `Token ${otherRunning.token_number} consultation is already in progress`,
+          message: `Token ${otherRunning.record.token_number || ""} consultation is already in progress`.trim(),
         });
       }
 
@@ -810,6 +833,7 @@ export const updateStatus = async (req, res) => {
         appointment,
         { ...req.body, status: "in-progress" },
       );
+      appointment.$locals = { ...(appointment.$locals || {}), notifyQueueSoon: !hadStarted && appointment.consultation_timing?.startedAt };
     } else {
       appointment.status = status;
     }
@@ -830,17 +854,19 @@ export const updateStatus = async (req, res) => {
     if (
       !starting &&
       ["completed", "cancelled", "canceled"].includes(
-        String(req.body.consultation_action || "").toLowerCase(),
+        String(req.body.consultation_action || status || "").toLowerCase(),
       )
     ) {
       appointment.consultation_timing = await getConsultationTiming(
         appointment,
         { ...req.body, status },
       );
+      appointment.$locals = { ...(appointment.$locals || {}), notifyQueueSoon: !hadEnded && appointment.consultation_timing?.endedAt };
     }
 
     await saveOnlineAppointment(appointment);
     emitQueueUpdated(appointment.counselor, appointment.appointment_date);
+    if (appointment.$locals?.notifyQueueSoon) await notifyUpcomingQueuePatients(appointment);
 
     await createNotificationSafely({
       recipientId: appointment.patient,
@@ -884,10 +910,29 @@ export const updateStatus = async (req, res) => {
 
 
 
-const appointmentView = async row => ({
-  ...jsonRecord(row), patient_id: row.patient, doctor_id: row.counselor,
-  appointment_status: row.status, ...await getActiveBreakDelayForAppointment(row.counselor, row.date),
-});
+const PATIENT_APPOINTMENT_FIELDS =
+  "fullName profilePhoto profileImage anonymous phoneNumber phone dateOfBirth age gender bloodGroup address locationData";
+const DOCTOR_APPOINTMENT_FIELDS =
+  "fullName name profilePhoto profileImage anonymous role accountType specialization experience qualification rating consultationMode location";
+
+const getRecordId = (value) => value?._id || value?.id || value;
+
+const appointmentView = async row => {
+  const record = jsonRecord(row);
+  const patientId = getRecordId(record.patient);
+  const doctorId = getRecordId(record.counselor);
+
+  return {
+    ...record,
+    patient_id: patientId,
+    doctor_id: doctorId,
+    counselorId: doctorId,
+    doctor: record.counselor,
+    counselor: record.counselor,
+    appointment_status: record.status,
+    ...await getActiveBreakDelayForAppointment(doctorId, record.date),
+  };
+};
 export const createAppointment = handle(async (req, res) => {
   if (req.user.role === 'user') return book(req, res);
   const doctor_id = await doctorScope(req, req.body.doctor_id || req.body.counselorId);
@@ -902,11 +947,18 @@ export const getAppointmentAll = handle(async (req, res) => {
   const filter = await filterFor(req);
   if (req.query.patient_id) filter.patient = req.user.role === 'user' ? actorId(req) : req.query.patient_id;
   if (req.query.date) filter.appointment_date = dateOnly(req.query.date);
-  const rows = await Appointment.find(filter).sort({ date: -1 }).lean();
+  const rows = await Appointment.find(filter)
+    .populate("patient", PATIENT_APPOINTMENT_FIELDS)
+    .populate("counselor", DOCTOR_APPOINTMENT_FIELDS)
+    .sort({ date: -1 })
+    .lean();
   res.json({ success: true, appointments: await Promise.all(rows.map(appointmentView)) });
 });
 export const getAppointmentById = handle(async (req, res) => {
-  const row = await Appointment.findOne({ ...await filterFor(req), _id: req.params.id }).lean();
+  const row = await Appointment.findOne({ ...await filterFor(req), _id: req.params.id })
+    .populate("patient", PATIENT_APPOINTMENT_FIELDS)
+    .populate("counselor", DOCTOR_APPOINTMENT_FIELDS)
+    .lean();
   if (!row) throw fail(404, 'Appointment not found');
   res.json({ success: true, appointment: await appointmentView(row) });
 });
@@ -963,6 +1015,7 @@ export const nurseCheckIn = handle(async (req, res) => {
 
 const consultationFields = [
   "medicine",
+  "medicines",
   "additional_notes",
   "follow_up_required",
   "follow_up_date",
@@ -999,20 +1052,47 @@ export const updateDoctorAppointment = async (req, res) => {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
-    const status = req.body.appointment_status || req.body.status;
+    const requestedQueueStatus = String(req.body.queue_status || req.body.queueStatus || "").toLowerCase();
+    const status = req.body.appointment_status || req.body.status || (requestedQueueStatus === "completed" ? "completed" : "");
     if (status && !["pending", "accepted", "confirmed", "booked", "in-progress", "completed", "cancelled", "canceled", "rejected"].includes(status)) {
       return res.status(400).json({ message: "Invalid appointment status" });
     }
 
+    const wasStarted = Boolean(appointment.consultation_timing?.startedAt || appointment.consultation_started_at);
+    const wasEnded = Boolean(appointment.consultation_timing?.endedAt || appointment.consultation_ended_at);
     const timing = await getConsultationTiming(appointment, req.body);
+    if (timing?.startedAt && !wasStarted) {
+      const otherRunning = await findOtherActiveConsultation(appointment);
+      if (otherRunning) {
+        return res.status(409).json({
+          message: `Token ${otherRunning.record.token_number || ""} consultation is already in progress`.trim(),
+        });
+      }
+    }
     if (timing) {
       appointment.consultation_timing = timing;
       appointment.consultation_started_at = timing.startedAt ? new Date(timing.startedAt) : null;
       appointment.consultation_ended_at = timing.endedAt ? new Date(timing.endedAt) : null;
     }
-    if (status) appointment.status = status;
+    if (status) {
+      appointment.status =
+        status === "cancelled" ? "canceled" : ["accepted", "booked"].includes(status) ? "confirmed" : status;
+    }
     for (const field of ["diagnosis", "advice", "queue_status", "priority", "checked_in_at", "called_at", "emergency_reason"]) {
       if (req.body[field] !== undefined) appointment[field] = req.body[field];
+    }
+    if (appointment.status === "completed") {
+      appointment.queue_status = "completed";
+      appointment.consultation_ended_at = appointment.consultation_ended_at || new Date();
+      if (appointment.consultation_timing && !appointment.consultation_timing.endedAt) {
+        appointment.consultation_timing.endedAt = appointment.consultation_ended_at;
+        appointment.consultation_timing.state = "completed";
+        if (typeof appointment.markModified === "function") appointment.markModified("consultation_timing");
+      }
+    } else if (["canceled", "rejected"].includes(appointment.status)) {
+      appointment.queue_status = "canceled";
+    } else if (appointment.queue_status === "in_progress" && appointment.status === "pending") {
+      appointment.status = "confirmed";
     }
     if (consultationFields.some((field) => req.body[field] !== undefined)) {
       const existing = expandConsultationNotes(appointment);
@@ -1025,6 +1105,9 @@ export const updateDoctorAppointment = async (req, res) => {
     }
     await appointment.save();
     await emitTimingQueueUpdated(appointment);
+    if ((!wasStarted && appointment.consultation_timing?.startedAt) || (!wasEnded && appointment.consultation_timing?.endedAt)) {
+      await notifyUpcomingQueuePatients(appointment);
+    }
     const result = expandConsultationNotes(appointment.toJSON());
     return res.json({ success: true, appointment: result, data: result });
   } catch (error) {

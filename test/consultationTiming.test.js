@@ -37,6 +37,17 @@ describe("Persisted consultation timing and live queue", () => {
     expect(result.current.elapsedSeconds).to.equal(300);
     expect(result.queue).to.include({ patientsAhead: 2, estimatedWaitMinutes: 25, estimatedTurnTime: at("10:30:00").toISOString() });
   });
+  it("marks the estimate uncertain instead of auto-advancing when the current token overruns", () => {
+    const result = formatTokenStatus(second, [current, second, mine], {}, [], [], at("10:20:00").getTime());
+    expect(result.current).to.include({ currentToken: 1, elapsedSeconds: 1200 });
+    expect(result.queue).to.include({ patientsAhead: 1, estimatedWaitMinutes: 0, estimateUncertain: true });
+    expect(result.queue.notice).to.equal("Your number may be called anytime. Please stay near the clinic.");
+  });
+  it("recomputes later tokens from now after an early completion", () => {
+    const result = formatTokenStatus(mine, [second, mine], {}, [], [], at("10:05:00").getTime());
+    expect(result.current).to.include({ currentToken: null, doctorStatus: "waiting" });
+    expect(result.queue).to.include({ patientsAhead: 1, estimatedWaitMinutes: 15, estimatedTurnTime: at("10:20:00").toISOString() });
+  });
   it("delays expected turn when the doctor starts late", () => {
     const late = { ...current, timing: { ...current.timing, startedAt: at("10:10:00").toISOString() } };
     expect(formatTokenStatus(mine, [late, second, mine], {}, [], [], at("10:15:00").getTime()).queue.estimatedTurnTime).to.equal(at("10:40:00").toISOString());
