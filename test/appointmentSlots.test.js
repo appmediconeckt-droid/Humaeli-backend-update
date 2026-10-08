@@ -152,6 +152,34 @@ describe("Availability-based appointment tokens", () => {
     expect(response.body.token_number).to.equal(3);
     expect(create.firstCall.args[0].patient_location).to.equal("12 Main Road");
   });
+  for (const accountType of ["consultant", null]) {
+  it(`consultant booking succeeds without slots (accountType: ${accountType})`, async () => {
+    sandbox.stub(User, "findOne").returns({ select: async () => ({ _id: "consultant-1", role: "counsellor", accountType }) });
+    sandbox.stub(User, "findById").returns({ select() { return this; }, lean: async () => ({}) });
+    sandbox.stub(Notification, "create").resolves({ toObject: () => ({}) });
+    const create = sandbox.stub(Appointment, "create").callsFake(async (data) => data);
+    slotRepository.ranges.resolves([]);
+    const response = res();
+    await book({ user: { _id: "patient-1" }, body: { counselorId: "consultant-1", date: `${date}T10:37:00+05:30`, token: 99 } }, response);
+    expect(response.statusCode).to.equal(201);
+    expect(create.firstCall.args[0]).to.include({ counselor: "consultant-1", patient: "patient-1", appointment_time: "10:37:00" });
+    expect(response.body.token_number).to.equal(undefined);
+    expect(slotRepository.connection.called).to.equal(false);
+    expect(slotRepository.ranges.called).to.equal(false);
+  });
+  }
+  for (const provider of [{ role: "doctor" }, { role: "counsellor", accountType: "doctor" }]) {
+    it(`doctor booking still rejects missing slots (${JSON.stringify(provider)})`, async () => {
+      sandbox.stub(User, "findOne").returns({ select: async () => ({ _id: "doctor-1", ...provider }) });
+      const create = sandbox.stub(Appointment, "create");
+      slotRepository.ranges.resolves([]);
+      const response = res();
+      await book({ user: { _id: "patient-1" }, body: { counselorId: "doctor-1", date: `${date}T10:30:00+05:30` } }, response);
+      expect(response.statusCode).to.equal(422);
+      expect(response.body.message).to.include("No matching availability slot");
+      expect(create.called).to.equal(false);
+    });
+  }
   it("walk-in booking persists the same time-based token", async () => {
     sandbox.stub(Walkin, "create").callsFake(async (data) => data);
     const response = res();

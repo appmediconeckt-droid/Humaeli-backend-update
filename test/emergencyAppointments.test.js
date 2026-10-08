@@ -18,6 +18,19 @@ const body = { counselorId: "doctor-1", clinic_id: "clinic-1", priority: "emerge
 const response = () => ({ statusCode: 200, status(value) { this.statusCode = value; return this; }, json(value) { this.body = value; return this; } });
 
 describe("Emergency appointment validation", () => {
+  it("validates a real unscheduled emergency record at request time", async () => {
+    const appointment = new Appointment({
+      patient: "507f1f77bcf86cd799439011", counselor: "507f1f77bcf86cd799439012",
+      date: new Date(Date.now() - 1000), priority: "emergency",
+      appointment_time: null, booking_source: "direct", consultation_mode: "in-clinic",
+    });
+    await appointment.validate();
+    appointment.priority = "normal";
+    expect(appointment.validateSync().errors).to.have.property("date");
+    appointment.priority = "emergency";
+    appointment.appointment_time = "09:00:00";
+    expect(appointment.validateSync().errors).to.have.property("date");
+  });
   it("leaves regular bookings as normal and removes an unrelated emergency reason", () => {
     expect(validateAppointmentPriority({ emergency_reason: "not applicable" }, now)).to.deep.equal({ priority: "normal", emergency_reason: null });
   });

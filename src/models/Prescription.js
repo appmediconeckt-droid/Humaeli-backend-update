@@ -29,6 +29,8 @@ const prescriptionSchema = new mongoose.Schema({
   },
   psychiatristSnapshot: {
     name: { type: String, required: true },
+    role: { type: String, default: "" },
+    accountType: { type: String, default: "" },
     qualification: { type: String, default: "" },
     specialization: [{ type: String }],
     prescriptionSignature: { type: String, default: "" },

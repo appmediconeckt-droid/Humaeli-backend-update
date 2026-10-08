@@ -58,7 +58,7 @@ export async function createEmergencyAppointment({ patientId, doctorId, body }) 
     const appointment = await Appointment.create({
       ...priority, patient: patientId, counselor: doctorId, clinic_id: String(body.clinic_id),
       date: now, appointment_date: today, appointment_time: null, token_number: null, slot_key: null,
-      consultation_mode: "in-clinic", booking_source: "online", status: "pending",
+      consultation_mode: "in-clinic", booking_source: "direct", status: "pending",
       notes: body.notes || null, patient_location: body.patient_location || null,
     });
     return { appointment, staffIds: [...new Set(staff.map((person) => String(person._id || person.id)))] };

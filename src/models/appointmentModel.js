@@ -19,7 +19,9 @@ const appointmentSchema = new mongoose.Schema(
       required: true,
       validate: {
         validator(value) {
-          return !this.isNew || value.getTime() > Date.now();
+          return !this.isNew ||
+            (this.priority === "emergency" && !this.appointment_time) ||
+            value.getTime() > Date.now();
         },
         message: "Appointment date and time must be in the future",
       },

@@ -359,6 +359,7 @@ import { getActiveBreakDelayForAppointment } from '../services/doctorBreakServic
 import { withAppointmentBooking } from '../services/appointmentConflictService.js';
 import { indiaDateTime, slotRepository } from '../services/appointmentSlotService.js';
 import { normalizeBookingSource } from '../services/doctorAnalyticsService.js';
+import { createEmergencyAppointment } from '../services/emergencyAppointmentService.js';
 import { getAppointmentSlotDuration, getConsultationTiming, emitQueueUpdated as emitTimingQueueUpdated, notifyUpcomingQueuePatients, findOtherActiveConsultation } from '../services/consultationTimingService.js';
 import { Clinic, Availability, UnavailableDate } from '../models/clinicModels.js';
 import { timeMinutes, withAppointmentSlot } from '../services/appointmentSlotService.js';
@@ -368,7 +369,7 @@ import { handle, doctorScope, actorId, fail, jsonRecord, pick, todayIST, dateOnl
 export const markExpiredAppointmentsNoShow = async (now = new Date()) => {
   const candidates = await Appointment.find({
     status: { $in: ["pending", "confirmed"] },
-    queue_status: { $nin: ["in_progress", "completed", "no_show", "canceled", "cancelled"] },
+    queue_status: { $nin: ["in_progress", "completed", "skipped", "no_show", "canceled", "cancelled"] },
     consultation_started_at: null,
     date: { $lte: now },
   }).lean();
@@ -380,7 +381,7 @@ export const markExpiredAppointmentsNoShow = async (now = new Date()) => {
     const queueStatus = String(appointment.queue_status || "").toLowerCase();
     if (
       !["pending", "confirmed"].includes(status) ||
-      ["in_progress", "completed", "no_show", "canceled", "cancelled"].includes(queueStatus) ||
+      ["in_progress", "completed", "skipped", "no_show", "canceled", "cancelled"].includes(queueStatus) ||
       appointment.consultation_started_at ||
       appointment.consultation_timing?.startedAt
     ) {
@@ -410,7 +411,7 @@ export const markExpiredAppointmentsNoShow = async (now = new Date()) => {
       {
         _id: appointment._id,
         status: { $in: ["pending", "confirmed"] },
-        queue_status: { $nin: ["in_progress", "completed", "no_show", "canceled", "cancelled"] },
+        queue_status: { $nin: ["in_progress", "completed", "skipped", "no_show", "canceled", "cancelled"] },
         consultation_started_at: null,
       },
       { $set: { queue_status: "no_show" } },
@@ -513,6 +514,43 @@ export const book = async (req, res) => {
     const counselorId = req.body.counselorId || req.body.doctor_id;
     const { notes } = req.body;
 
+    // Emergency requests have no scheduled slot; handle them before date validation.
+    if (req.body.priority === "emergency") {
+      if (!counselorId) {
+        return res.status(400).json({ message: "counselorId or doctor_id is required" });
+      }
+      const provider = await User.findOne(appointmentProviderFilter(counselorId))
+        .select("_id role accountType profileCompleted");
+      if (!provider) {
+        return res.status(404).json({ message: "Provider not found or profile is not available yet" });
+      }
+      if (String(provider.role || "").toLowerCase() !== "doctor" &&
+          String(provider.accountType || "").toLowerCase() !== "doctor") {
+        return res.status(400).json({ message: "Emergency appointments require a doctor" });
+      }
+      const { appointment, staffIds } = await createEmergencyAppointment({
+        patientId: req.user._id, doctorId: counselorId, body: req.body,
+      });
+      for (const recipientId of new Set([String(counselorId), ...staffIds])) {
+        if (global.io) {
+          global.io.to(`user_${recipientId}`).emit("appointmentBooked", appointment);
+          global.io.to(`user_${recipientId}`).emit("queueUpdated", {
+            doctorId: counselorId, date: appointment.appointment_date,
+          });
+        }
+        await createNotificationSafely({
+          recipientId,
+          actorId: req.user._id,
+          type: "appointment",
+          title: "Emergency appointment request",
+          message: "A new emergency appointment request needs clinic review.",
+          data: { appointmentId: appointment._id, status: appointment.status, priority: "emergency", clinic_id: appointment.clinic_id },
+          actionUrl: "/counselor/appointments",
+        });
+      }
+      return res.status(201).json(appointment);
+    }
+
     // Prefer appointment_date + appointment_time because this is the format
     // used by the clinic/hospital booking flow. req.body.date is kept only
     // as a backwards-compatible fallback for older clients.
@@ -577,12 +615,7 @@ export const book = async (req, res) => {
     const localDate = new Date(appointmentDate.getTime() + 19800000).toISOString();
     const appointment_date = localDate.slice(0, 10), appointment_time = localDate.slice(11, 19);
     const clinic_id = req.body.clinic_id;
-    const appointment = await withAppointmentSlot({
-      doctorId: counselorId,
-      date: appointment_date,
-      time: appointment_time,
-      clinicId: clinic_id,
-    }, async (slot) => Appointment.create({
+    const createAppointmentRecord = async (slot = {}) => Appointment.create({
       patient: req.user._id,
       counselor: counselorId,
       date: appointmentDate,
@@ -600,7 +633,17 @@ export const book = async (req, res) => {
       consultation_mode: req.body.consultation_mode,
       queue_status: "booked",
       priority: "normal",
-    }));
+    });
+    const isDoctor = String(counselor.role || "").toLowerCase() === "doctor" ||
+      String(counselor.accountType || "").toLowerCase() === "doctor";
+    const appointment = isDoctor
+      ? await withAppointmentSlot({
+          doctorId: counselorId,
+          date: appointment_date,
+          time: appointment_time,
+          clinicId: clinic_id,
+        }, createAppointmentRecord)
+      : await createAppointmentRecord();
 
     // Notify the counselor via socket if global.io exists
     if (global.io) {
@@ -686,16 +729,20 @@ export const getAppointments = async (req, res) => {
       ...ownerFilter,
       ...dateFilter,
     })
-      .populate("patient", "fullName profilePhoto anonymous phoneNumber dateOfBirth age gender bloodGroup address locationData")
+      .populate("patient", "fullName profilePhoto anonymous phoneNumber phone dateOfBirth age gender bloodGroup address locationData")
       .populate("counselor", "fullName name profilePhoto anonymous role accountType specialization experience qualification rating consultationMode")
       .sort({ date: -1 })
       .lean();
 
     if (isProvider) {
+      // Legacy doctor accounts can still have the counsellor role.
+      const viewerProfile = role === "doctor" ? null : await User.findById(userId).select("role accountType").lean();
+      const isDoctor = role === "doctor" || viewerProfile?.role === "doctor" || viewerProfile?.accountType === "doctor";
       return res.json(
         appointments.map((appointment) => ({
           ...appointment,
-          patient: sanitizeUserForCounselor(
+          appointment_type: "online",
+          patient: isDoctor ? appointment.patient : sanitizeUserForCounselor(
             appointment.patient,
             appointment.patient?._id || appointment.patient,
           ),
@@ -703,7 +750,7 @@ export const getAppointments = async (req, res) => {
       );
     }
 
-    return res.json(appointments);
+    return res.json(appointments.map((appointment) => ({ ...appointment, appointment_type: "online" })));
   } catch (err) {
     console.error("❌ get appointments error", err);
     return res.status(500).json({ message: "Server error" });
@@ -924,6 +971,7 @@ const appointmentView = async row => {
 
   return {
     ...record,
+    appointment_type: "online",
     patient_id: patientId,
     doctor_id: doctorId,
     counselorId: doctorId,
@@ -1053,6 +1101,10 @@ export const updateDoctorAppointment = async (req, res) => {
     }
 
     const requestedQueueStatus = String(req.body.queue_status || req.body.queueStatus || "").toLowerCase();
+    if (requestedQueueStatus === "skipped" &&
+      (!["pending", "confirmed"].includes(appointment.status) || appointment.consultation_started_at || appointment.consultation_timing?.startedAt)) {
+      return res.status(409).json({ message: "Only an unstarted appointment can be moved to Next" });
+    }
     const status = req.body.appointment_status || req.body.status || (requestedQueueStatus === "completed" ? "completed" : "");
     if (status && !["pending", "accepted", "confirmed", "booked", "in-progress", "completed", "cancelled", "canceled", "rejected"].includes(status)) {
       return res.status(400).json({ message: "Invalid appointment status" });

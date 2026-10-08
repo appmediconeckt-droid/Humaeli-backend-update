@@ -31,7 +31,8 @@ export const getWalkinAppointments = async (req, res) => {
     const appointments = await WalkinAppointment.find(filter)
       .sort({ appointment_date: 1, appointment_time: 1, token_number: 1, createdAt: -1 });
     const targetDate = req.query.date || indiaDateTime().date;
-    const enriched = await enrichAppointmentsWithDelay(appointments, doctorId, targetDate);
+    const enriched = (await enrichAppointmentsWithDelay(appointments, doctorId, targetDate))
+      .map((appointment) => ({ ...appointment, appointment_type: "walkin" }));
 
     return res.status(200).json({
       success: true,
@@ -212,6 +213,14 @@ export const updateWalkinAppointment = async (req, res) => {
     delete updates.consultation_action;
 
     const requestedStatus = String(req.body.status || req.body.appointment_status || "").toLowerCase();
+    if (requestedStatus === "skipped") {
+      if (String(req.userId || req.user?._id || "") !== String(appointment.doctor_id)) {
+        return res.status(403).json({ message: "Only the assigned doctor can move a patient to Next" });
+      }
+      if (!["pending", "booked", "confirmed", "accepted", "skipped"].includes(appointment.appointment_status) || appointment.consultation_timing?.startedAt) {
+        return res.status(409).json({ message: "Only an unstarted appointment can be moved to Next" });
+      }
+    }
     if (req.body.consultation_action || ["in-progress", "completed", "cancelled", "canceled"].includes(requestedStatus)) {
       if (String(req.userId || req.user?._id || "") !== String(appointment.doctor_id)) {
         return res.status(403).json({ message: "Only the assigned doctor can update consultation timing" });

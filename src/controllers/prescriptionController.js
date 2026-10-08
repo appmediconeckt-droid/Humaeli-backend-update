@@ -202,6 +202,8 @@ const followUpToResponse = (followUp) => {
 const getDoctorSnapshot = (doctor, fallbackName = "Doctor") => ({
   id: recordId(doctor),
   name: doctor?.fullName || doctor?.name || fallbackName,
+  role: doctor?.role || "",
+  accountType: doctor?.accountType || "",
   qualification: doctor?.qualification || "",
   specialization: normalizeSpecializations(doctor),
   photo: getPhotoUrl(doctor),
@@ -255,6 +257,8 @@ const appointmentToPrescriptionResponse = (appointment, doctor) => {
 const doctorFromPrescription = (prescription) => ({
   id: idValue(prescription.psychiatrist?.id),
   name: prescription.psychiatrist?.name || "Doctor",
+  role: prescription.psychiatrist?.role || "",
+  accountType: prescription.psychiatrist?.accountType || "",
   qualification: prescription.psychiatrist?.qualification || "",
   specialization: prescription.psychiatrist?.specialization || [],
   photo: prescription.psychiatrist?.photo || "",
@@ -387,6 +391,8 @@ export const issuePrescription = async (req, res) => {
       },
       psychiatristSnapshot: {
         name: psychiatrist.fullName || psychiatrist.name || "Psychiatrist",
+        role: psychiatrist.role || "",
+        accountType: psychiatrist.accountType || "",
         qualification: psychiatrist.qualification || "",
         specialization: normalizeSpecializations(psychiatrist),
         prescriptionSignature,
@@ -450,6 +456,14 @@ export const getMyPrescriptions = async (req, res) => {
       console.warn("Prescription follow-up details could not be loaded:", followUpError?.message || followUpError);
     }
     const doctorsById = new Map(doctors.map((doctor) => [recordId(doctor), doctor]));
+    // Older prescription snapshots lack provider type; use the current profile.
+    prescriptionResponses.forEach((prescription) => {
+      const provider = doctorsById.get(idValue(prescription.psychiatrist?.id));
+      if (provider) {
+        prescription.psychiatrist.role = provider.role || prescription.psychiatrist.role || "";
+        prescription.psychiatrist.accountType = provider.accountType || prescription.psychiatrist.accountType || "";
+      }
+    });
     const followUpResponses = followUps.map(followUpToResponse);
     const followUpsByAppointment = new Map();
     const followUpsByDoctor = new Map();
@@ -468,9 +482,15 @@ export const getMyPrescriptions = async (req, res) => {
         followUpsByDoctor.set(doctorId, list);
       }
     });
-    const appointmentRecords = appointments.map((appointment) =>
-      appointmentToPrescriptionResponse(appointment, doctorsById.get(idValue(appointment.counselor))),
-    );
+    const patientProfile = appointments.length ? await User.findById(req.user._id).lean() : null;
+    const appointmentRecords = appointments.map((appointment) => ({
+      ...appointmentToPrescriptionResponse(appointment, doctorsById.get(idValue(appointment.counselor))),
+      patient: {
+        id: req.user._id,
+        name: patientProfile?.name || patientProfile?.fullName || patientProfile?.full_name || "Patient",
+        gender: patientProfile?.gender || "",
+      },
+    }));
     const prescriptions = [...prescriptionResponses, ...appointmentRecords]
       .sort((left, right) => new Date(right.issuedAt || 0) - new Date(left.issuedAt || 0));
     const doctorCards = buildDoctorCards({
