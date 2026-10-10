@@ -13,7 +13,7 @@ describe('LED browser page', () => {
     const page = await request(app).get('/display/tv-123');
     assert.equal(page.status, 200); assert.match(page.headers['content-type'], /html/);
     assert.match(page.text, /Now|Patient queue/); assert.equal(page.headers['cache-control'], 'no-store');
-    for (const asset of ['display.js', 'display.css']) assert.equal((await request(app).get(`/led-assets/${asset}`)).status, 200);
+    for (const asset of ['display.js', 'display.css', 'audio.js']) assert.equal((await request(app).get(`/led-assets/${asset}`)).status, 200);
     assert.equal((await request(app).get('/display/bad%20id')).status, 400);
     assert.equal((await request(app).get('/display/clinic/clinic-123')).status, 200);
     assert.equal((await request(app).get('/display/clinic/bad%20id')).status, 400);
@@ -43,7 +43,21 @@ describe('LED browser page', () => {
     const flatten = node => [node.textContent, ...node.children.map(flatten)].join(' ');
     assert.match(flatten(elements.doctors), /AM-001/); assert.match(flatten(elements.doctors), /AM-002/);
     assert.match(flatten(elements.doctors), /Room 101/);
+    const counts = elements.doctors.children[0].children.find(node => node.className === 'counts');
+    assert.equal(counts.children[3].children[1].children[0].className, 'wait-status');
     assert.equal(elements.doctors.children[0].children[0].textContent, '<img src=x onerror=alert(1)>');
+    payload = { ...payload, current: null, doctorStatus: 'delayed', estimatedWaitLabel: 'Awaiting doctor', breakInfo: {
+      headline: '58 min late', delayMinutes: 58, waitingForDoctor: true,
+      scheduledStart: '01:10 PM', reason: 'Consultation has not started',
+    } };
+    await scheduled.find(task => task.delay === 3000).fn();
+    assert.match(flatten(elements.doctors), /58 min late/);
+    assert.match(flatten(elements.doctors), /Scheduled start.*01:10 PM/);
+    assert.match(flatten(elements.doctors), /Running late.*58 min/);
+    assert.match(flatten(elements.doctors), /Estimated wait for next token.*Awaiting doctor/);
+    payload = { ...payload, estimatedWaitLabel: null, estimatedWaitMinutes: 10 };
+    await scheduled.find(task => task.delay === 3000).fn();
+    assert.match(flatten(elements.doctors), /Estimated wait for next token.*10 min/);
     status = 403; payload = { success: false, message: 'Display is inactive' };
     await scheduled.find(task => task.delay === 3000).fn();
     assert.equal(elements.doctors.children.length, 0);

@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import sinon from "sinon";
-import { consultationTransition, emitQueueUpdated } from "../src/services/consultationTimingService.js";
+import { consultationTransition, emitQueueUpdated, getConsultationTiming } from "../src/services/consultationTimingService.js";
+import { DoctorBreak } from "../src/models/clinicModels.js";
 import { formatTokenStatus } from "../src/controllers/tokenStatusController.js";
 import { markExpiredAppointmentsNoShow, updateDoctorAppointment } from "../src/controllers/appointmentController.js";
 import { updateWalkinAppointment } from "../src/controllers/walkinController.js";
@@ -23,6 +24,25 @@ describe("Persisted consultation timing and live queue", () => {
     const started = consultationTransition(null, "start", 15, at("10:00:00"));
     expect(consultationTransition(started, "start", 15, at("10:01:00"))).to.deep.equal(started);
   });
+  it("reuses an existing top-level start timestamp on legacy start/end requests", async () => {
+    const record = { consultation_started_at: at("10:08:00") };
+    const started = await getConsultationTiming(record, { status: "in-progress" });
+    expect(new Date(started.startedAt).getTime()).to.equal(at("10:08:00").getTime());
+    const ended = await getConsultationTiming(record, { status: "completed" });
+    expect(new Date(ended.startedAt).getTime()).to.equal(at("10:08:00").getTime());
+    expect(ended.endedAt).to.be.a("string");
+  });
+  it("does not expire a waiting patient whose effective slot is delayed by the running consultation", async () => {
+    const waiting = { _id: "waiting", counselor: "doctor", status: "pending", queue_status: "booked", date: at("10:15:00"), appointment_date: "2026-09-22", appointment_time: "10:15:00" };
+    const running = { ...waiting, _id: "current", status: "confirmed", queue_status: "in_progress", appointment_time: "10:00:00", consultation_timing: { startedAt: at("10:20:00").toISOString(), durationMinutes: 15 } };
+    sandbox.stub(Appointment, "find").callsFake((filter) => ({ lean: async () => filter.consultation_started_at === null ? [waiting] : [running, waiting] }));
+    sandbox.stub(Walkin, "find").returns({ lean: async () => [] });
+    sandbox.stub(DoctorBreak, "find").returns({ lean: async () => [] });
+    sandbox.stub(slotRepository, "ranges").resolves([{ availability_date: "2026-09-22", start_time: "10:00", end_time: "12:00", slot_duration: 15 }]);
+    const update = sandbox.stub(Appointment, "updateOne");
+    expect(await markExpiredAppointmentsNoShow(at("10:30:00"))).to.equal(0);
+    expect(update.called).to.equal(false);
+  });
   it("persists pause/resume/end intervals without resetting start time", () => {
     let timing = consultationTransition(null, "start", 15, at("10:00:00"));
     timing = consultationTransition(timing, "pause", 15, at("10:03:00"));
@@ -40,22 +60,22 @@ describe("Persisted consultation timing and live queue", () => {
   it("marks the estimate uncertain instead of auto-advancing when the current token overruns", () => {
     const result = formatTokenStatus(second, [current, second, mine], {}, [], [], at("10:20:00").getTime());
     expect(result.current).to.include({ currentToken: 1, elapsedSeconds: 1200 });
-    expect(result.queue).to.include({ patientsAhead: 1, estimatedWaitMinutes: 0, estimateUncertain: true });
+    expect(result.queue).to.include({ patientsAhead: 1, estimatedWaitMinutes: 1, estimateUncertain: true });
     expect(result.queue.notice).to.equal("Your number may be called anytime. Please stay near the clinic.");
   });
-  it("recomputes later tokens from now after an early completion", () => {
+  it("keeps scheduled online slot floors after an early completion", () => {
     const result = formatTokenStatus(mine, [second, mine], {}, [], [], at("10:05:00").getTime());
     expect(result.current).to.include({ currentToken: null, doctorStatus: "waiting" });
-    expect(result.queue).to.include({ patientsAhead: 1, estimatedWaitMinutes: 15, estimatedTurnTime: at("10:20:00").toISOString() });
+    expect(result.queue).to.include({ patientsAhead: 1, estimatedWaitMinutes: 25, estimatedTurnTime: at("10:30:00").toISOString() });
   });
   it("delays expected turn when the doctor starts late", () => {
     const late = { ...current, timing: { ...current.timing, startedAt: at("10:10:00").toISOString() } };
     expect(formatTokenStatus(mine, [late, second, mine], {}, [], [], at("10:15:00").getTime()).queue.estimatedTurnTime).to.equal(at("10:40:00").toISOString());
   });
-  it("bases waiting on actual checkup start even when scheduled slots are later", () => {
+  it("does not pull scheduled online slots earlier after an early checkup start", () => {
     const early = { ...current, timing: { ...current.timing, startedAt: at("09:00:00").toISOString() } };
     const result = formatTokenStatus(mine, [early, second, mine], {}, [], [], at("09:05:00").getTime());
-    expect(result.queue).to.include({ estimatedWaitMinutes: 25, estimatedTurnTime: at("09:30:00").toISOString() });
+    expect(result.queue).to.include({ estimatedWaitMinutes: 85, estimatedTurnTime: at("10:30:00").toISOString() });
   });
   it("does not start an elapsed timer merely because a patient was called", () => {
     const called = { ...current, status: "called", timing: {} };
@@ -76,7 +96,7 @@ describe("Persisted consultation timing and live queue", () => {
     expect(result.queue.estimatedTurnTime).to.equal(null);
     expect(formatTokenStatus(mine, [current, mine], {}, [], breaks, at("10:10:00").getTime()).current.elapsedSeconds).to.equal(300);
   });
-  it("marks an unstarted appointment no-show only after its complete slot duration", async () => {
+  it("deletes an absent appointment only after its complete doctor availability session", async () => {
     const appointment = {
       _id: "missed",
       counselor: "doctor",
@@ -89,7 +109,7 @@ describe("Persisted consultation timing and live queue", () => {
     const find = sandbox.stub(Appointment, "find").returns({
       lean: async () => [appointment],
     });
-    const updateOne = sandbox.stub(Appointment, "updateOne").resolves({ modifiedCount: 1 });
+    const updateOne = sandbox.stub(Appointment, "deleteOne").resolves({ deletedCount: 1 });
     sandbox.stub(slotRepository, "ranges").resolves([{
       availability_date: "2026-09-22",
       start_time: "10:00",
@@ -97,16 +117,14 @@ describe("Persisted consultation timing and live queue", () => {
       slot_duration: 15,
     }]);
 
-    expect(await markExpiredAppointmentsNoShow(at("10:14:59"))).to.equal(0);
+    expect(await markExpiredAppointmentsNoShow(at("10:59:59"))).to.equal(0);
     expect(updateOne.called).to.equal(false);
-    expect(await markExpiredAppointmentsNoShow(at("10:15:00"))).to.equal(1);
+    expect(await markExpiredAppointmentsNoShow(at("11:00:00"))).to.equal(1);
     expect(updateOne.calledOnce).to.equal(true);
     expect(updateOne.firstCall.args[0]).to.include({
       consultation_started_at: null,
     });
-    expect(updateOne.firstCall.args[1]).to.deep.equal({
-      $set: { queue_status: "no_show" },
-    });
+    expect(updateOne.firstCall.args[0].checked_in_at).to.equal(null);
     expect(find.firstCall.args[0].status).to.deep.equal({
       $in: ["pending", "confirmed"],
     });

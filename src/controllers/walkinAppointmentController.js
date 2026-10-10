@@ -5,6 +5,7 @@ import { normalizeBookingSource } from '../services/doctorAnalyticsService.js';
 import { getActiveBreakDelayForAppointment } from '../services/doctorBreakService.js';
 import { withAppointmentBooking, bookingMinute } from '../services/appointmentConflictService.js';
 import { withAppointmentSlot, indiaDateTime, timeMinutes } from '../services/appointmentSlotService.js';
+import { notifyUpcomingQueuePatients } from '../services/consultationTimingService.js';
 import { handle, doctorScope, pick, fail, jsonRecord, bool, dateOnly } from '../utils/clinicAccess.js';
 const scope = req => doctorScope(req, req.query?.doctor_id || req.body?.doctor_id);
 export const createWalkinAppointment = handle(async (req, res) => {
@@ -68,6 +69,7 @@ export const updateWalkinAppointment = handle(async (req, res) => {
   else await withAppointmentBooking({ doctorId: row.doctor_id, patientId: row.patient_id,
     phoneNumber: row.phone_number, appointmentDate: row.appointment_date,
     appointmentTime: row.appointment_time, excludeId: row._id }, () => row.save());
+  if (data.appointment_status) await notifyUpcomingQueuePatients(row);
   if (data.follow_up_required) {
     await FollowUp.findOneAndUpdate({ walkin_id: row._id }, { $set: { doctor_id: row.doctor_id,
       patient_name: row.patient_name, follow_up_date: row.follow_up_date, reason: row.diagnosis, notes: row.additional_notes } },

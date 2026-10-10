@@ -4,11 +4,12 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Doctor queue · Humaeli</title>
   <link rel="stylesheet" href="/led-assets/display.css">
+  <script src="/led-assets/audio.js" defer></script>
   <script src="/led-assets/display.js" defer></script>
 </head>
 <body>
-  <header><div><p class="eyebrow" id="facility">HUMAELI</p><h1 id="title">Patient queue</h1></div><div class="right"><div id="clock"></div><p id="connection" role="status">Connecting…</p><button id="fullscreen" type="button">Full screen</button></div></header>
+  <header><div class="brand"><svg class="brand-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3.5" aria-hidden="true"><path d="M12 8v14a16 16 0 0 0 32 0V8M12 8h7M44 8h-7M28 38v10a12 12 0 0 0 24 0v-7"/><circle cx="52" cy="35" r="6"/></svg><div><p class="eyebrow" id="facility">HUMAELI</p><h1 id="title">Patient queue</h1></div></div><div class="right"><div class="live-clock"><div id="clock"></div><p id="connection" role="status">Connecting…</p></div><button id="fullscreen" type="button"><span aria-hidden="true">⛶</span> Full screen</button></div></header>
   <main><p id="message" role="status">Loading your display…</p><div id="doctors" aria-live="polite"></div></main>
-  <footer><span>Please wait for your token to be called.</span><span id="updated">Waiting for live data</span></footer>
+  <footer><span class="announcement"><span aria-hidden="true">◀))</span> Please wait for your token to be called.</span><div class="audio-controls"><button id="audio-toggle" type="button" aria-pressed="false">Enable audio</button><button id="audio-repeat" type="button" disabled>Repeat announcement</button><span id="updated">Waiting for live data</span></div></footer>
 </body>
 </html>

@@ -1,5 +1,6 @@
 import { buildDaySlots, indiaDateTime, slotRepository, timeMinutes } from "./appointmentSlotService.js";
-import { createNotificationSafely } from "./notificationService.js";
+import { notifyNextQueueTokens } from './queueTurnNotificationService.js';
+import { normalizeQueueAppointment } from "./queueTimingService.js";
 
 export const consultationTransition = (previous, action, duration, now = new Date()) => {
   const timing = structuredClone(previous || {});
@@ -29,6 +30,25 @@ export const consultationTransition = (previous, action, duration, now = new Dat
   return timing;
 };
 
+export const getAppointmentSessionEnd = async (appointment, availableRanges) => {
+  const doctorId = appointment.doctor_id || appointment.counselor;
+  const fallback = appointment.date ? indiaDateTime(appointment.date) : {};
+  const date = appointment.appointment_date || fallback.date;
+  const minutes = timeMinutes(appointment.appointment_time || fallback.time);
+  if (!doctorId || !date || minutes == null) return null;
+  const ranges = (availableRanges || await slotRepository.ranges(doctorId)).filter((range) =>
+    !appointment.clinic_id || !range.clinic_id || String(range.clinic_id) === String(appointment.clinic_id));
+  const specific = ranges.filter((range) => String(range.availability_date || range.date || '').slice(0, 10) === date);
+  const matches = (specific.length ? specific : ranges).filter((range) => {
+    try { return buildDaySlots([range], date).some((slot) => timeMinutes(slot.time) === minutes); }
+    catch { return false; }
+  });
+  if (!matches.length) return null;
+  const end = Math.max(...matches.map((range) => timeMinutes(range.end_time)).filter((value) => value != null));
+  const midnight = new Date(`${date}T00:00:00+05:30`).getTime();
+  return Number.isFinite(end) && Number.isFinite(midnight) ? new Date(midnight + end * 60000) : null;
+};
+
 export const getAppointmentSlotDuration = async (appointment, availableRanges) => {
   const doctorId = appointment.doctor_id || appointment.counselor;
   const fallback = appointment.date ? indiaDateTime(appointment.date) : {};
@@ -52,11 +72,12 @@ export const getConsultationTiming = async (appointment, body) => {
   const action = body.consultation_action || (status === "in-progress" ? "start" : ["completed", "cancelled", "canceled"].includes(status) ? "end" : null);
   if (!action) return appointment.consultation_timing;
   if (!["start", "pause", "resume", "end"].includes(action)) throw Object.assign(new Error("Invalid consultation action"), { status: 400 });
-  let duration = appointment.consultation_timing?.durationMinutes;
-  if (action === "start" && !appointment.consultation_timing?.startedAt) {
+  const previous = normalizeQueueAppointment(appointment).timing;
+  let duration = previous.durationMinutes;
+  if (action === "start" && !previous.startedAt) {
     duration = await getAppointmentSlotDuration(appointment);
   }
-  return consultationTransition(appointment.consultation_timing, action, duration);
+  return consultationTransition(previous, action, duration);
 };
 
 const activeConsultationStatuses = new Set(["in-progress", "in_progress", "consulting", "serving"]);
@@ -97,8 +118,9 @@ export const emitQueueUpdated = async (appointment) => {
   } catch (error) { console.error("Queue update notification failed:", error.message); }
 };
 
-const terminalStatuses = new Set(["completed", "cancelled", "canceled", "rejected", "reject", "no-show", "no_show"]);
-const servingStatuses = new Set(["in-progress", "in_progress", "consulting", "serving", "called"]);
+const terminalStatuses = new Set(["completed", "cancelled", "canceled", "rejected", "reject", "no-show", "no_show", "skipped"]);
+// A called patient is next in line until their consultation actually starts.
+const servingStatuses = new Set(["in-progress", "in_progress", "in_consultation", "consulting", "serving"]);
 const normalizeQueueRecord = (record, source) => {
   const fallback = record.date ? indiaDateTime(record.date) : {};
   const status = String(record.appointment_status || record.status || "pending").toLowerCase();
@@ -113,6 +135,8 @@ const normalizeQueueRecord = (record, source) => {
     status,
     queueStatus: String(record.queue_status || status).toLowerCase(),
     emergency: String(record.priority || "").toLowerCase() === "emergency",
+    urgent: String(record.priority || '').toLowerCase() === 'urgent',
+    clinicId: String(record.clinic_id?._id || record.clinic_id?.id || record.clinic_id || ''),
   };
 };
 
@@ -124,6 +148,7 @@ export const notifyUpcomingQueuePatients = async (appointment, { limit = 2 } = {
     const doctorId = appointment.doctor_id || appointment.counselor;
     const date = appointment.appointment_date || (appointment.date ? indiaDateTime(appointment.date).date : null);
     if (!doctorId || !date) return [];
+    const clinicId = String(appointment.clinic_id?._id || appointment.clinic_id?.id || appointment.clinic_id || '');
 
     const [online, walkins] = await Promise.all([
       slotRepository.online(doctorId, date),
@@ -132,33 +157,22 @@ export const notifyUpcomingQueuePatients = async (appointment, { limit = 2 } = {
     const queue = [
       ...online.map((record) => normalizeQueueRecord(record, "online")),
       ...walkins.map((record) => normalizeQueueRecord(record, "walkin")),
-    ].filter((item) => item.doctorId === String(doctorId) && item.date === date && isActiveQueueRecord(item))
+    ].filter((item) => item.doctorId === String(doctorId) && item.date === date &&
+      item.clinicId === clinicId && isActiveQueueRecord(item))
       .sort((a, b) => Number(isServingQueueRecord(b)) - Number(isServingQueueRecord(a))
+        || Number(b.queueStatus === 'called') - Number(a.queueStatus === 'called')
         || Number(b.emergency) - Number(a.emergency)
+        || Number(b.urgent) - Number(a.urgent)
         || (timeMinutes(a.time) ?? 1440) - (timeMinutes(b.time) ?? 1440)
+        || (a.token ?? Infinity) - (b.token ?? Infinity)
         || a.id.localeCompare(b.id));
 
-    const currentIndex = queue.findIndex((item) => item.id === String(appointment.id || appointment._id));
-    const waiting = queue.slice(currentIndex >= 0 ? currentIndex + 1 : 0)
-      .filter((item) => !isServingQueueRecord(item) && item.patientId)
+    const waiting = queue
+      .filter((item) => !isServingQueueRecord(item) && item.token !== null)
       .slice(0, limit);
-
-    await Promise.all(waiting.map((item) => createNotificationSafely({
-      recipientId: item.patientId,
-      actorId: doctorId,
-      type: "appointment",
-      title: "Your turn is coming soon",
-      message: "Your number may come within 30 minutes. Please stay near the clinic.",
-      data: {
-        type: "QUEUE_TURN_SOON",
-        doctorId: String(doctorId),
-        appointmentId: item.id,
-        source: item.source,
-        token: item.token,
-        appointmentDate: item.date,
-      },
-      actionUrl: "/appointments",
-    })));
+    const serving = queue.find(isServingQueueRecord);
+    await notifyNextQueueTokens(waiting, { doctorId, date, clinicId, limit,
+      currentAppointmentId: serving?.id || '' });
     return waiting;
   } catch (error) {
     console.error("Upcoming queue notification failed:", error.message);

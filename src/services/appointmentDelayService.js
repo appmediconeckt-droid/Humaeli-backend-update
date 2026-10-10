@@ -2,7 +2,9 @@
 import DoctorBreak from "../models/doctorBreakModel.js";
 import Appointment from "../models/appointmentModel.js";
 import WalkinAppointment from "../models/walkinAppointmentModel.js";
-import { indiaDateTime, timeMinutes } from "./appointmentSlotService.js";
+import { indiaDateTime, timeMinutes, slotRepository } from "./appointmentSlotService.js";
+
+import { calculateEstimatedQueue, normalizeQueueAppointment, queueRecordKey } from "./queueTimingService.js";
 
 export const clockTime = (minutes) =>
   `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:00`;
@@ -133,73 +135,41 @@ export const calculateDoctorDelays = async (doctorId, date) => {
  */
 export const enrichAppointmentsWithDelay = async (appointments, doctorId, date) => {
   if (!Array.isArray(appointments) || appointments.length === 0) return appointments;
-
   const targetDate = date || indiaDateTime().date;
-  const targetDoctorId = doctorId || appointments[0]?.counselor || appointments[0]?.doctor_id;
-
-  const { delayEvents } = await calculateDoctorDelays(targetDoctorId, targetDate);
-
-  if (!delayEvents || delayEvents.length === 0) {
-    return appointments.map((appt) => {
-      const isPlain = typeof appt.toJSON === "function" ? appt.toJSON() : { ...appt };
-      return isPlain;
-    });
-  }
-
-  return appointments.map((appt) => {
-    const item = typeof appt.toJSON === "function" ? appt.toJSON() : { ...appt };
-
-    const status = String(item.appointment_status || item.status || "pending").toLowerCase();
-    const isCompletedOrCancelled = ["completed", "complete", "cancelled", "canceled", "rejected"].includes(status);
-    const isEmergency = String(item.priority || "").toLowerCase() === "emergency";
-
-    if (isEmergency || isCompletedOrCancelled) {
-      return item;
-    }
-
-    const fallback = item.date ? indiaDateTime(item.date) : {};
-    const apptDate = String(item.appointment_date || fallback.date || "").slice(0, 10);
-    const apptTime = item.appointment_time || fallback.time;
-
-    if (!apptTime || apptDate !== targetDate) {
-      return item;
-    }
-
-    const apptMinutes = timeMinutes(apptTime);
-    if (apptMinutes === null) return item;
-
-    // Initialize delay tracking
-    let applicableDelay = 0;
-    const reasons = [];
-    // effectiveStart tracks the appointment's start time after applying delays
-    let effectiveStart = apptMinutes;
-for (const event of delayEvents) {
-      // Calculate overlap between event and the current effective start time
-      const overlap = Math.max(0, (event.endMinutes ?? (event.startMinutes + event.durationMinutes)) - effectiveStart);
-      if (overlap > 0) {
-        applicableDelay += overlap;
-        effectiveStart += overlap;
-        const label = event.type === "emergency"
-          ? `Emergency consultation (${overlap} min)`
-          : `Doctor break (${overlap} min)`;
-        if (!reasons.includes(label)) reasons.push(label);
-      }
-    }
-
-    if (applicableDelay > 0) {
-      const newMinutes = apptMinutes + applicableDelay;
-      const originalTime = apptTime.length === 5 ? `${apptTime}:00` : apptTime;
-      const scheduledIso = `${apptDate}T${originalTime}+05:30`;
-      const scheduledMs = new Date(scheduledIso).getTime();
-
-      item.original_appointment_time = item.appointment_time || originalTime;
-      item.original_appointment_at = new Date(scheduledMs).toISOString();
-      item.delay_minutes = applicableDelay;
-      item.delay_reason = reasons.join(", ");
-      item.estimated_appointment_time = clockTime(newMinutes);
-      item.estimated_start_at = new Date(scheduledMs + applicableDelay * 60000).toISOString();
-    }
-
-    return item;
+  const targetDoctorId = String(doctorId || appointments[0]?.counselor?._id || appointments[0]?.counselor || appointments[0]?.doctor_id || '');
+  const { breaks } = await calculateDoctorDelays(targetDoctorId, targetDate);
+  const [online, walkins, ranges] = await Promise.all([
+    slotRepository.online(targetDoctorId, targetDate), slotRepository.walkins(targetDoctorId, targetDate), slotRepository.ranges(targetDoctorId),
+  ]);
+  const sourceFor = (item) => item.doctor_id && !item.counselor ? 'walkin' : 'online';
+  const normalized = [
+    ...(Array.isArray(online) ? online : []).map((record) => normalizeQueueAppointment(record, 'online')),
+    ...(Array.isArray(walkins) ? walkins : []).map((record) => normalizeQueueAppointment(record, 'walkin')),
+    ...appointments.map((record) => normalizeQueueAppointment(record, sourceFor(record))),
+  ];
+  const records = [...new Map(normalized.map((item) => [queueRecordKey(item), item])).values()];
+  const states = new Map();
+  const now = Date.now();
+  return appointments.map((record) => {
+    const item = typeof record.toJSON === 'function' ? record.toJSON() : { ...record };
+    const own = normalizeQueueAppointment(item, sourceFor(item));
+    if (own.date !== targetDate || own.doctorId !== targetDoctorId) return item;
+    if (!states.has(own.clinicId)) states.set(own.clinicId, calculateEstimatedQueue(records, {
+      doctorId: targetDoctorId, date: targetDate, clinicId: own.clinicId, ranges: Array.isArray(ranges) ? ranges : [], breaks, now,
+    }));
+    const timing = states.get(own.clinicId).estimates.get(queueRecordKey(own));
+    if (!timing) return item;
+    return {
+      ...item,
+      original_appointment_time: item.appointment_time,
+      original_appointment_at: timing.scheduledStartAt,
+      estimated_appointment_time: timing.estimatedStartAt ? indiaDateTime(timing.estimatedStartAt).time : null,
+      estimated_start_at: timing.estimatedStartAt, estimated_end_at: timing.estimatedEndAt,
+      actual_start_at: timing.actualStartAt, actual_end_at: timing.actualEndAt,
+      expected_duration_minutes: timing.expectedDurationMinutes, waiting_minutes: timing.waitingMinutes,
+      timing_difference_minutes: timing.timingDifferenceMinutes, timing_label: timing.timingLabel,
+      delay_minutes: Math.max(0, timing.timingDifferenceMinutes || 0),
+      delay_reason: timing.timingDifferenceMinutes > 0 ? 'Live consultation queue' : null,
+    };
   });
 };

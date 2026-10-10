@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import sinon from "sinon";
 import { calculateDoctorDelays, enrichAppointmentsWithDelay } from "../src/services/appointmentDelayService.js";
+import { slotRepository } from "../src/services/appointmentSlotService.js";
 import DoctorBreak from "../src/models/doctorBreakModel.js";
 import Appointment from "../src/models/appointmentModel.js";
 import WalkinAppointment from "../src/models/walkinAppointmentModel.js";
@@ -10,13 +11,15 @@ describe("Appointment Delay Service (Doctor Break & Emergency Shifts)", () => {
 
   beforeEach(() => {
     sandbox = sinon.createSandbox();
+    sandbox.useFakeTimers({ now: new Date("2026-09-26T13:00:00+05:30"), toFake: ["Date"] });
+    sandbox.stub(slotRepository, "ranges").resolves([]);
   });
 
   afterEach(() => {
     sandbox.restore();
   });
 
-  it("calculates 30-minute delay for subsequent patient when an emergency takes 30 minutes", async () => {
+  it("does not add a completed emergency block that ends at the scheduled start", async () => {
     const today = "2026-09-26";
     const doctorId = "doctor-123";
 
@@ -53,13 +56,13 @@ describe("Appointment Delay Service (Doctor Break & Emergency Shifts)", () => {
     const enriched = await enrichAppointmentsWithDelay([patientAppt], doctorId, today);
 
     expect(enriched).to.have.lengthOf(1);
-    expect(enriched[0].delay_minutes).to.equal(30);
+    expect(enriched[0].delay_minutes).to.equal(0);
     expect(enriched[0].original_appointment_time).to.equal("14:00:00");
-    expect(enriched[0].estimated_appointment_time).to.equal("14:30:00");
-    expect(enriched[0].delay_reason).to.include("Emergency consultation (30 min)");
+    expect(enriched[0].estimated_appointment_time).to.equal("14:00:00");
+    expect(enriched[0].delay_reason).to.equal(null);
   });
 
-  it("calculates 15-minute delay for subsequent patient when doctor takes a 15-minute break", async () => {
+  it("does not add a completed break that ends at the scheduled start", async () => {
     const today = "2026-09-26";
     const doctorId = "doctor-123";
 
@@ -91,13 +94,13 @@ describe("Appointment Delay Service (Doctor Break & Emergency Shifts)", () => {
     const enriched = await enrichAppointmentsWithDelay([patientAppt], doctorId, today);
 
     expect(enriched).to.have.lengthOf(1);
-    expect(enriched[0].delay_minutes).to.equal(15);
+    expect(enriched[0].delay_minutes).to.equal(0);
     expect(enriched[0].original_appointment_time).to.equal("14:00:00");
-    expect(enriched[0].estimated_appointment_time).to.equal("14:15:00");
-    expect(enriched[0].delay_reason).to.include("Doctor break (15 min)");
+    expect(enriched[0].estimated_appointment_time).to.equal("14:00:00");
+    expect(enriched[0].delay_reason).to.equal(null);
   });
 
-  it("accumulates both emergency time (30m) and break time (15m) to shift 2:00 PM appointment to 2:45 PM", async () => {
+  it("does not double count previous emergency and break durations", async () => {
     const today = "2026-09-26";
     const doctorId = "doctor-123";
 
@@ -143,10 +146,10 @@ describe("Appointment Delay Service (Doctor Break & Emergency Shifts)", () => {
     const enriched = await enrichAppointmentsWithDelay([patientAppt], doctorId, today);
 
     expect(enriched).to.have.lengthOf(1);
-    expect(enriched[0].delay_minutes).to.equal(45);
+    expect(enriched[0].delay_minutes).to.equal(0);
     expect(enriched[0].original_appointment_time).to.equal("14:00:00");
-    expect(enriched[0].estimated_appointment_time).to.equal("14:45:00");
-    expect(enriched[0].delay_reason).to.include("Doctor break (15 min)");
-    expect(enriched[0].delay_reason).to.include("Emergency consultation (30 min)");
+    expect(enriched[0].estimated_appointment_time).to.equal("14:00:00");
+    expect(enriched[0].delay_reason).to.equal(null);
+    expect(enriched[0].delay_reason).to.equal(null);
   });
 });

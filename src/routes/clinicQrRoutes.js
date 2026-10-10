@@ -1,7 +1,8 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
-import { clinicDisplayQueue } from '../services/clinicDisplayQueue.js';
+import { clinicDisplayQueue, notifyClinicDisplayPatients } from '../services/clinicDisplayQueue.js';
 import { queueToday } from '../utils/queueDate.js';
+import { getDisplayTiming } from '../services/displayTimingService.js';
 import { protect } from '../middleware/authMiddleware.js';
 import { doctorScope, handle, fail } from '../utils/clinicAccess.js';
 import { query } from '../config/mysql.js';
@@ -16,15 +17,19 @@ router.get('/doctors/:doctorId/clinics', protect, handle(async (req, res) => {
     ledPath: `/display/clinic/${clinic.doctorClinicId}` })) } });
 }));
 router.get('/walkin/:doctorClinicId/queue', handle(async (req, res) => {
-  const { link, doctor, clinic } = await resolveWalkin(req.params.doctorClinicId);
+  const { link, doctor, clinic, timings } = await resolveWalkin(req.params.doctorClinicId);
   const queueDate = queueToday();
   const data = await clinicDisplayQueue(link, queueDate);
+  await notifyClinicDisplayPatients(link, queueDate, data);
+  const timing = await getDisplayTiming({ doctorId: link.doctor_id, date: queueDate,
+    clinicId: link.clinic_id || '', timings, nextAppointmentId: data.waiting[0]?.appointmentId,
+    nextToken: data.waiting[0]?.tokenNumber });
   res.json({ success: true, displayType: 'doctor', displayName: 'Clinic queue',
     doctorClinicId: link.id, facility: { id: link.facility_id, name: clinic?.clinic_name || link.facility_name },
     doctor: { id: link.doctor_id, name: doctor.fullName }, roomId: link.roomId || null, queueDate,
     current: data.current ? { token: data.current.tokenNumber, status: data.current.status } : null,
-    nextTokens: data.waiting.slice(0, 4).map(entry => entry.tokenNumber),
-    waitingCount: data.waitingCount, totalPatients: data.totalPatients, completedCount: data.completedCount });
+    nextTokens: data.waiting.slice(0, 2).map(entry => entry.tokenNumber),
+    waitingCount: data.waitingCount, totalPatients: data.totalPatients, completedCount: data.completedCount, ...timing });
 }));
 router.patch('/walkin/:doctorClinicId/room', protect, handle(async (req, res) => {
   const { link } = await resolveWalkin(req.params.doctorClinicId);

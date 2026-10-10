@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { protect, allowRoles } from '../middleware/authMiddleware.js';
-import { addStaff, listStaff, updateStaff, removeStaff } from '../controllers/staffController.js';
+import { addStaff, listStaff, updateStaff, removeStaff, resendStaffWelcomeEmail } from '../controllers/staffController.js';
 const router = Router();
 router.use(protect, allowRoles('doctor', 'admin'));
 router.post('/', addStaff);
+router.post('/:id/resend-welcome-email', resendStaffWelcomeEmail);
 router.get('/', listStaff);
 router.patch('/:id', updateStaff);
 router.delete('/:id', removeStaff);

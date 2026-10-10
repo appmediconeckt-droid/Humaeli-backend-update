@@ -7,6 +7,7 @@ import DoctorFacility from "../models/mysql/DoctorFacilityModel.js";
 import { generateObjectId } from "../models/mysql/BaseModel.js";
 import { queueToday } from '../utils/queueDate.js';
 import { withQueueMutex } from '../services/queueMutex.js';
+import { notifyNextQueueTokens } from '../services/queueTurnNotificationService.js';
 
 // Valid queue statuses
 const VALID_STATUSES = ["waiting", "called", "in_consultation", "completed", "skipped", "cancelled", "no_show"];
@@ -173,13 +174,19 @@ export async function getDoctorQueueData(facilityId, doctorId, queueDate) {
   );
   const all = allRows || [];
 
-  const waiting = all.filter(r => r.status === "waiting");
   const inConsultation = all.find(r => r.status === "in_consultation") || null;
+  const waiting = all.filter(r => r.status === "waiting" || (inConsultation && r.status === "called"));
   const called = all.find(r => r.status === "called") || null;
   const completed = all.filter(r => r.status === "completed");
   const skipped = all.filter(r => r.status === "skipped");
 
   const current = inConsultation || called || null;
+
+  if (queueDate === todayStr()) await notifyNextQueueTokens(waiting.filter(entry => entry.tokenNumber != null).map(entry => ({
+    id: entry.appointmentId || entry.id, source: 'queue', token: entry.tokenNumber,
+    patientId: entry.patientId,
+  })), { doctorId, date: queueDate, clinicId: facilityId,
+    currentAppointmentId: String(current?.appointmentId || current?.id || '') });
 
   return {
     facilityId,

@@ -360,72 +360,48 @@ import { withAppointmentBooking } from '../services/appointmentConflictService.j
 import { indiaDateTime, slotRepository } from '../services/appointmentSlotService.js';
 import { normalizeBookingSource } from '../services/doctorAnalyticsService.js';
 import { createEmergencyAppointment } from '../services/emergencyAppointmentService.js';
-import { getAppointmentSlotDuration, getConsultationTiming, emitQueueUpdated as emitTimingQueueUpdated, notifyUpcomingQueuePatients, findOtherActiveConsultation } from '../services/consultationTimingService.js';
+import { getAppointmentSessionEnd, getConsultationTiming, emitQueueUpdated as emitTimingQueueUpdated, notifyUpcomingQueuePatients, findOtherActiveConsultation } from '../services/consultationTimingService.js';
 import { Clinic, Availability, UnavailableDate } from '../models/clinicModels.js';
 import { timeMinutes, withAppointmentSlot } from '../services/appointmentSlotService.js';
 import { handle, doctorScope, actorId, fail, jsonRecord, pick, todayIST, dateOnly } from '../utils/clinicAccess.js';
-// Expire unstarted appointments only after their full scheduled slot. Keep the
-// row as no-show history; cancelled and completed appointments are never deleted.
+// Retain the exported name used by existing jobs/routes. Expiry now follows
+// the doctor availability session, and only an absent unstarted booking is deleted.
 export const markExpiredAppointmentsNoShow = async (now = new Date()) => {
-  const candidates = await Appointment.find({
+  const absentFilter = {
     status: { $in: ["pending", "confirmed"] },
-    queue_status: { $nin: ["in_progress", "completed", "skipped", "no_show", "canceled", "cancelled"] },
+    queue_status: { $nin: ["waiting", "called", "in_progress", "completed", "skipped", "canceled", "cancelled"] },
+    checked_in_at: null,
     consultation_started_at: null,
-    date: { $lte: now },
-  }).lean();
+    "consultation_timing.startedAt": null,
+  };
+  const candidates = await Appointment.find({ ...absentFilter, date: { $lte: now } }).lean();
   const rangesByDoctor = new Map();
-  let noShowCount = 0;
-
+  let removedCount = 0;
   for (const appointment of candidates) {
-    const status = String(appointment.status || "").toLowerCase();
-    const queueStatus = String(appointment.queue_status || "").toLowerCase();
-    if (
-      !["pending", "confirmed"].includes(status) ||
-      ["in_progress", "completed", "skipped", "no_show", "canceled", "cancelled"].includes(queueStatus) ||
-      appointment.consultation_started_at ||
-      appointment.consultation_timing?.startedAt
-    ) {
+    if (!["pending", "confirmed"].includes(String(appointment.status || '').toLowerCase()) ||
+        ["waiting", "called", "in_progress", "completed", "skipped", "canceled", "cancelled"].includes(String(appointment.queue_status || '').toLowerCase()) ||
+        appointment.checked_in_at || appointment.consultation_started_at || appointment.consultation_timing?.startedAt ||
+        (appointment.priority === "emergency" && !appointment.appointment_time)) continue;
+    const doctorId = String(appointment.counselor || '');
+    if (!rangesByDoctor.has(doctorId)) rangesByDoctor.set(doctorId, await slotRepository.ranges(appointment.counselor));
+    const sessionEnd = await getAppointmentSessionEnd(appointment, rangesByDoctor.get(doctorId));
+    // Missing/ambiguous schedules must never cause an early automatic deletion.
+    if (!sessionEnd) continue;
+    if (sessionEnd.getTime() > now.getTime()) {
+      // Recover legacy no-show flags applied at the old per-patient duration.
+      if (appointment.queue_status === "no_show") {
+        await Appointment.updateOne({ ...absentFilter, _id: appointment._id, queue_status: "no_show" }, { $set: { queue_status: "booked" } });
+      }
       continue;
     }
-
-    const doctorId = String(appointment.counselor || "");
-    if (!rangesByDoctor.has(doctorId)) {
-      rangesByDoctor.set(
-        doctorId,
-        await slotRepository.ranges(appointment.counselor),
-      );
-    }
-
-    const durationMinutes = Number(
-      appointment.consultation_timing?.durationMinutes ||
-      await getAppointmentSlotDuration(appointment, rangesByDoctor.get(doctorId)),
-    );
-    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) continue;
-
-    const scheduledAt = new Date(appointment.date).getTime();
-    if (!Number.isFinite(scheduledAt) || scheduledAt + durationMinutes * 60000 > now.getTime()) {
-      continue;
-    }
-
-    const result = await Appointment.updateOne(
-      {
-        _id: appointment._id,
-        status: { $in: ["pending", "confirmed"] },
-        queue_status: { $nin: ["in_progress", "completed", "skipped", "no_show", "canceled", "cancelled"] },
-        consultation_started_at: null,
-      },
-      { $set: { queue_status: "no_show" } },
-    );
-    if (result.modifiedCount || result.nModified) {
-      noShowCount += 1;
-      await emitTimingQueueUpdated({ ...appointment, queue_status: "no_show" });
+    const result = await Appointment.deleteOne({ ...absentFilter, _id: appointment._id });
+    if (result.deletedCount) {
+      removedCount += result.deletedCount;
+      await emitTimingQueueUpdated(appointment);
     }
   }
-
-  if (noShowCount > 0) {
-    console.log(`Appointment cleanup: marked ${noShowCount} expired appointment(s) as no-show`);
-  }
-  return noShowCount;
+  if (removedCount) console.log(`Appointment cleanup: removed ${removedCount} absent booking(s) after doctor session end`);
+  return removedCount;
 };
 
 // IST (India Standard Time) is UTC+5:30
@@ -544,7 +520,7 @@ export const book = async (req, res) => {
           type: "appointment",
           title: "Emergency appointment request",
           message: "A new emergency appointment request needs clinic review.",
-          data: { appointmentId: appointment._id, status: appointment.status, priority: "emergency", clinic_id: appointment.clinic_id },
+          data: { appointmentId: appointment._id, doctorId: counselorId, status: appointment.status, priority: "emergency", clinic_id: appointment.clinic_id },
           actionUrl: "/counselor/appointments",
         });
       }
@@ -913,7 +889,7 @@ export const updateStatus = async (req, res) => {
 
     await saveOnlineAppointment(appointment);
     emitQueueUpdated(appointment.counselor, appointment.appointment_date);
-    if (appointment.$locals?.notifyQueueSoon) await notifyUpcomingQueuePatients(appointment);
+    if (starting || appointment.$locals?.notifyQueueSoon) await notifyUpcomingQueuePatients(appointment);
 
     await createNotificationSafely({
       recipientId: appointment.patient,
@@ -963,6 +939,17 @@ const DOCTOR_APPOINTMENT_FIELDS =
   "fullName name profilePhoto profileImage anonymous role accountType specialization experience qualification rating consultationMode location";
 
 const getRecordId = (value) => value?._id || value?.id || value;
+
+const notifyEmergencyDoctor = (appointment, actorId) => createNotificationSafely({
+  recipientId: appointment.counselor,
+  actorId,
+  type: 'appointment',
+  title: 'Emergency appointment request',
+  message: 'An appointment has been moved to your emergency queue. Please review it.',
+  data: { appointmentId: appointment._id, doctorId: appointment.counselor,
+    priority: 'emergency', clinic_id: appointment.clinic_id },
+  actionUrl: '/counselor/appointments',
+});
 
 const appointmentView = async row => {
   const record = jsonRecord(row);
@@ -1100,6 +1087,8 @@ export const updateDoctorAppointment = async (req, res) => {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
+    const becameEmergency = req.body.priority === 'emergency' && appointment.priority !== 'emergency';
+
     const requestedQueueStatus = String(req.body.queue_status || req.body.queueStatus || "").toLowerCase();
     if (requestedQueueStatus === "skipped" &&
       (!["pending", "confirmed"].includes(appointment.status) || appointment.consultation_started_at || appointment.consultation_timing?.startedAt)) {
@@ -1157,7 +1146,11 @@ export const updateDoctorAppointment = async (req, res) => {
     }
     await appointment.save();
     await emitTimingQueueUpdated(appointment);
-    if ((!wasStarted && appointment.consultation_timing?.startedAt) || (!wasEnded && appointment.consultation_timing?.endedAt)) {
+    if (becameEmergency && !['canceled', 'rejected', 'completed'].includes(appointment.status)) {
+      await notifyEmergencyDoctor(appointment, req.user._id);
+    }
+    if ((!wasStarted && appointment.consultation_timing?.startedAt) || (!wasEnded && appointment.consultation_timing?.endedAt) ||
+      requestedQueueStatus || becameEmergency) {
       await notifyUpcomingQueuePatients(appointment);
     }
     const result = expandConsultationNotes(appointment.toJSON());
@@ -1281,6 +1274,7 @@ export const updateAppointment = handle(async (req, res) => {
 
   await saveOnlineAppointment(row);
   emitQueueUpdated(row.counselor, row.appointment_date);
+  if (requestedQueueStatus || requestedStatus) await notifyUpcomingQueuePatients(row);
 
   res.json({
     success: true,
@@ -1674,6 +1668,7 @@ export const setAppointmentEmergency = handle(async (req, res) => {
   }
 
   const isEmergency = req.body.is_emergency !== false;
+  const becameEmergency = isEmergency && row.priority !== 'emergency';
 
   row.priority = isEmergency ? "emergency" : "normal";
   row.emergency_reason = isEmergency
@@ -1693,6 +1688,11 @@ export const setAppointmentEmergency = handle(async (req, res) => {
 
   await row.save();
   emitQueueUpdated(row.counselor, row.appointment_date);
+
+  if (becameEmergency) {
+    await notifyEmergencyDoctor(row, req.user._id);
+    await notifyUpcomingQueuePatients(row);
+  }
 
   await createNotificationSafely({
     recipientId: row.patient,

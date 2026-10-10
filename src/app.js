@@ -521,8 +521,8 @@ app.use("/api/admin/reviews", adminReviewRoutes);
 app.use("/api/admin/payments", adminPaymentRoutes);
 app.use("/api/admin/support", adminSupportRoutes);
 app.use("/api/admin/refunds", adminRefundRoutes);
-// Mark unstarted appointments as no-show only after their full slot duration;
-// keep all appointment rows so completed/cancelled history remains available.
+// Remove absent unstarted bookings only after the matching doctor session ends.
+// Checked-in, started, completed and explicitly cancelled history is preserved.
 export const startDatabaseJobs = createDatabaseStartup(mongoose.connection, async () => {
   if (process.env.NODE_ENV === "test") return;
   await resetAllUsersPresence();

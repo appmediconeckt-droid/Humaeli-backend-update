@@ -6,7 +6,8 @@ import Department from "../models/mysql/DepartmentModel.js";
 import { generateObjectId } from "../models/mysql/BaseModel.js";
 import { getDoctorQueueData } from "./queueController.js";
 import { queueToday } from '../utils/queueDate.js';
-import { clinicDisplayQueue } from '../services/clinicDisplayQueue.js';
+import { clinicDisplayQueue, notifyClinicDisplayPatients } from '../services/clinicDisplayQueue.js';
+import { getDisplayTiming } from '../services/displayTimingService.js';
 
 const DISPLAY_TYPES = ["doctor", "department", "floor", "hospital", "reception"];
 
@@ -118,6 +119,9 @@ export const getDisplayQueue = async (req, res) => {
       if (!doctorId) return fail(res, "This display has no doctor configured.", 422);
       const [links] = await query('SELECT * FROM doctor_clinic_links WHERE facility_id=? AND doctor_id=? AND is_active=1 LIMIT 1', [facilityId, doctorId]);
       const data = links[0] ? await clinicDisplayQueue(links[0], queueDate) : await getDoctorQueueData(facilityId, doctorId, queueDate);
+      if (links[0]) await notifyClinicDisplayPatients(links[0], queueDate, data);
+      const timing = await getDisplayTiming({ doctorId, date: queueDate, clinicId: links[0]?.clinic_id || '',
+        nextAppointmentId: data.waiting[0]?.appointmentId, nextToken: data.waiting[0]?.tokenNumber });
 
       // Fetch facility info
       const facility = await Facility.findById(facilityId);
@@ -134,10 +138,11 @@ export const getDisplayQueue = async (req, res) => {
         roomId: data.current?.roomId || mappingRows?.[0]?.roomId || null,
         queueDate,
         current: data.current ? { token: data.current.tokenNumber, status: data.current.status } : null,
-        nextTokens: data.waiting.slice(0, 4).map(e => e.tokenNumber),
+        nextTokens: data.waiting.slice(0, 2).map(e => e.tokenNumber),
         waitingCount: data.waitingCount,
         totalPatients: data.totalPatients,
         completedCount: data.completedCount,
+        ...timing,
       });
     }
 

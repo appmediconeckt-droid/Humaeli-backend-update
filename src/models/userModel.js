@@ -89,6 +89,7 @@ const userSchema = new mongoose.Schema({
         ],
         default: "user"
     },
+    clinic_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Clinic' },
     accountType: {
         type: String,
         enum: ["doctor", "consultant"],
