@@ -81,6 +81,9 @@ const appointmentSchema = new mongoose.Schema(
     checked_in_at: {
       type: Date,
     },
+    cancellation_reason: { type: String },
+    cancellation_deadline: { type: Date },
+    canceled_at: { type: Date },
 
     vitals: {
       type: mongoose.Schema.Types.Mixed,

@@ -214,7 +214,7 @@ describe("Availability-based appointment tokens", () => {
     expect(update.firstCall.args[1].$set.token_number).to.equal(2);
   });
 
-  it("keeps an absent appointment through the full doctor session and then deletes it", async () => {
+  it("keeps an absent uncalled appointment after the full doctor session", async () => {
     const appointment = {
       _id: "appointment-1",
       counselor: "doctor-1",
@@ -230,9 +230,8 @@ describe("Availability-based appointment tokens", () => {
 
     expect(await markExpiredAppointmentsNoShow(new Date(slotEnd.getTime() - 1))).to.equal(0);
     expect(update.called).to.equal(false);
-    expect(await markExpiredAppointmentsNoShow(slotEnd)).to.equal(1);
-    expect(update.firstCall.args[0]._id).to.equal(appointment._id);
-    expect(update.firstCall.args[0].checked_in_at).to.equal(null);
+    expect(await markExpiredAppointmentsNoShow(slotEnd)).to.equal(0);
+    expect(update.called).to.equal(false);
   });
 
   it("keeps started and cancelled appointments instead of expiring or deleting them", async () => {

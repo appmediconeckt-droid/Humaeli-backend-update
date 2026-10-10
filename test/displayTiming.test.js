@@ -80,12 +80,13 @@ describe('Doctor display break and delay data', () => {
     expect(overrun.estimatedWaitLabel).to.equal('Updating estimate');
   });
 
-  it('shows a known minimum wait while the serving doctor is on break', () => {
+  it("shows the recalculated wait including the serving doctor break", () => {
     const data = buildDisplayTiming(options({ records: [
       item('1', '10:00', { status: 'in-progress', queueStatus: 'in_progress', timing: { startedAt: at('10:00'), durationMinutes: 15 } }),
       item('2', '10:10'),
     ], breaks: [{ started_at: at('10:04'), planned_minutes: 11, status: 'active' }] }));
-    expect(data.estimatedWaitLabel).to.equal('At least 10 min');
+    expect(data.estimatedWaitMinutes).to.equal(21);
+    expect(data.estimatedWaitLabel).to.equal(null);
   });
 
   for (const queueStatus of ['waiting', 'called']) {

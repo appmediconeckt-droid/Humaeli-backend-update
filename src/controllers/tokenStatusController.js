@@ -60,6 +60,8 @@ export const formatTokenStatus = (own, records, doctor, ranges = [], breaks = []
       appointmentId: `${own.source}:${own.id}`, _id: own.id, source: own.source,
       appointmentDate: own.date, appointmentTime: own.time, status: own.status,
       createdAt: own.createdAt, bookedAt: own.createdAt, scheduledStartAt: timing.scheduledStartAt || null,
+      scheduledTime: timing.scheduledStartAt || null, estimatedTime: estimatedTurnTime,
+      cancelDeadline: timing.cancelDeadline || null, patientArrivalTime: own.patientArrivalTime || null,
       doctor: { _id: own.doctorId, fullName: doctor?.fullName || 'Doctor' },
       estimatedAppointmentTime: estimatedTurnTime ? indiaDateTime(estimatedTurnTime).time : null,
       estimatedStartAt: estimatedTurnTime, estimatedEndAt: timing.estimatedEndAt || null,

@@ -93,10 +93,10 @@ describe("Persisted consultation timing and live queue", () => {
     const breaks = [{ started_at: at("10:03:00"), planned_minutes: 5 }];
     const result = formatTokenStatus(mine, [current, mine], {}, [], breaks, at("10:06:00").getTime());
     expect(result.current).to.include({ elapsedSeconds: 180, doctorStatus: "break" });
-    expect(result.queue.estimatedTurnTime).to.equal(null);
+    expect(result.queue.estimatedTurnTime).to.equal(at("10:30:00").toISOString());
     expect(formatTokenStatus(mine, [current, mine], {}, [], breaks, at("10:10:00").getTime()).current.elapsedSeconds).to.equal(300);
   });
-  it("deletes an absent appointment only after its complete doctor availability session", async () => {
+  it("keeps an absent uncalled appointment even after doctor availability ends", async () => {
     const appointment = {
       _id: "missed",
       counselor: "doctor",
@@ -119,12 +119,8 @@ describe("Persisted consultation timing and live queue", () => {
 
     expect(await markExpiredAppointmentsNoShow(at("10:59:59"))).to.equal(0);
     expect(updateOne.called).to.equal(false);
-    expect(await markExpiredAppointmentsNoShow(at("11:00:00"))).to.equal(1);
-    expect(updateOne.calledOnce).to.equal(true);
-    expect(updateOne.firstCall.args[0]).to.include({
-      consultation_started_at: null,
-    });
-    expect(updateOne.firstCall.args[0].checked_in_at).to.equal(null);
+    expect(await markExpiredAppointmentsNoShow(at("11:00:00"))).to.equal(0);
+    expect(updateOne.called).to.equal(false);
     expect(find.firstCall.args[0].status).to.deep.equal({
       $in: ["pending", "confirmed"],
     });

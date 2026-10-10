@@ -25,6 +25,6 @@ describe("Doctor appointment patient details", () => {
     const counselorFields = chain.populate.secondCall.args[1].split(" ");
     expect(chain.populate.secondCall.args[0]).to.equal("counselor");
     expect(counselorFields).to.include.members(["fullName", "profilePhoto", "anonymous", "role", "accountType", "specialization", "experience", "qualification", "rating", "consultationMode"]);
-    expect(find.secondCall.args[0]).to.deep.equal({ counselor: "doctor" });
+    expect(find.firstCall.args[0]).to.deep.equal({ counselor: "doctor" });
   });
 });

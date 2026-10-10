@@ -161,6 +161,11 @@ export const enrichAppointmentsWithDelay = async (appointments, doctorId, date) 
     if (!timing) return item;
     return {
       ...item,
+      scheduledTime: timing.scheduledStartAt, estimatedTime: timing.estimatedStartAt,
+      cancelDeadline: timing.cancelDeadline || item.cancellation_deadline || null,
+      patientArrivalTime: own.patientArrivalTime,
+      currentToken: states.get(own.clinicId).current?.token ?? null,
+      cancellationReason: item.cancellation_reason || null,
       original_appointment_time: item.appointment_time,
       original_appointment_at: timing.scheduledStartAt,
       estimated_appointment_time: timing.estimatedStartAt ? indiaDateTime(timing.estimatedStartAt).time : null,
@@ -172,4 +177,23 @@ export const enrichAppointmentsWithDelay = async (appointments, doctorId, date) 
       delay_reason: timing.timingDifferenceMinutes > 0 ? 'Live consultation queue' : null,
     };
   });
+};
+
+// Batch existing list/detail APIs by doctor/day instead of calculating one
+// independent queue per appointment. Keep historical and original fields intact.
+export const enrichAppointmentGroups = async (appointments) => {
+  const groups = new Map();
+  for (const record of appointments) {
+    const own = normalizeQueueAppointment(record);
+    if (!own.doctorId || !own.date) continue;
+    const key = `${own.doctorId}:${own.date}`;
+    if (!groups.has(key)) groups.set(key, { doctorId: own.doctorId, date: own.date, records: [] });
+    groups.get(key).records.push(record);
+  }
+  const enriched = new Map();
+  for (const group of groups.values()) {
+    const rows = await enrichAppointmentsWithDelay(group.records, group.doctorId, group.date);
+    for (const row of rows) enriched.set(String(row._id || row.id), row);
+  }
+  return appointments.map((row) => enriched.get(String(row._id || row.id)) || row);
 };

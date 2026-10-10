@@ -521,17 +521,20 @@ app.use("/api/admin/reviews", adminReviewRoutes);
 app.use("/api/admin/payments", adminPaymentRoutes);
 app.use("/api/admin/support", adminSupportRoutes);
 app.use("/api/admin/refunds", adminRefundRoutes);
-// Remove absent unstarted bookings only after the matching doctor session ends.
-// Checked-in, started, completed and explicitly cancelled history is preserved.
+// Existing minute job cancels only explicitly called, absent patients after
+// their live deadline. Slot end never removes booked patients or history.
 export const startDatabaseJobs = createDatabaseStartup(mongoose.connection, async () => {
   if (process.env.NODE_ENV === "test") return;
   await resetAllUsersPresence();
-  const appointmentCleanupInterval = setInterval(() => {
-    if (mongoose.connection.readyState !== 1) return;
-    markExpiredAppointmentsNoShow().catch((error) => {
-      console.error("Appointment cleanup failed:", error.message);
-    });
-  }, 60 * 1000);
+  let appointmentCleanupRunning = false;
+  const runAppointmentCleanup = async () => {
+    if (mongoose.connection.readyState !== 1 || appointmentCleanupRunning) return;
+    appointmentCleanupRunning = true;
+    try { await markExpiredAppointmentsNoShow(); }
+    catch (error) { console.error("Appointment cleanup failed:", error.message); }
+    finally { appointmentCleanupRunning = false; }
+  };
+  const appointmentCleanupInterval = setInterval(runAppointmentCleanup, 60 * 1000);
   appointmentCleanupInterval.unref?.();
   const chatBillingSettlementInterval = setInterval(() => {
     if (mongoose.connection.readyState !== 1) return;
@@ -543,9 +546,7 @@ export const startDatabaseJobs = createDatabaseStartup(mongoose.connection, asyn
   settleInactiveChatSessions().catch((error) => {
     console.error("Initial inactive chat billing settlement failed:", error.message);
   });
-  markExpiredAppointmentsNoShow().catch((error) => {
-    console.error("Initial appointment cleanup failed:", error.message);
-  });
+  void runAppointmentCleanup();
 
   const paidChatExpiryInterval = setInterval(() => {
     if (mongoose.connection.readyState !== 1) return;

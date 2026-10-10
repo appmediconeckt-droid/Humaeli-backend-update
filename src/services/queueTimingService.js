@@ -6,6 +6,14 @@ const serving = new Set(['in-progress', 'in_progress', 'in_consultation', 'consu
 const timestamp = (value) => value == null || value === '' ? null : Number.isFinite(new Date(value).getTime()) ? new Date(value).getTime() : null;
 const iso = (value) => value == null ? null : new Date(value).toISOString();
 const idOf = (value) => String(value?._id || value?.id || value || '');
+export const patientGraceMinutes = () => {
+  const value = Number(process.env.PATIENT_GRACE_PERIOD_MINUTES ?? 5);
+  return Number.isFinite(value) && value >= 0 ? value : 5;
+};
+export const calculateCancellationDeadline = (estimated) => {
+  const start = timestamp(estimated);
+  return start == null ? null : iso(start + patientGraceMinutes() * MINUTE);
+};
 export const queueRecordKey = (item) => `${item.source}:${item.id}`;
 export const scheduledQueueTime = (date, time) => {
   const minutes = timeMinutes(time);
@@ -31,6 +39,8 @@ export const normalizeQueueAppointment = (record, source = record.source || 'onl
     time: scheduledQueueTime('2000-01-01', time) ? indiaDateTime(scheduledQueueTime('2000-01-01', time)).time : String(time),
     token: Number(record.token ?? record.token_number) > 0 ? Number(record.token ?? record.token_number) : null,
     createdAt: record.createdAt || record.created_at || null,
+    patientArrivalTime: record.patientArrivalTime || record.checked_in_at || null,
+    calledAt: record.calledAt || record.called_at || null,
     status, queueStatus: String(record.queueStatus || record.queue_status || status).toLowerCase(), emergency,
     timing: {
       ...timing,
@@ -90,6 +100,7 @@ export const calculateEstimatedQueue = (records, { doctorId, date, clinicId = ''
   }));
   const activeBreak = breakIntervals.find(({ start, end }) => start <= now && end > now);
   const queue = scoped.filter(isActiveQueueAppointment).sort((a, b) =>
+    Number(Boolean(b.timing?.startedAt)) - Number(Boolean(a.timing?.startedAt)) ||
     Number(isServingQueueAppointment(b)) - Number(isServingQueueAppointment(a)) || Number(b.emergency) - Number(a.emergency) ||
     (timeMinutes(a.time) ?? 1440) - (timeMinutes(b.time) ?? 1440) || (a.token ?? Infinity) - (b.token ?? Infinity) || a.id.localeCompare(b.id) || a.source.localeCompare(b.source));
   const current = queue.find(isServingQueueAppointment);
@@ -116,7 +127,15 @@ export const calculateEstimatedQueue = (records, { doctorId, date, clinicId = ''
       estimatedEnd = workEnd(actualStart, duration, pauses);
       if (estimatedEnd <= now) { estimatedEnd = now + MINUTE; uncertain = true; }
       cursor = estimatedEnd;
-    } else if (!manualPaused && !(activeBreak && current) && (!uncertain || started != null)) {
+    } else if (item === current && timestamp(item.calledAt) != null && !manualPaused && !activeBreak) {
+      // An explicitly called, absent patient gets a stable deadline. Clamping
+      // their estimate to now on every worker tick would prevent expiry forever.
+      const afterCallBreakEnds = breakIntervals.filter(({ start }) => start >= timestamp(item.calledAt) && start <= now).map(({ end }) => end);
+      estimatedStart = skipInterruptions(Math.max(timestamp(item.calledAt), scheduled ?? -Infinity, ...completedEnds, ...afterCallBreakEnds), breakIntervals);
+      estimatedEnd = workEnd(estimatedStart, duration, breakIntervals);
+      cursor = Math.max(now, estimatedEnd);
+      uncertain = false;
+    } else if (!manualPaused && (!uncertain || started != null)) {
       // Walk-ins retain their assigned slot floor; emergency priority can bypass it.
       estimatedStart = skipInterruptions(Math.max(cursor, item.emergency ? cursor : scheduled ?? cursor), breakIntervals);
       estimatedEnd = workEnd(estimatedStart, duration, breakIntervals);
@@ -125,6 +144,7 @@ export const calculateEstimatedQueue = (records, { doctorId, date, clinicId = ''
     const difference = calculateTimingDifference(actualStart ?? estimatedStart, scheduled);
     estimates.set(queueRecordKey(item), {
       scheduledStartAt: iso(scheduled), estimatedStartAt: iso(estimatedStart), estimatedEndAt: iso(estimatedEnd),
+      cancelDeadline: calculateCancellationDeadline(iso(estimatedStart)), patientArrivalTime: item.patientArrivalTime || null,
       actualStartAt: iso(actualStart), actualEndAt: iso(timestamp(item.timing?.endedAt)), expectedDurationMinutes: duration,
       waitingMinutes: item === current && actualStart != null ? 0 : calculateWaitingMinutes(estimatedStart, now),
       timingDifferenceMinutes: difference, timingRelation: difference == null ? null : difference > 0 ? 'late' : difference < 0 ? 'early' : 'on_time',
