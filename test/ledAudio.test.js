@@ -27,7 +27,7 @@ describe('Queue display audio announcements', () => {
     audio.update(doctor([3, 4]));
     assert.equal(spoken.length, 0);
     buttons['audio-toggle'].handlers.click();
-    assert.equal(spoken[0].text, 'Next token numbers are 3 and 4. Please be ready near the clinic.');
+    assert.equal(spoken[0].text, 'Next token numbers 3 and 4 are available for patients. Please be ready for your turn.');
     assert.equal(spoken[0].lang, 'en-IN');
     audio.update(doctor([3, 4]));
     assert.equal(spoken.length, 1);
@@ -40,14 +40,14 @@ describe('Queue display audio announcements', () => {
     const { audio, buttons, spoken } = await setup();
     audio.update(doctor(['AM-003']));
     buttons['audio-toggle'].handlers.click();
-    assert.match(spoken[0].text, /Next token number is AM-003/);
+    assert.match(spoken[0].text, /Next token number AM-003 is available for the patient/);
     buttons['audio-repeat'].handlers.click();
     assert.equal(spoken.length, 2);
     buttons['audio-toggle'].handlers.click();
     audio.update(doctor([5]));
     assert.equal(spoken.length, 2);
     buttons['audio-toggle'].handlers.click();
-    assert.match(spoken[2].text, /Next token number is 5/);
+    assert.match(spoken[2].text, /Next token number 5 is available for the patient/);
   });
 
   it('clears stale announcements after a connection error and stops speaking when the queue is empty', async () => {
@@ -62,7 +62,7 @@ describe('Queue display audio announcements', () => {
     audio.update(doctor([]));
     assert.equal(spoken.length, 1);
     audio.update(doctor([4]));
-    assert.match(spoken[1].text, /number is 4/);
+    assert.match(spoken[1].text, /number 4 is available for the patient/);
   });
 
   it('identifies doctors on displays showing multiple queues and ignores missing tokens', async () => {
@@ -70,7 +70,7 @@ describe('Queue display audio announcements', () => {
     audio.update([{ doctorId: 'a', doctorName: 'Doctor A', nextTokens: [null, 3, 4, 5] },
       { doctorId: 'b', doctorName: 'Doctor B', nextToken: 8 }]);
     buttons['audio-toggle'].handlers.click();
-    assert.match(spoken[0].text, /For Doctor A.*3 and 4.*For Doctor B.*number is 8/);
+    assert.match(spoken[0].text, /For Doctor A.*3 and 4.*For Doctor B.*number 8 is available for the patient/);
     assert.ok(!spoken[0].text.includes('number is null'));
   });
 

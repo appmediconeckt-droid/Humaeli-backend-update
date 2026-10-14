@@ -11,3 +11,34 @@
 .count-copy{min-width:0}
 .count strong.wait-status{font-size:clamp(14px,2vh,22px);line-height:1.35;font-weight:600}
 @media(max-width:900px),(max-aspect-ratio:1/1){.token-value{font-size:min(150px,75cqh,28cqw)}.count strong.wait-status{font-size:16px}}
+
+/* Phone layouts keep controls readable and let the complete queue scroll. */
+@media(max-width:900px){button,.audio-controls button{min-height:44px;padding:10px 12px;font-size:13px}}
+@media(max-width:600px){
+  body{padding:12px;gap:14px;grid-template-rows:auto auto auto}
+  header{flex-direction:column;align-items:stretch;gap:12px}
+  .brand{gap:12px}.brand-icon{flex-shrink:0;width:38px;height:44px}
+  h1{font-size:24px}.eyebrow{font-size:13px}
+  .right{justify-content:space-between;gap:12px;text-align:left}
+  #connection{font-size:12px}button,.audio-controls button{min-height:44px;padding:10px 12px;font-size:13px}
+  #doctors{height:auto;overflow:visible;gap:18px}
+  .doctor,.single .doctor{padding:20px 12px 0;grid-template-rows:auto auto auto 180px auto auto 16px auto auto;column-gap:0}
+  .doctor:before{height:390px;border-radius:18px}
+  .doctor h2{font-size:clamp(24px,7vw,34px);white-space:normal;overflow-wrap:anywhere}
+  .details{font-size:13px;overflow-wrap:anywhere}
+  .label{font-size:16px;letter-spacing:.12em}.label:not(.next-label){padding:10px 20px}
+  .next{font-size:clamp(28px,9vw,42px)}
+  .counts{gap:16px 0;padding:16px 6px;border-radius:16px}
+  .count{gap:8px;padding:0 8px;font-size:12px;align-items:flex-start}
+  .count strong{font-size:26px}.count-icon{width:30px;height:30px;font-size:24px}
+  .count strong.wait-status{font-size:14px}
+  .status-panel,.delay-panel{padding:16px;border-radius:18px}
+  .doctor-info h3{font-size:17px}.status-body{gap:12px;padding:16px 10px}
+  .status-body strong{font-size:24px}.status-body p{font-size:14px}
+  .status-dot{width:24px;height:24px;margin:0 6px;box-shadow:0 0 0 6px #00d19a22}
+  .info-row{font-size:14px;gap:10px}.delay-body{padding:12px}
+  footer{gap:12px;font-size:12px}.announcement{gap:10px;font-size:14px;align-items:flex-start}
+  .announcement>span{font-size:20px}.audio-controls{width:100%;gap:8px}
+  #updated{width:100%;overflow-wrap:anywhere}
+}
+@media(max-width:360px){.counts{grid-template-columns:1fr}.count{border-right:0;border-bottom:1px solid #236087;padding:10px}.count:last-child{border:0}}

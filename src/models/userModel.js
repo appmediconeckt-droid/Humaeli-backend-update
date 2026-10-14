@@ -1,6 +1,7 @@
 
 // models/userModel.js
 import mongoose from "../persistence/mongoose.js";
+import { LOCATION_EVENTS } from "../utils/locationEvents.js";
 import { type } from "os";
 
 const userSchema = new mongoose.Schema({
@@ -84,7 +85,7 @@ const userSchema = new mongoose.Schema({
         type: String,
         enum: [
             "user", "counsellor", "doctor", "admin",
-            "nurse", "assistant", "lab_technician", "housekeeping",
+            "receptionist", "nurse", "assistant", "lab_technician", "housekeeping",
             "supervisor", "department_manager", "billing",
         ],
         default: "user"
@@ -428,7 +429,7 @@ devicePlatform: {
             coordinates: { type: [Number] },
             address: { type: String, default: "" },
             capturedAt: { type: Date },
-            event: { type: String, enum: ["signup", "login", "booking", "manual"], default: "manual" },
+            event: { type: String, enum: LOCATION_EVENTS, default: "manual" },
             ipAddress: { type: String, default: "" },
             _id: false
         }],

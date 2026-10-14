@@ -1,3 +1,4 @@
+import { filterPatientDirectory } from '../services/patientDirectoryService.js';
 // import Appointment from '../models/appointmentModel.js';
 // import User from '../models/userModel.js';
 // import { createNotificationSafely } from '../services/notificationService.js';
@@ -363,6 +364,7 @@ import { Clinic, Availability, UnavailableDate } from '../models/clinicModels.js
 import { timeMinutes, withAppointmentSlot } from '../services/appointmentSlotService.js';
 import { handle, doctorScope, actorId, fail, jsonRecord, pick, todayIST, dateOnly } from '../utils/clinicAccess.js';
 import { checkAndAutoCancelLateAppointments } from '../services/lateAppointmentService.js';
+import { syncAppointmentFollowUp } from '../services/appointmentFollowUpService.js';
 import { finishAppointmentCancellation } from '../services/appointmentCancellationService.js';
 import { enrichAppointmentGroups } from '../services/appointmentDelayService.js';
 // Keep the existing scheduler entry point; slot/session end never expires bookings.
@@ -672,12 +674,17 @@ export const getAppointments = async (req, res) => {
       ...dateFilter,
       ...statusFilter,
     })
-      .populate("patient", "fullName profilePhoto anonymous phoneNumber phone dateOfBirth age gender bloodGroup address locationData")
+      .populate("patient", "fullName profilePhoto anonymous phoneNumber phone dateOfBirth age gender bloodGroup address locationData isActive")
       .populate("counselor", "fullName name profilePhoto anonymous role accountType specialization experience qualification rating consultationMode")
       .sort({ date: -1 })
       .lean();
 
+    if (isProvider && req.query.patient_directory === 'true') {
+      appointments = await filterPatientDirectory(appointments, 'online');
+      res.set('Cache-Control', 'no-store');
+    }
     appointments = await enrichAppointmentGroups(appointments);
+    appointments = appointments.map(expandConsultationNotes);
 
     if (isProvider) {
       // Legacy doctor accounts can still have the counsellor role.
@@ -928,7 +935,7 @@ const notifyEmergencyDoctor = (appointment, actorId) => createNotificationSafely
 });
 
 const appointmentView = async row => {
-  const record = jsonRecord(row);
+  const record = expandConsultationNotes(jsonRecord(row));
   const patientId = getRecordId(record.patient);
   const doctorId = getRecordId(record.counselor);
 
@@ -1134,6 +1141,9 @@ export const updateDoctorAppointment = async (req, res) => {
       await notifyUpcomingQueuePatients(appointment);
     }
     const result = expandConsultationNotes(appointment.toJSON());
+    if (appointment.status === 'completed' && (req.body.follow_up_required !== undefined || req.body.follow_up_date !== undefined)) {
+      await syncAppointmentFollowUp(appointment);
+    }
     return res.json({ success: true, appointment: result, data: result });
   } catch (error) {
     return res.status(error.status || 500).json({ message: error.status ? error.message : "Failed to update appointment" });
@@ -1570,6 +1580,8 @@ export const getDoctorQueue = handle(async (req, res) => {
     .populate("clinic_id", "name address")
     .sort({ appointment_time: 1, token_number: 1 })
     .lean();
+
+  rows.forEach((row, index) => { rows[index] = expandConsultationNotes(row); });
 
   const currentPatient =
     rows.find((item) => item.queue_status === "in_progress") || null;

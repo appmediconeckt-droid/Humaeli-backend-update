@@ -382,7 +382,11 @@ app.use(cookieParser());
 // 3. Static files
 // ---------------------------
 
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+app.use("/uploads", express.static(path.join(__dirname, "../uploads"), {
+  setHeaders: (res, filePath) => {
+    if (/\.(?:jpe?g|png|webp)$/i.test(filePath)) res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  },
+}));
 
 // Serve password reset HTML page
 app.get("/reset-password/:token", (req, res) => {

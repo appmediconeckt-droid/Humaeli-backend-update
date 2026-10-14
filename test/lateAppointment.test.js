@@ -50,12 +50,12 @@ describe('Dynamic grace deadline and real-turn cancellation', () => {
     expect(estimate(state, own).estimatedStartAt).to.equal(at('11:00').toISOString());
     expect(shouldAutoCancelLateAppointment(own, state, at('11:06').getTime())).to.equal(false);
   });
-  it('cancels only strictly after grace and never continually advances a called deadline', () => {
+  it('keeps called absent appointments active after grace for manual cancellation', () => {
     const own = called();
     for (const time of ['11:00', '11:05', '11:06', '11:10']) {
       const state = stateFor([own], time);
       expect(estimate(state, own).cancelDeadline).to.equal(at('11:05').toISOString());
-      expect(Boolean(shouldAutoCancelLateAppointment(own, state, at(time).getTime()))).to.equal(['11:06', '11:10'].includes(time));
+      expect(Boolean(shouldAutoCancelLateAppointment(own, state, at(time).getTime()))).to.equal(false);
     }
   });
   it('previous consultation protects even a prematurely called next token', () => {
@@ -132,7 +132,7 @@ describe('Dynamic grace deadline and real-turn cancellation', () => {
       expect(notification.firstCall.args[0].data.cancellationReason).to.equal('PATIENT_LATE');
     } finally { global.io = old; }
   });
-  it('existing backend worker uses authoritative queue and atomic cancellation', async () => {
+  it('existing backend worker never automatically cancels an absent patient', async () => {
     const own = called();
     sinon.stub(Appointment, 'find').returns({ lean: async () => [own] });
     sinon.stub(DoctorBreak, 'find').returns({ lean: async () => [] });
@@ -141,7 +141,7 @@ describe('Dynamic grace deadline and real-turn cancellation', () => {
     sinon.stub(slotRepository, 'ranges').resolves([]);
     const update = sinon.stub(Appointment, 'findOneAndUpdate').resolves(null);
     expect(await checkAndAutoCancelLateAppointments(at('11:06'))).to.equal(0);
-    expect(update.calledOnce).to.equal(true);
+    expect(update.called).to.equal(false);
   });
   it('configurable grace supports zero and safely falls back for invalid values', () => {
     const previous = process.env.PATIENT_GRACE_PERIOD_MINUTES;

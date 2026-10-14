@@ -9,7 +9,7 @@
 // const REALTIME_ROUTE_VERSION = "webrtc-blob-sdp-2026-06-27";
 
 // const REALTIME_SYSTEM_INSTRUCTIONS = `
-// You are MediConeckt AI Assistant, a warm voice companion for mental health and general wellbeing support.
+// You are Humaeli AI Assistant, a warm voice companion for mental health and general wellbeing support.
 // Keep voice replies short, natural, and supportive. Ask one gentle follow-up question only when it helps.
 // You are not a replacement for a doctor, therapist, emergency service, or crisis line.
 // If the user mentions self-harm, suicide, harming others, abuse, coercion, feeling unsafe, or a medical emergency:
@@ -167,14 +167,14 @@
 
 //   if (["hi", "hello", "hey", "hii", "namaste"].includes(text)) {
 //     if (lang === "en") {
-//       return "Hello! I am MediConeckt AI. How are you feeling today?";
+//       return "Hello! I am Humaeli AI. How are you feeling today?";
 //     }
 
 //     if (lang === "mr") {
-//       return "Namaskar! Mi MediConeckt AI aahe. Tumhala kase vatate aahe?";
+//       return "Namaskar! Mi Humaeli AI aahe. Tumhala kase vatate aahe?";
 //     }
 
-//     return "Namaste! Main MediConeckt AI hu. Aap kaise feel kar rahe ho?";
+//     return "Namaste! Main Humaeli AI hu. Aap kaise feel kar rahe ho?";
 //   }
 
 //   if (
@@ -374,7 +374,7 @@ const REALTIME_VOICE = process.env.OPENAI_REALTIME_VOICE || "shimmer";
 const REALTIME_ROUTE_VERSION = "webrtc-text-sdp-2026-06-27";
 
 const REALTIME_SYSTEM_INSTRUCTIONS = `
-You are MediConeckt AI Assistant, a warm voice companion for mental health and general wellbeing support.
+You are Humaeli AI Assistant, a warm voice companion for mental health and general wellbeing support.
 Do not speak first when a voice call starts. Stay silent and wait until the user says something, then respond to that user message.
 Keep voice replies short, natural, and supportive. Ask one gentle follow-up question only when it helps.
 Use a warm female-presenting assistant persona. In Hindi, Hinglish, and other gendered languages, always refer to yourself with feminine grammar, for example "main bol rahi hoon", "main samajh rahi hoon", "main madad kar rahi hoon". Never say masculine self-references like "main bol raha hoon" or "main kar raha hoon".
@@ -549,14 +549,14 @@ const getQuickReply = (message, language = "hi-IN") => {
 
   if (["hi", "hello", "hey", "hii", "namaste"].includes(text)) {
     if (lang === "en") {
-      return "Hello! I am MediConeckt AI. How are you feeling today?";
+      return "Hello! I am Humaeli AI. How are you feeling today?";
     }
 
     if (lang === "mr") {
-      return "Namaskar! Mi MediConeckt AI aahe. Tumhala kase vatate aahe?";
+      return "Namaskar! Mi Humaeli AI aahe. Tumhala kase vatate aahe?";
     }
 
-    return "Namaste! Main MediConeckt AI hu. Aap kaise feel kar rahe ho?";
+    return "Namaste! Main Humaeli AI hu. Aap kaise feel kar rahe ho?";
   }
 
   if (

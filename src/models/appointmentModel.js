@@ -30,6 +30,16 @@ const appointmentSchema = new mongoose.Schema(
     notes: {
       type: String,
     },
+    follow_up_synced: { type: Boolean, default: false },
+
+    doctorRating: {
+      type: new mongoose.Schema({
+        stars: { type: Number, required: true, min: 1, max: 5 },
+        review: { type: String, default: "", maxlength: 500 },
+        submittedAt: { type: Date, required: true },
+      }, { _id: false }),
+      default: undefined,
+    },
 
     clinic_id: {
       type: mongoose.Schema.Types.ObjectId,

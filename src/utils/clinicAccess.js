@@ -1,6 +1,6 @@
 import User from '../models/userModel.js';
 
-export const staffRoles = ['nurse', 'assistant', 'lab_technician', 'housekeeping', 'supervisor', 'department_manager', 'billing'];
+export const staffRoles = ['receptionist', 'nurse', 'assistant', 'lab_technician', 'housekeeping', 'supervisor', 'department_manager', 'billing'];
 export const actorId = req => String(req.userId || req.user?._id || req.user?.id || req.user?.userId || '');
 export const fail = (statusCode, message) => Object.assign(new Error(message), { statusCode });
 export const pick = (object, fields) => Object.fromEntries(fields.filter(key => object?.[key] !== undefined).map(key => [key, object[key]]));
@@ -19,8 +19,9 @@ export const handle = fn => async (req, res) => {
   }
 };
 export async function doctorScope(req, requested) {
-  const user = await User.findById(actorId(req)).select('role assignedDoctor isActive');
+  const user = await User.findById(actorId(req)).select('role assignedDoctor isActive clinic_id');
   if (!user || !user.isActive) throw fail(401, 'Active account required');
+  req.clinicAccessUser = user;
   if (user.role === 'admin') {
     if (!requested) throw fail(400, 'doctor_id is required');
     const doctor = await User.exists({ _id: requested, role: 'doctor', isActive: true });
@@ -30,6 +31,16 @@ export async function doctorScope(req, requested) {
   const owner = user.role === 'doctor' ? actorId(req) : staffRoles.includes(user.role) ? String(user.assignedDoctor || '') : '';
   if (!owner || (requested && String(requested) !== owner)) throw fail(403, 'Access to this doctor is not allowed');
   return owner;
+}
+export async function receptionistClinicScope(req, requested = '') {
+  const user = req.clinicAccessUser || await User.findById(actorId(req)).select('role assignedDoctor isActive clinic_id');
+  if (!user || !user.isActive) throw fail(401, 'Active account required');
+  const clinicId = String(requested || '');
+  if (user.role !== 'receptionist') return clinicId;
+  const assignedClinic = String(user.clinic_id?._id || user.clinic_id?.id || user.clinic_id || '');
+  if (!assignedClinic) throw fail(403, 'Your clinic assignment is missing. Contact your doctor.');
+  if (clinicId && clinicId !== assignedClinic) throw fail(403, 'Access is limited to your assigned clinic or hospital');
+  return assignedClinic;
 }
 export const bool = value => value === true || value === 1 || ['true', '1'].includes(String(value).toLowerCase());
 export const todayIST = () => new Date(Date.now() + 19800000).toISOString().slice(0, 10);

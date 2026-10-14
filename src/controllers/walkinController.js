@@ -1,3 +1,4 @@
+import { filterPatientDirectory } from '../services/patientDirectoryService.js';
 // src/controllers/walkinController.js
 import WalkinAppointment from "../models/walkinAppointmentModel.js";
 import { ensureClinicStaffSchema } from "../services/clinicStaffService.js";
@@ -28,8 +29,12 @@ export const getWalkinAppointments = async (req, res) => {
       filter.appointment_status = String(rawStatus).toLowerCase();
     }
 
-    const appointments = await WalkinAppointment.find(filter)
+    let appointments = await WalkinAppointment.find(filter)
       .sort({ appointment_date: 1, appointment_time: 1, token_number: 1, createdAt: -1 });
+    if (req.query.patient_directory === 'true') {
+      appointments = await filterPatientDirectory(appointments, 'walkin');
+      res.set('Cache-Control', 'no-store');
+    }
     const targetDate = req.query.date || indiaDateTime().date;
     const enriched = (await enrichAppointmentsWithDelay(appointments, doctorId, targetDate))
       .map((appointment) => ({ ...appointment, appointment_type: "walkin" }));

@@ -18,6 +18,7 @@ const { default: mongoose } = await import('../src/persistence/mongoose.js');
 const { default: mysql } = await import('mysql2/promise');
 const { slotRepository } = await import('../src/services/appointmentSlotService.js');
 const { notifyUpcomingQueuePatients } = await import('../src/services/consultationTimingService.js');
+const { requestPatientEmergency } = await import('../src/controllers/patientEmergencyController.js');
 const response = () => ({ statusCode: 200, status(value) { this.statusCode = value; return this; }, json(value) { this.body = value; return this; } });
 const query = value => ({ select() { return this; }, lean: async () => value, then: (resolve, reject) => Promise.resolve(value).then(resolve, reject) });
 
@@ -51,6 +52,21 @@ describe('Emergency appointment doctor push', () => {
     await setAppointmentEmergency({ user: { _id: 'staff-1' }, params: { id: row._id }, body }, res);
     return res;
   };
+
+  it('sends patient emergency escalation through FCM to the booked doctor only', async () => {
+    row._id = '507f1f77bcf86cd799439011';
+    row.counselor = { _id: 'doctor-1', role: 'doctor' };
+    Appointment.findOne.returns({ populate: () => ({ lean: async () => row }) });
+    sinon.stub(Appointment, 'findOneAndUpdate').resolves(row);
+    const res = response();
+    await requestPatientEmergency({ user: { _id: 'patient-1', role: 'user' }, params: { id: row._id },
+      body: { reason: 'PRIVATE EMERGENCY REASON' } }, res);
+    expect(res.body.success).to.equal(true);
+    expect(send.calledOnce).to.equal(true);
+    expect(send.firstCall.args[0].token).to.equal('doctor-device');
+    expect(send.firstCall.args[0].data.type).to.equal('EMERGENCY_APPOINTMENT');
+    expect(JSON.stringify(send.firstCall.args[0])).not.to.include('PRIVATE EMERGENCY REASON');
+  });
 
   it('pushes a newly booked emergency to its assigned doctor only, without the medical reason', async () => {
     Appointment.findOne.resolves(null);

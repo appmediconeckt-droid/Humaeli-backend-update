@@ -4,6 +4,7 @@ import Session from '../models/sessionModel.js';
 import Clinic from '../models/clinicModel.js';
 import { getStrongPasswordError } from '../utils/passwordPolicy.js';
 import { sendStaffWelcomeEmail } from '../services/staffWelcomeEmailService.js';
+import { clinicPhotoPath } from '../services/clinicPhotoService.js';
 import { handle, doctorScope, staffRoles, pick, fail } from '../utils/clinicAccess.js';
 
 const fields = ['staffId', 'nursingLicense', 'shift', 'shiftTime', 'shiftStartTime', 'shiftEndTime', 'assignedWard', 'yearsOfExperience', 'qualifications', 'assistantId', 'department', 'supervisor', 'technicianId', 'labType', 'staffCertifications', 'housekeepingStaffId', 'assignedArea', 'housekeepingSupervisor', 'supervisorId', 'teamSize', 'responsibilities', 'managerId', 'employeesUnder', 'budgetResponsibility', 'billingId', 'softwareExpertise'];
@@ -14,6 +15,9 @@ const details = body => Object.fromEntries(fields.flatMap(key => {
 }));
 const scope = req => doctorScope(req, req.body?.doctor_id || req.query?.doctor_id);
 const safe = user => { const data = user.toJSON(); delete data.walletCreditPaymentIds; delete data.walletAdjustmentIds; return data; };
+const uploadedPhoto = file => ({ url: clinicPhotoPath(file),
+  publicId: /^https?:\/\//i.test(file.path || '') ? file.filename : null,
+  format: file.mimetype?.split('/')[1], bytes: file.size });
 const ownedClinic = async (doctorId, clinicId) => {
   if (typeof clinicId !== 'string' || !clinicId.trim()) throw fail(400, 'Please select a clinic or hospital');
   const clinic = await Clinic.findOne({ _id: clinicId.trim(), doctor_id: doctorId });
@@ -35,6 +39,7 @@ export const addStaff = handle(async (req, res) => {
   const user = await User.create({ ...details(b), fullName: b.fullName || b.full_name || b.name, email,
     phoneNumber, phoneCountryCode: b.phoneCountryCode || '+91', password: await bcrypt.hash(b.password, 10),
     role, assignedDoctor, ...(clinic ? { clinic_id: b.clinic_id.trim() } : {}),
+    ...(req.file ? { profilePhoto: uploadedPhoto(req.file) } : {}),
     isActive: true, isEmailVerified: false, isPhoneVerified: false, profileCompleted: true });
   let emailSent = false;
   try {
@@ -79,6 +84,9 @@ export const listStaff = handle(async (req, res) => {
   res.json({ success: true, data: users.map(user => ({ ...safe(user), clinic_name: names.get(String(user.clinic_id || '')) || null })) });
 });
 export const updateStaff = handle(async (req, res) => {
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    throw fail(400, 'Staff update details are required. Send JSON or multipart form data.');
+  }
   const doctorId = await scope(req);
   const user = await User.findOne({ _id: req.params.id, assignedDoctor: doctorId, role: { $in: staffRoles } });
   if (!user) throw fail(404, 'Staff member not found');
@@ -89,13 +97,25 @@ export const updateStaff = handle(async (req, res) => {
     user.role = req.body.role;
   }
   Object.assign(user, details(req.body), pick(req.body, ['fullName']));
+  if (req.body.isActive !== undefined) {
+    const value = req.body.isActive;
+    const isActive = req.is?.('multipart/form-data') && ['true', 'false'].includes(value) ? value === 'true' : value;
+    if (typeof isActive !== 'boolean') throw fail(400, 'isActive must be a boolean');
+    user.isActive = isActive;
+  }
+  if (req.file) user.profilePhoto = uploadedPhoto(req.file);
   await user.save();
+  if (user.isActive === false) {
+    await Session.updateMany({ userId: user._id, isActive: true }, { $set: { isActive: false, logoutAt: new Date() } });
+  }
   res.json({ success: true, user: { ...safe(user), ...(clinic ? { clinic_name: clinic.clinic_name } : {}) } });
 });
 export const removeStaff = handle(async (req, res) => {
-  const user = await User.findOneAndUpdate({ _id: req.params.id, assignedDoctor: await scope(req), role: { $in: staffRoles } },
-    { $set: { isActive: false } }, { returnDocument: 'after' });
+  const filter = { _id: req.params.id, assignedDoctor: await scope(req), role: { $in: staffRoles } };
+  const user = await User.findOne(filter);
   if (!user) throw fail(404, 'Staff member not found');
   await Session.updateMany({ userId: user._id, isActive: true }, { $set: { isActive: false, logoutAt: new Date() } });
-  res.json({ success: true, message: 'Staff account deactivated' });
+  const result = await User.deleteOne(filter);
+  if (result.deletedCount !== 1) throw fail(404, 'Staff member not found');
+  res.json({ success: true, message: 'Staff account deleted' });
 });

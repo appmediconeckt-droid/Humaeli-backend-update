@@ -29,10 +29,16 @@ export const WalkinAppointment = model('WalkinAppointment', 'walkin_appointments
   phone_number: requiredText, date_of_birth: Date, gender: { type: String, enum: ['male', 'female', 'other'] },
   symptoms: requiredText, appointment_date: requiredText, appointment_time: requiredText,
   token_number: { type: Number, required: true },
-  appointment_status: { type: String, enum: ['booked', 'pending', 'confirmed', 'completed', 'cancelled'], default: 'booked' },
+  appointment_status: { type: String, enum: ['booked', 'pending', 'confirmed', 'in-progress', 'completed', 'cancelled', 'rejected'], default: 'booked' },
+  queue_status: { type: String, enum: ['booked', 'waiting', 'called', 'in_progress', 'completed', 'skipped', 'no_show', 'canceled'], default: 'booked' },
+  consultation_timing: mongoose.Schema.Types.Mixed,
+  consultation_started_at: Date, consultation_ended_at: Date,
   booking_source: { type: String, enum: ['qr', 'direct'], default: 'direct' },
   diagnosis: String, advice: String, additional_notes: String, follow_up_required: Boolean,
+  medicine: String, medicines: [mongoose.Schema.Types.Mixed],
+  recommended_tests: [mongoose.Schema.Types.Mixed], recommendedTests: [mongoose.Schema.Types.Mixed],
   follow_up_date: Date,
+  follow_up_synced: { type: Boolean, default: false },
 });
 export const FollowUp = model('FollowUp', 'follow_ups', {
   doctor_id: ref(), patient_id: ref('User', false), appointment_id: ref('Appointment', false),

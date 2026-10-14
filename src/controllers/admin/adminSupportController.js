@@ -29,12 +29,12 @@ const sendSupportEmail = async ({ to, subject, body, ticketNumber }) => {
     method: "POST",
     headers: { "api-key": process.env.BREVO_API_KEY, "content-type": "application/json" },
     body: JSON.stringify({
-      sender: { name: "Mediconeckt Support", email: process.env.EMAIL_FROM },
+      sender: { name: "Humaeli Support", email: process.env.EMAIL_FROM },
       to: [{ email: to }],
       subject: `[Ticket #${ticketNumber}] ${subject}`,
-      htmlContent: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#202124"><p>${escapeHtml(body).replaceAll("\n", "<br>")}</p><hr><p style="font-size:12px;color:#5f6368">Mediconeckt Support · Ticket #${ticketNumber}</p></div>`,
-      textContent: `${body}\n\nMediconeckt Support · Ticket #${ticketNumber}`,
-      replyTo: { email: process.env.SUPPORT_REPLY_TO || process.env.EMAIL_FROM, name: "Mediconeckt Support" },
+      htmlContent: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#202124"><p>${escapeHtml(body).replaceAll("\n", "<br>")}</p><hr><p style="font-size:12px;color:#5f6368">Humaeli Support · Ticket #${ticketNumber}</p></div>`,
+      textContent: `${body}\n\nHumaeli Support · Ticket #${ticketNumber}`,
+      replyTo: { email: process.env.SUPPORT_REPLY_TO || process.env.EMAIL_FROM, name: "Humaeli Support" },
     }),
   });
   const data = await response.json().catch(() => ({}));

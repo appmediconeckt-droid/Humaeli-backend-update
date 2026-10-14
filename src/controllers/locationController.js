@@ -1,4 +1,5 @@
 import User from "../models/userModel.js";
+import { LOCATION_EVENTS } from "../utils/locationEvents.js";
 import { reverseGeocode } from "../services/geocodingService.js";
 import Chat from "../models/Chat.js";
 
@@ -15,6 +16,9 @@ const getClientIp = (req) =>
 export const updateLocation = async (req, res) => {
   try {
     const { latitude, longitude, event = "manual" } = req.body;
+    if (!LOCATION_EVENTS.includes(event)) {
+      return res.status(400).json({ success: false, message: 'Invalid location event' });
+    }
 
     const lat = Number(latitude);
     const lng = Number(longitude);

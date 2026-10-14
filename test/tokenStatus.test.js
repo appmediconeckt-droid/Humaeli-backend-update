@@ -37,7 +37,7 @@ describe("User token status route", () => {
       lastSeen: null,
       fullName: String(id) === "patient-1" ? "Test Patient" : "Test Doctor",
       select() { return this; },
-      lean: async () => ({ _id: id, fullName: String(id) === "patient-1" ? "Test Patient" : "Test Doctor" }),
+      lean: async () => ({ _id: id, role: String(id) === "patient-1" ? "user" : "doctor", fullName: String(id) === "patient-1" ? "Test Patient" : "Test Doctor" }),
     }));
   });
   afterEach(() => sandbox.restore());
@@ -60,6 +60,20 @@ describe("User token status route", () => {
     expect(item.current).to.include({ currentToken: 1, doctorStatus: "consulting" });
     expect(item.queue).to.include({ patientsAhead: 1, queuePosition: 2, totalWaiting: 1 });
     expect(JSON.stringify(item)).not.to.include('"serving"');
+  });
+  it("excludes consultant appointments even when legacy records contain a token", async () => {
+    Appointment.find.resolves([own, { ...own, id: 'consultant-booking', counselor: 'consultant-1', token_number: 2 }]);
+    User.findById.withArgs('consultant-1').returns({ select() { return this; }, lean: async () => ({ _id: 'consultant-1', role: 'counsellor', accountType: 'consultant', fullName: 'Consultant' }) });
+    const res = await get();
+    expect(res.body.appointments.map(item => item.appointment._id)).to.deep.equal(['my-booking']);
+    expect(res.body.appointments[0].appointment.doctor.role).to.equal('doctor');
+    expect(slotRepository.online.calledWith('consultant-1')).to.equal(false);
+  });
+  it("excludes appointments without an issued token", async () => {
+    Appointment.find.resolves([{ ...own, token_number: null }]);
+    const res = await get();
+    expect(res.body.appointments).to.deep.equal([]);
+    expect(slotRepository.online.called).to.equal(false);
   });
   it("includes walk-ins and emergency priority without exposing other patients", async () => {
     slotRepository.walkins.resolves([{ id: "other-patient", doctor_id: "doctor-1", appointment_date: today, appointment_time: "11:15:00", token_number: 6, appointment_status: "booked", priority: "Emergency", patient_name: "PRIVATE NAME" }]);
@@ -92,9 +106,7 @@ describe("User token status route", () => {
     slotRepository.online.resolves([urgent]);
     const res = await get();
     expect(res.status).to.equal(200);
-    expect(res.body.appointments[0].appointment.appointmentTime).to.equal("");
-    expect(res.body.appointments[0].token.myToken).to.equal(null);
-    expect(res.body.appointments[0].emergency.active).to.equal(true);
+    expect(res.body.appointments).to.deep.equal([]);
   });
   it("handles AM/PM appointment times without throwing a 500", async () => {
     const amPm = { ...own, appointment_time: "11:00 AM" };

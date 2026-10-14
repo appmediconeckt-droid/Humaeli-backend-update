@@ -5,8 +5,9 @@ import { normalizeBookingSource } from '../services/doctorAnalyticsService.js';
 import { getActiveBreakDelayForAppointment } from '../services/doctorBreakService.js';
 import { withAppointmentBooking, bookingMinute } from '../services/appointmentConflictService.js';
 import { withAppointmentSlot, indiaDateTime, timeMinutes } from '../services/appointmentSlotService.js';
-import { notifyUpcomingQueuePatients } from '../services/consultationTimingService.js';
+import { notifyUpcomingQueuePatients, getConsultationTiming, findOtherActiveConsultation, emitQueueUpdated } from '../services/consultationTimingService.js';
 import { handle, doctorScope, pick, fail, jsonRecord, bool, dateOnly } from '../utils/clinicAccess.js';
+import { syncAppointmentFollowUp } from '../services/appointmentFollowUpService.js';
 const scope = req => doctorScope(req, req.query?.doctor_id || req.body?.doctor_id);
 export const createWalkinAppointment = handle(async (req, res) => {
   const b = req.body || {};
@@ -56,8 +57,33 @@ export const getWalkinAppointmentById = handle(async (req, res) => {
 export const updateWalkinAppointment = handle(async (req, res) => {
   const row = await WalkinAppointment.findOne({ _id: req.params.id, doctor_id: await scope(req) });
   if (!row) throw fail(404, 'Walk-in appointment not found');
-  const data = pick(req.body, ['diagnosis', 'advice', 'additional_notes', 'symptoms']);
-  if (req.body.status || req.body.appointment_status) data.appointment_status = req.body.status || req.body.appointment_status;
+  const data = pick(req.body, ['diagnosis', 'advice', 'additional_notes', 'symptoms', 'medicine', 'medicines', 'recommended_tests', 'recommendedTests']);
+  if (data.medicine !== undefined && typeof data.medicine !== 'string') throw fail(400, 'medicine must be text');
+  for (const field of ['medicines', 'recommended_tests', 'recommendedTests']) {
+    if (data[field] !== undefined && !Array.isArray(data[field])) throw fail(400, `${field} must be a list`);
+  }
+  if (req.body.status || req.body.appointment_status) {
+    const status = String(req.body.status || req.body.appointment_status).toLowerCase();
+    data.appointment_status = status === 'in_progress' ? 'in-progress' : status === 'canceled' ? 'cancelled' : status;
+    if (!['booked', 'pending', 'confirmed', 'in-progress', 'completed', 'cancelled', 'rejected'].includes(data.appointment_status)) throw fail(400, 'Invalid appointment status');
+  }
+  if (data.appointment_status === 'in-progress') {
+    if (['completed', 'cancelled', 'rejected'].includes(row.appointment_status)) throw fail(409, 'Only an active appointment can start consultation');
+    const other = await findOtherActiveConsultation(row);
+    if (other) throw fail(409, 'Another consultation is already in progress. Complete it before starting this patient.');
+  }
+  const timing = await getConsultationTiming(row, { ...req.body,
+    status: data.appointment_status || req.body.status,
+    appointment_status: data.appointment_status || req.body.appointment_status,
+  });
+  if (timing) {
+    data.consultation_timing = timing;
+    data.consultation_started_at = timing.startedAt ? new Date(timing.startedAt) : null;
+    data.consultation_ended_at = timing.endedAt ? new Date(timing.endedAt) : null;
+  }
+  if (data.appointment_status === 'in-progress') data.queue_status = 'in_progress';
+  else if (data.appointment_status === 'completed') data.queue_status = 'completed';
+  else if (['cancelled', 'rejected'].includes(data.appointment_status)) data.queue_status = 'canceled';
   const required = req.body.follow_up_required ?? req.body.followUpRequired;
   if (required !== undefined) data.follow_up_required = bool(required);
   const date = req.body.follow_up_date ?? req.body.followUpDate;
@@ -70,11 +96,8 @@ export const updateWalkinAppointment = handle(async (req, res) => {
     phoneNumber: row.phone_number, appointmentDate: row.appointment_date,
     appointmentTime: row.appointment_time, excludeId: row._id }, () => row.save());
   if (data.appointment_status) await notifyUpcomingQueuePatients(row);
-  if (data.follow_up_required) {
-    await FollowUp.findOneAndUpdate({ walkin_id: row._id }, { $set: { doctor_id: row.doctor_id,
-      patient_name: row.patient_name, follow_up_date: row.follow_up_date, reason: row.diagnosis, notes: row.additional_notes } },
-      { upsert: true, returnDocument: 'after', runValidators: true });
-  }
+  await emitQueueUpdated(row);
+  if (data.follow_up_required || data.follow_up_date) await syncAppointmentFollowUp(row, 'walkin');
   res.json({ success: true, data: jsonRecord(row) });
 });
 export const deleteWalkinAppointment = handle(async (req, res) => {

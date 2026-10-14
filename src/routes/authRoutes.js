@@ -116,6 +116,7 @@ authRoutes.get(
     "user",
     "counsellor",
     "doctor",
+    "receptionist",
     "nurse",
     "assistant",
     "lab_technician",

@@ -42,6 +42,16 @@ describe('Staff temporary password email', () => {
     expect(res.body.user).not.to.have.property('password');
   });
 
+  it('persists the uploaded staff photo and returns it for subsequent rendering', async () => {
+    const req = request();
+    req.file = { path: 'https://res.cloudinary.com/example/image/upload/staff-photo.jpg', filename: 'profile-photos/staff-photo', mimetype: 'image/jpeg', size: 1234 };
+    const res = response();
+    await addStaff(req, res);
+    expect(res.statusCode).to.equal(201);
+    expect(created.firstCall.args[0].profilePhoto).to.deep.equal({ url: req.file.path, publicId: req.file.filename, format: 'jpeg', bytes: 1234 });
+    expect(res.body.user.profilePhoto.url).to.equal(req.file.path);
+  });
+
   it('keeps a created account and reports mail failure without exposing provider errors or passwords', async () => {
     send.rejects(new Error(`Provider error containing ${password}`));
     const log = sinon.stub(console, 'error');
@@ -170,13 +180,41 @@ describe('Staff temporary password email', () => {
     expect(save.calledOnce).to.equal(true);
   });
 
-  it('excludes deleted staff from fresh GET responses and invalidates their active sessions', async () => {
+  it('persists suspension and invalidates the staff active sessions', async () => {
+    const staff = new User({ fullName: 'Staff', role: 'nurse', isActive: true });
+    const save = sinon.stub(staff, 'save').resolves(staff);
+    sinon.stub(User, 'findOne').resolves(staff);
+    const sessions = sinon.stub(Session, 'updateMany').resolves({});
+    const req = { ...request(), params: { id: String(staff._id) }, body: { status: 'Suspended', isActive: false } };
+    const res = response(); await updateStaff(req, res);
+    expect(res.statusCode).to.equal(200);
+    expect(res.body.user.isActive).to.equal(false);
+    expect(save.calledOnce).to.equal(true);
+    expect(sessions.firstCall.args[0]).to.deep.equal({ userId: staff._id, isActive: true });
+    expect(sessions.firstCall.args[1].$set.isActive).to.equal(false);
+    expect(User.findOne.firstCall.args[0].assignedDoctor).to.equal('doctor-1');
+  });
+
+  it('rejects invalid activation values without saving or changing sessions', async () => {
+    const staff = new User({ fullName: 'Staff', role: 'nurse', isActive: true });
+    const save = sinon.stub(staff, 'save').resolves(staff);
+    sinon.stub(User, 'findOne').resolves(staff);
+    const sessions = sinon.stub(Session, 'updateMany').resolves({});
+    const req = { ...request(), params: { id: String(staff._id) }, body: { isActive: 'false' } };
+    const res = response(); await updateStaff(req, res);
+    expect(res.statusCode).to.equal(400);
+    expect(save.called).to.equal(false);
+    expect(sessions.called).to.equal(false);
+  });
+
+  it('deletes the staff record, excludes it from fresh GET responses and invalidates active sessions', async () => {
     const staff = new User({ fullName: 'Deleted Staff', role: 'nurse', isActive: true });
-    const list = sinon.stub(User, 'find').callsFake(async filter =>
-      filter.isActive === true && !staff.isActive ? [] : [staff]);
+    let exists = true;
+    const list = sinon.stub(User, 'find').callsFake(async () => exists ? [staff] : []);
     sinon.stub(Clinic, 'find').resolves([]);
-    sinon.stub(User, 'findOneAndUpdate').callsFake(async (filter, update) => {
-      Object.assign(staff, update.$set); return staff;
+    sinon.stub(User, 'findOne').resolves(staff);
+    const deletion = sinon.stub(User, 'deleteOne').callsFake(async () => {
+      exists = false; return { deletedCount: 1 };
     });
     const sessions = sinon.stub(Session, 'updateMany').resolves({});
     const req = { ...request(), params: { id: String(staff._id) } };
@@ -184,9 +222,22 @@ describe('Staff temporary password email', () => {
     expect(before.body.data.length).to.equal(1);
     const deleted = response(); await removeStaff(req, deleted);
     expect(deleted.body.success).to.equal(true);
+    expect(deleted.body.message).to.equal('Staff account deleted');
+    expect(deletion.firstCall.args[0]).to.deep.equal({ _id: String(staff._id), assignedDoctor: 'doctor-1', role: { $in: ['receptionist', 'nurse', 'assistant', 'lab_technician', 'housekeeping', 'supervisor', 'department_manager', 'billing'] } });
     const refreshed = response(); await listStaff(req, refreshed);
     expect(refreshed.body.data).to.deep.equal([]);
     expect(list.lastCall.args[0]).to.include({ assignedDoctor: 'doctor-1', isActive: true });
     expect(sessions.firstCall.args[0]).to.deep.equal({ userId: staff._id, isActive: true });
+  });
+
+  it('does not delete missing staff or staff belonging to another doctor', async () => {
+    sinon.stub(User, 'findOne').resolves(null);
+    const deletion = sinon.stub(User, 'deleteOne').resolves({ deletedCount: 1 });
+    const sessions = sinon.stub(Session, 'updateMany').resolves({});
+    const res = response();
+    await removeStaff({ ...request(), params: { id: 'foreign-staff' } }, res);
+    expect(res.statusCode).to.equal(404);
+    expect(deletion.called).to.equal(false);
+    expect(sessions.called).to.equal(false);
   });
 });

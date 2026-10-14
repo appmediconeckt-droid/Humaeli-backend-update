@@ -166,7 +166,9 @@ export const resetPassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
     user.password = hashedPassword;
-    await user.save();
+    // Password reset must not revalidate unrelated legacy profile/history data.
+    // Keep normal save hooks and validate the password field being changed.
+    await user.save({ validateModifiedOnly: true });
 
     await ForgotPasswordToken.deleteMany({ email: normalizedEmail });
 

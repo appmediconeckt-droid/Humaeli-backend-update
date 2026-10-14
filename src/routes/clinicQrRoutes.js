@@ -4,7 +4,7 @@ import { clinicDisplayQueue, notifyClinicDisplayPatients } from '../services/cli
 import { queueToday } from '../utils/queueDate.js';
 import { getDisplayTiming } from '../services/displayTimingService.js';
 import { protect } from '../middleware/authMiddleware.js';
-import { doctorScope, handle, fail } from '../utils/clinicAccess.js';
+import { doctorScope, receptionistClinicScope, handle, fail } from '../utils/clinicAccess.js';
 import { query } from '../config/mysql.js';
 import { profileQr, publicDoctor, doctorClinics, resolveWalkin, publicWalkin, bookClinicWalkin } from '../services/clinicQrService.js';
 const router = express.Router();
@@ -12,7 +12,8 @@ router.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); }
 router.get('/doctors/:doctorId/profile', handle(async (req, res) => res.json({ success: true, data: await publicDoctor(req.params.doctorId) })));
 router.get('/doctors/:doctorId/clinics', protect, handle(async (req, res) => {
   await doctorScope(req, req.params.doctorId);
-  const clinics = await doctorClinics(req.params.doctorId, true);
+  const clinicId = await receptionistClinicScope(req);
+  const clinics = (await doctorClinics(req.params.doctorId, true)).filter(clinic => !clinicId || String(clinic.clinicId) === clinicId);
   res.json({ success: true, data: { clinics: clinics.map(clinic => ({ ...clinic,
     ledPath: `/display/clinic/${clinic.doctorClinicId}` })) } });
 }));

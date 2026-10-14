@@ -45,7 +45,7 @@
       const nextSignature = JSON.stringify(next.map(doctor => [doctor.id, doctor.tokens]));
       announcements = next.map(doctor => {
         const prefix = doctors.length > 1 ? `For ${doctor.name}. ` : '';
-        return `${prefix}${doctor.tokens.length === 1 ? 'Next token number is' : 'Next token numbers are'} ${doctor.tokens.join(' and ')}. Please be ready near the clinic.`;
+        return `${prefix}${doctor.tokens.length === 1 ? 'Next token number' : 'Next token numbers'} ${doctor.tokens.join(' and ')} ${doctor.tokens.length === 1 ? 'is' : 'are'} available for ${doctor.tokens.length === 1 ? 'the patient' : 'patients'}. Please be ready for your turn.`;
       });
       const changed = signature !== nextSignature;
       signature = nextSignature;

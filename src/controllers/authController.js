@@ -32,6 +32,7 @@ import { profileQr, doctorClinics } from '../services/clinicQrService.js';
 import { recordDoctorAnalyticsEvent, getDoctorQuickStats } from '../services/doctorAnalyticsService.js';
 import { staffRoles } from '../utils/clinicAccess.js';
 import Appointment from '../models/appointmentModel.js';
+import Clinic from '../models/clinicModel.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -2079,6 +2080,7 @@ export const completeRegistration = async (req, res) => {
 
     const professionalTypes = ["doctor", "consultant"];
     const staffTypes = [
+      "receptionist",
       "nurse",
       "assistant",
       "lab_technician",
@@ -2500,10 +2502,7 @@ export const loginUser = async (req, res) => {
 
     if (role && normalizeRole(user.role) !== role) {
       return res.status(403).json({
-        message:
-          normalizeRole(user.role) === "counsellor"
-            ? "This account is registered as a counsellor. Please use counsellor login."
-            : "This account is registered as a user. Please use user login.",
+        message: `This account is registered as ${user.role}. Please use the main login page with this account's email and password.`,
         success: false,
         roleMismatch: true,
         code: "ROLE_MISMATCH",
@@ -3659,6 +3658,7 @@ export const getMyProfile = async (req, res) => {
       role: user.role,
       assignedDoctor: user.assignedDoctor ?? null,
       ...(staffRoles.includes(user.role) ? {
+        clinic_id: user.clinic_id ?? null,
         staffId: user.staffId, nursingLicense: user.nursingLicense, shift: user.shift,
         shiftTime: user.shiftTime, shiftStartTime: user.shiftStartTime, shiftEndTime: user.shiftEndTime,
         assignedWard: user.assignedWard, department: user.department, supervisor: user.supervisor,
@@ -3717,6 +3717,18 @@ export const getMyProfile = async (req, res) => {
       },
     };
 
+    if (staffRoles.includes(user.role)) {
+      const [doctor, clinic] = await Promise.all([
+        user.assignedDoctor
+          ? User.findOne({ _id: user.assignedDoctor, role: 'doctor' }).select('fullName')
+          : null,
+        user.clinic_id && user.assignedDoctor
+          ? Clinic.findOne({ _id: user.clinic_id, doctor_id: user.assignedDoctor }).select('clinic_name')
+          : null,
+      ]);
+      formattedProfile.assignedDoctorName = doctor?.fullName ?? null;
+      formattedProfile.clinic_name = clinic?.clinic_name ?? null;
+    }
     if (user.role === "doctor") Object.assign(formattedProfile, privateDoctorProfile(user));
 
     // Add counsellor-specific fields if user is counsellor

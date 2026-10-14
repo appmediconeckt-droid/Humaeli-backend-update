@@ -49,6 +49,9 @@ import {
   setAppointmentEmergency,
 } from "../controllers/appointmentController.js";
 import { getMyTokenStatus } from "../controllers/tokenStatusController.js";
+import { submitDoctorRating } from "../controllers/doctorRatingController.js";
+import { requestPatientEmergency } from "../controllers/patientEmergencyController.js";
+import { cancelAppointmentManually } from '../controllers/manualAppointmentCancellationController.js';
 
 import {
   authenticateToken,
@@ -61,6 +64,8 @@ import {
 } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
+router.patch('/:id/cancel', protect, allowRoles('user', 'receptionist'), cancelAppointmentManually);
+router.post('/:id/doctor-rating', protect, allowRoles('user'), submitDoctorRating);
 
 // =====================================================
 // CREATE APPOINTMENT
@@ -158,8 +163,8 @@ router.patch(
 router.patch(
   "/:id/emergency",
   protect,
-  allowRoles("doctor", "counsellor", "admin", "assistant", "nurse"),
-  setAppointmentEmergency,
+  allowRoles("user", "doctor", "counsellor", "admin", "assistant", "nurse"),
+  (req, res, next) => req.user.role === 'user' ? requestPatientEmergency(req, res) : setAppointmentEmergency(req, res, next),
 );
 
 // =====================================================

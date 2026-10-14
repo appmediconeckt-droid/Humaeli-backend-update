@@ -62,7 +62,7 @@ export const formatTokenStatus = (own, records, doctor, ranges = [], breaks = []
       createdAt: own.createdAt, bookedAt: own.createdAt, scheduledStartAt: timing.scheduledStartAt || null,
       scheduledTime: timing.scheduledStartAt || null, estimatedTime: estimatedTurnTime,
       cancelDeadline: timing.cancelDeadline || null, patientArrivalTime: own.patientArrivalTime || null,
-      doctor: { _id: own.doctorId, fullName: doctor?.fullName || 'Doctor' },
+      doctor: { _id: own.doctorId, fullName: doctor?.fullName || 'Doctor', role: doctor?.role, accountType: doctor?.accountType },
       estimatedAppointmentTime: estimatedTurnTime ? indiaDateTime(estimatedTurnTime).time : null,
       estimatedStartAt: estimatedTurnTime, estimatedEndAt: timing.estimatedEndAt || null,
       actualStartAt: timing.actualStartAt || null, actualEndAt: timing.actualEndAt || null,
@@ -106,7 +106,7 @@ export const getMyTokenStatus = async (req, res) => {
       optionalTokenLookup("walk-in appointment", () => WalkinAppointment.find({ patient_id: userId })),
     ]);
     const mine = [...online.map((record) => normalize(record, "online")), ...asArray(walkins).map((record) => normalize(record, "walkin"))]
-      .filter(isActive)
+      .filter(item => isActive(item) && Number.isInteger(item.token) && item.token > 0)
       .sort((a, b) => {
         const timestamp = (item) => Date.parse(item.createdAt || `${item.date}T${item.time || "00:00:00"}+05:30`) || 0;
         return timestamp(b) - timestamp(a) || b.id.localeCompare(a.id);
@@ -119,9 +119,10 @@ export const getMyTokenStatus = async (req, res) => {
     const appointments = (await Promise.all(mine.map(async (own) => {
       try {
         if (!doctors.has(own.doctorId)) {
-          doctors.set(own.doctorId, optionalTokenLookup("doctor", () => User.findById(own.doctorId).select("fullName").lean(), null));
+          doctors.set(own.doctorId, optionalTokenLookup("doctor", () => User.findById(own.doctorId).select("fullName role accountType").lean(), null));
         }
-        if (!isActive(own)) return formatTokenStatus(own, [], await doctors.get(own.doctorId));
+        const provider = await doctors.get(own.doctorId);
+        if (!provider || (String(provider.role || '').toLowerCase() !== 'doctor' && String(provider.accountType || '').toLowerCase() !== 'doctor')) return null;
         const key = `${own.doctorId}:${own.date}`;
         if (!queues.has(key)) queues.set(key, Promise.all([
           optionalTokenLookup("online queue", () => slotRepository.online(own.doctorId, own.date)),

@@ -1,6 +1,7 @@
 import mongoose from "../persistence/mongoose.js";
 import Chat from "../models/Chat.js";
 import Appointment from "../models/appointmentModel.js";
+import WalkinAppointment from "../models/walkinAppointmentModel.js";
 import Prescription from "../models/Prescription.js";
 import User from "../models/userModel.js";
 import { FollowUp } from "../models/clinicModels.js";
@@ -88,7 +89,7 @@ const bufferFromStoredBinary = (value) => {
 const recordId = (record) => String(record?._id || record?.id || "");
 const idValue = (value) => String(value?._id || value?.id || value || "");
 
-const toResponse = (record) => ({
+export const toResponse = (record) => ({
   id: recordId(record),
   problem: record.problem,
   medicines: record.medicines,
@@ -124,7 +125,7 @@ const consultationFields = [
   "recommendedTests",
 ];
 
-const expandConsultationDetails = (appointment) => {
+export const expandConsultationDetails = (appointment) => {
   try {
     const notes = JSON.parse(appointment.notes || "");
     if (notes?.__doctorConsultation === 1) {
@@ -158,8 +159,10 @@ const normalizeAppointmentMedicine = (medicine = {}) => {
 };
 
 const medicinesFromAppointment = (appointment) => {
-  if (Array.isArray(appointment.medicines) && appointment.medicines.length) {
-    return appointment.medicines.map(normalizeAppointmentMedicine).filter((medicine) => medicine.name);
+  let medicines = appointment.medicines;
+  if (typeof medicines === "string") { try { medicines = JSON.parse(medicines); } catch { medicines = []; } }
+  if (Array.isArray(medicines) && medicines.length) {
+    return medicines.map(normalizeAppointmentMedicine).filter((medicine) => medicine.name);
   }
   const text = String(appointment.medicine || "").trim();
   if (!text || /^not specified$/i.test(text)) return [];
@@ -167,7 +170,8 @@ const medicinesFromAppointment = (appointment) => {
 };
 
 const testsFromAppointment = (appointment) => {
-  const tests = appointment.recommended_tests || appointment.recommendedTests;
+  let tests = appointment.recommended_tests || appointment.recommendedTests;
+  if (typeof tests === "string") { try { tests = JSON.parse(tests); } catch { tests = []; } }
   if (Array.isArray(tests) && tests.length) return tests.filter((test) => test?.testName || test?.name);
   if (appointment.testName) {
     return [{
@@ -211,11 +215,11 @@ const getDoctorSnapshot = (doctor, fallbackName = "Doctor") => ({
   prescriptionSeal: getImageUrl(doctor?.prescriptionSeal),
 });
 
-const appointmentToPrescriptionResponse = (appointment, doctor) => {
+export const appointmentToPrescriptionResponse = (appointment, doctor) => {
   const expanded = expandConsultationDetails(appointment);
   const doctorSnapshot = getDoctorSnapshot(doctor);
   const issuedAt = expanded.consultation_ended_at || expanded.updatedAt || expanded.date;
-  const followUpRequired = Boolean(expanded.follow_up_required || expanded.followUpRequired);
+  const followUpRequired = [true, 1, "1", "true"].includes(expanded.follow_up_required ?? expanded.followUpRequired);
   const followUpDate = expanded.follow_up_date || expanded.followUpDate || "";
   const additionalNotes = expanded.additional_notes || expanded.additionalNotes || "";
   return {
@@ -223,6 +227,7 @@ const appointmentToPrescriptionResponse = (appointment, doctor) => {
     source: "appointment",
     recordType: "completed_appointment",
     appointmentId: recordId(expanded),
+    visitSource: expanded.visitSource || "online",
     appointmentDate: expanded.appointment_date || "",
     appointmentTime: expanded.appointment_time || "",
     appointmentWhen: getAppointmentWhen(expanded),
@@ -252,6 +257,16 @@ const appointmentToPrescriptionResponse = (appointment, doctor) => {
     canViewFile: false,
     canDownload: false,
   };
+};
+
+export const asWalkinConsultation = record => {
+  let timing = record.consultation_timing || {};
+  if (typeof timing === 'string') { try { timing = JSON.parse(timing); } catch { timing = {}; } }
+  return { ...record, _id: `walkin:${recordId(record)}`, visitSource: 'walkin',
+    counselor: record.doctor_id, patient: record.patient_id,
+    status: record.appointment_status || record.status,
+    consultation_ended_at: record.consultation_ended_at || timing.endedAt,
+    consultation_started_at: record.consultation_started_at || timing.startedAt };
 };
 
 const doctorFromPrescription = (prescription) => ({
@@ -434,6 +449,8 @@ export const getMyPrescriptions = async (req, res) => {
     } catch (appointmentError) {
       console.warn("Completed appointment prescriptions could not be loaded:", appointmentError?.message || appointmentError);
     }
+    const walkins = await WalkinAppointment.find({ patient_id: req.user._id, appointment_status: "completed" }).lean();
+    appointments = [...appointments, ...walkins.map(asWalkinConsultation)];
     const prescriptionResponses = records.map(toResponse);
     const doctorIds = [...new Set([
       ...appointments.map((appointment) => idValue(appointment.counselor)),
@@ -469,7 +486,7 @@ export const getMyPrescriptions = async (req, res) => {
     const followUpsByDoctor = new Map();
     followUps.forEach((followUp, index) => {
       const response = followUpResponses[index];
-      const appointmentId = idValue(followUp.appointment_id);
+      const appointmentId = followUp.walkin_id ? `walkin:${idValue(followUp.walkin_id)}` : idValue(followUp.appointment_id);
       const doctorId = idValue(followUp.doctor_id);
       if (appointmentId) {
         const list = followUpsByAppointment.get(appointmentId) || [];

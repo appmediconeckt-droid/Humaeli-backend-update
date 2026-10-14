@@ -1,6 +1,7 @@
 import { FollowUp, WalkinAppointment } from '../models/clinicModels.js';
 import Appointment from '../models/appointmentModel.js';
 import User from '../models/userModel.js';
+import { recoverAppointmentFollowUps } from '../services/appointmentFollowUpService.js';
 import { handle, doctorScope, pick, fail, jsonRecord, dateOnly, todayIST } from '../utils/clinicAccess.js';
 const scope = req => doctorScope(req, req.body?.doctor_id || req.query?.doctor_id);
 const fields = ['follow_up_type', 'reason', 'notes', 'status'];
@@ -17,19 +18,28 @@ async function validatePatient(doctor_id, patient_id, appointment_id) {
 }
 export const createFollowUp = handle(async (req, res) => {
   const doctor_id = await scope(req);
-  await validatePatient(doctor_id, req.body.patient_id, req.body.appointment_id);
-  const row = await FollowUp.create({ ...pick(req.body, fields), doctor_id, patient_id: req.body.patient_id,
-    appointment_id: req.body.appointment_id || undefined, follow_up_date: when(req.body), follow_up_type: req.body.type || req.body.follow_up_type });
+  let walkin;
+  if (req.body.walkin_id) {
+    walkin = await WalkinAppointment.findOne({ _id: req.body.walkin_id, doctor_id }).lean();
+    if (!walkin) throw fail(404, 'Walk-in patient not found');
+  } else await validatePatient(doctor_id, req.body.patient_id, req.body.appointment_id);
+  const row = await FollowUp.create({ ...pick(req.body, fields), doctor_id,
+    patient_id: walkin ? walkin.patient_id || undefined : req.body.patient_id,
+    patient_name: walkin?.patient_name, walkin_id: walkin?._id,
+    appointment_id: walkin ? undefined : req.body.appointment_id || undefined, follow_up_date: when(req.body), follow_up_type: req.body.type || req.body.follow_up_type });
   res.status(201).json({ success: true, message: 'Follow-up created successfully', id: String(row._id), data: jsonRecord(row) });
 });
 const list = today => handle(async (req, res) => {
   const filter = { doctor_id: await scope(req) };
+  await recoverAppointmentFollowUps(filter.doctor_id);
   if (today) {
     const start = new Date(todayIST() + 'T00:00:00+05:30');
     filter.follow_up_date = { $gte: start, $lt: new Date(start.getTime() + 86400000) };
   }
   const rows = await FollowUp.find(filter).populate('patient_id', 'fullName age phoneNumber').populate('doctor_id', 'fullName').sort({ follow_up_date: -1 }).lean();
-  res.json(rows.map(r => ({ ...jsonRecord(r), patient_name: r.patient_id?.fullName || r.patient_name, doctor_name: r.doctor_id?.fullName })));
+  res.json(rows.map(r => ({ ...jsonRecord(r), patient: r.patient_id, doctor: r.doctor_id,
+    patient_id: r.patient_id?._id || r.patient_id, doctor_id: r.doctor_id?._id || r.doctor_id,
+    patient_name: r.patient_id?.fullName || r.patient_name, doctor_name: r.doctor_id?.fullName })));
 });
 export const getAllFollowUps = list(false);
 export const getTodayFollowUps = list(true);

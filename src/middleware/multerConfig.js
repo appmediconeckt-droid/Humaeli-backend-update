@@ -51,6 +51,33 @@ const profileStorage = new CloudinaryStorage({
   },
 });
 
+const staffPhotoUpload = multer({
+  storage: (process.env.STAFF_PHOTO_STORAGE === 'cloudinary' ||
+    (process.env.NODE_ENV === 'production' && process.env.STAFF_PHOTO_STORAGE !== 'local')) && isCloudinaryConfigured()
+    ? profileStorage : localStorage,
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+      return cb(Object.assign(new Error('Staff photo must be JPG, PNG or WebP'), { status: 400 }));
+    }
+    cb(null, true);
+  },
+});
+
+export const handleStaffPhotoUpload = (req, res, next) => {
+  staffPhotoUpload.single('profilePhoto')(req, res, error => {
+    if (!error) return next();
+    console.error('Staff photo storage failed', {
+      code: error.code || 'UPLOAD_FAILED',
+      status: error.http_code || error.status || error.error?.http_code || null,
+    });
+    const message = error.code === 'LIMIT_FILE_SIZE' ? 'Staff photo must be 5 MB or smaller'
+      : error.code === 'LIMIT_UNEXPECTED_FILE' ? 'Upload one image using profilePhoto'
+      : error.status === 400 ? error.message : 'Staff photo upload failed. Please try again.';
+    res.status(error instanceof multer.MulterError || error.status === 400 ? 400 : 502).json({ success: false, message });
+  });
+};
+
 // Storage for certification documents
 const certificationStorage = new CloudinaryStorage({
   cloudinary: cloudinary,

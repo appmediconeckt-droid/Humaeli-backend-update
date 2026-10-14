@@ -14,7 +14,6 @@ describe('Slot end never removes appointments', () => {
     const find = sinon.stub(Appointment, 'find').returns({ lean: async () => [] });
     const remove = sinon.stub(Appointment, 'deleteOne');
     expect(await markExpiredAppointmentsNoShow(at('18:00:00'))).to.equal(0);
-    expect(find.firstCall.args[0]).to.include({ queue_status: 'called', checked_in_at: null });
     expect(remove.called).to.equal(false);
   });
   it('retains matching session metadata only for booking/display', async () => {

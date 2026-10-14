@@ -3,7 +3,7 @@ import Settings from "../models/Settings.js";
 const GENERAL_KEYS = ["platform_name", "support_email"];
 
 const DEFAULTS = {
-  platform_name: { value: "Mediconeckt", description: "Platform display name", type: "STRING", category: "GENERAL" },
+  platform_name: { value: "Humaeli", description: "Platform display name", type: "STRING", category: "GENERAL" },
   support_email: { value: "", description: "Support contact email", type: "STRING", category: "EMAIL" },
 };
 
@@ -18,6 +18,10 @@ export const getGeneralSettings = async (req, res) => {
       if (map[key] === undefined) map[key] = DEFAULTS[key].value;
     }
 
+    // Legacy stored platform branding must not reappear in the settings UI.
+    if (/^medi(?:coneckt|connect)$/i.test(String(map.platform_name || '').trim())) {
+      map.platform_name = DEFAULTS.platform_name.value;
+    }
     res.json({ success: true, data: map });
   } catch (err) {
     res.status(500).json({ success: false, message: "Failed to load settings" });
