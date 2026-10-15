@@ -31,6 +31,10 @@ export const saveAppointmentVitals = handle(async (req, res) => {
     ...(row.queue_status ? { queue_status: row.queue_status } : {}),
   }, { $set: { vitals: recorded } });
   if (!updated.matchedCount) throw fail(409, 'Appointment changed. Refresh and try again.');
+  const patientId = source === 'walkin' ? row.patient_id : row.patient?._id || row.patient;
+  if (patientId && global.io) {
+    global.io.to(`user_${String(patientId)}`).emit('patientVitalsUpdated', { appointmentId: String(row._id || row.id), recordedAt: recorded.recorded_at });
+  }
   res.json({ success: true, vitals: recorded });
 });
 

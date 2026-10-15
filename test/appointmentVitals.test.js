@@ -17,6 +17,21 @@ describe('Appointment vitals', () => {
     req = { userId: 'staff', params: { id: 'visit' }, body: { source: 'online', vitals: { blood_pressure: '120/80', pulse: '75', temperature: '37', spo2: '98', respiratory_rate: '16', pain_score: '0' } } };
   });
   afterEach(() => sandbox.restore());
+  it('notifies only the linked patient after readings are saved', async () => {
+    sandbox.stub(Appointment, 'findOne').resolves({ _id: 'visit', patient: 'patient-account', appointment_date: '2026-10-15', status: 'confirmed', queue_status: 'waiting' });
+    const update = sandbox.stub(Appointment, 'updateOne').resolves({ matchedCount: 1 });
+    const emit = sinon.spy();
+    const to = sinon.stub().returns({ emit });
+    const previous = global.io;
+    global.io = { to };
+    try {
+      await saveAppointmentVitals(req, res);
+      expect(to.firstCall.args[0]).to.equal('user_patient-account');
+      expect(emit.firstCall.args[0]).to.equal('patientVitalsUpdated');
+      expect(update.calledBefore(to)).to.equal(true);
+      expect(emit.firstCall.args[1]).not.to.have.property('vitals');
+    } finally { global.io = previous; }
+  });
   it('stores measured values and server-owned recorder metadata in the scoped online appointment', async () => {
     const find = sandbox.stub(Appointment, 'findOne').resolves({ appointment_date: '2026-10-15', status: 'confirmed', queue_status: 'waiting' });
     const update = sandbox.stub(Appointment, 'updateOne').resolves({ matchedCount: 1 });

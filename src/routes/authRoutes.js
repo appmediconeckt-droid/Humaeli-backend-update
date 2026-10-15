@@ -1,4 +1,5 @@
 import express from "express";
+import { getMyVitals } from '../controllers/patientVitalsController.js';
 import {
   loginUser,
   deleteUser,
@@ -59,6 +60,7 @@ import {
 } from "../middleware/multerConfig.js";
 
 export const authRoutes = express.Router();
+authRoutes.get('/me/vitals', authMiddleware, authorizeRoles('user'), getMyVitals);
 
 // OTP & REGISTRATION FLOW
 authRoutes.post("/send-email-otp", sendEmailOTP);
