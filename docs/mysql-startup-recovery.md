@@ -27,6 +27,11 @@ table layouts still use the backed-up offline `npm run db:columns` migration.
 
 - Set the MySQL connection variables in the backend deployment. A local `.env`
   change does not update Railway's environment.
+- Run `npm start` with `NODE_ENV=production`. `npm run dev` watches source files
+  and intentionally restarts the process after edits; use it only for development.
+- Configure the deployment readiness/health check as `/api/health` with a startup
+  grace period of at least 300 seconds for a new/imported database. Keep the old
+  healthy instance serving traffic until the replacement is ready.
 - Restart/redeploy the backend after updating code. An already-running Node
   process continues to use its loaded driver.
 - Verify `/api/health` returns HTTP 200 with `db.engine: "mysql"` and
@@ -40,3 +45,39 @@ The regression suites `mysqlColumnMapping.test.js`,
 cover restored metadata, preserved data, reconnects, IDs, query operations and
 concurrent wallet updates. Integration tests require a separate
 `MYSQL_TEST_DATABASE=humaeli_test_<name>`; never point them at the live database.
+
+## Restart time and runtime recovery
+
+Legacy chat/message identifier repairs are checkpointed in `_humaeli_migrations`.
+The marker is written only after both repairs succeed, under a dedicated advisory
+lock. Subsequent startups skip the full record scans. Back up this table too. If
+old chat/message records are imported later, set `MYSQL_REPAIR_LEGACY_IDS=true`
+for one controlled restart, then remove it. Table and index validation still run
+before readiness; independent models initialize in bounded batches of up to four.
+Ordinary nonunique index initialization no longer reads the entire collection.
+Unique indexes still validate existing records before accepting traffic.
+
+Both MySQL pools use TCP keepalive, 30-second idle cleanup and a bounded waiting
+queue (`MYSQL_QUEUE_LIMIT=100` by default). Budget connections for **two pools per
+backend worker**, plus a temporary migration connection. Set
+`MYSQL_CONNECTION_LIMIT` according to your database capacity and replica count.
+
+After startup the server probes both pools every 15 seconds. A failed/slow probe
+marks readiness unhealthy; a successful later probe restores it automatically.
+Concurrent probes are suppressed. Closed pooled connections are replaced by
+mysql2; the application does not replay writes, payments or transactions whose
+commit status is uncertain. An actual database/network outage can still cause
+503 responses; readiness routing, database uptime and deployment configuration
+remain necessary.
+
+The Vercel entry point also retries initialization on later requests after a failed
+cold start, and probes warm instances on incoming requests. It does not depend on
+background timers being scheduled by the serverless runtime. For this app's live
+Socket.IO queues and persistent background jobs, deploy the backend as a long
+running service with readiness routing; the frontend can be hosted separately.
+
+`databaseRecovery.test.js` covers simulated outage/recovery, probe timeouts,
+bounded startup concurrency and migration checkpoints. The opt-in
+`databaseRecovery.integration.test.js` creates a **new** isolated test database,
+kills only its own pooled connection, verifies subsequent reads/writes and removes
+that test database afterward. It refuses an existing database name.

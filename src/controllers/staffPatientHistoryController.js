@@ -32,11 +32,15 @@ export const staffPatientHistory = handle(async (req, res) => {
   const [online, walkins, prescriptions] = await Promise.all([
     ['all', 'online'].includes(source) ? Appointment.find({ counselor: doctorId, $or: [{ status: 'completed' }, { queue_status: 'completed' }], ...clinicFilter })
       .populate('patient', 'fullName phoneNumber age gender').lean() : [],
-    ['all', 'walkin'].includes(source) ? WalkinAppointment.find({ doctor_id: doctorId, $or: [{ appointment_status: 'completed' }, { status: 'completed' }, { queue_status: 'completed' }], ...clinicFilter }).lean() : [],
+    // Native walk-in tables use appointment_status; legacy status/queue fields
+    // may not exist as SQL columns. Evaluate completion after reading scoped rows.
+    ['all', 'walkin'].includes(source) ? WalkinAppointment.find({ doctor_id: doctorId, ...clinicFilter }).lean() : [],
     !clinicId && ['all', 'prescription'].includes(source) ? Prescription.find({ psychiatristId: doctorId })
       .select('_id patientId psychiatristId patientSnapshot psychiatristSnapshot problem medicines instructions issuedAt identityVerification').lean() : [],
   ]);
-  const visits = [...online.map(row => ({ row, visitSource: 'online' })), ...walkins.map(row => ({ row: asWalkinConsultation(row), visitSource: 'walkin' }))].map(({ row, visitSource }) => {
+  const completedWalkins = walkins.filter(row => [row.appointment_status || row.status, row.queue_status]
+    .some(value => ['completed', 'complete', 'done'].includes(String(value || '').trim().toLowerCase())));
+  const visits = [...online.map(row => ({ row, visitSource: 'online' })), ...completedWalkins.map(row => ({ row: asWalkinConsultation(row), visitSource: 'walkin' }))].map(({ row, visitSource }) => {
     const expanded = expandConsultationDetails(row);
     const patient = { id: idOf(row.patient), name: row.patient?.fullName || row.patient_name || 'Patient', phoneNumber: row.patient?.phoneNumber || row.phone_number || '', gender: row.patient?.gender || row.gender, age: row.patient?.age ?? row.age };
     const prescription = { ...appointmentToPrescriptionResponse(row, doctor), patient };

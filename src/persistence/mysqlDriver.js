@@ -60,6 +60,11 @@ export function mysqlConfig(env = process.env) {
     password: env.MYSQL_PASSWORD ?? env.MYSQLPASSWORD ?? (url ? decodeURIComponent(url.password) : ''),
     database: env.MYSQL_DATABASE || env.MYSQLDATABASE || (url && decodeURIComponent(url.pathname.slice(1))) || 'humaeli',
     connectionLimit: Number(env.MYSQL_CONNECTION_LIMIT || 10),
+    waitForConnections: true,
+    queueLimit: Number(env.MYSQL_QUEUE_LIMIT || 100),
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10000,
+    idleTimeout: 30000,
     connectTimeout: 10000,
     charset: 'utf8mb4',
     // fromRow decodes EJSON itself. Keep JSON strings encoded so a scalar
@@ -71,6 +76,8 @@ export function mysqlConfig(env = process.env) {
   identifier(config.database);
   if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535) throw new Error('Invalid MYSQL_PORT');
   if (!Number.isInteger(config.connectionLimit) || config.connectionLimit < 1) throw new Error('Invalid MYSQL_CONNECTION_LIMIT');
+  if (!Number.isInteger(config.queueLimit) || config.queueLimit < 1) throw new Error('Invalid MYSQL_QUEUE_LIMIT');
+  config.maxIdle = Math.floor(config.connectionLimit / 2);
   if (env.MYSQL_SSL === 'true') config.ssl = { rejectUnauthorized: true };
   return config;
 }
@@ -429,7 +436,9 @@ class SQLCollection {
       if (existing && encode(existing) !== encode(definition) && !canRefreshIndexDefinition(existing, definition)) {
         throw new Error(`Index ${name} has conflicting options; migrate the index explicitly`);
       }
-      checkUnique(await this.read(client), [definition]);
+      // Nonunique indexes have no data constraint to validate. Do not load the
+      // entire collection for every ordinary index on each process startup.
+      if (definition.unique) checkUnique(await this.read(client), [definition]);
       await client.execute('INSERT INTO `_humaeli_indexes` (collection_name, index_name, definition) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE definition = VALUES(definition)', [this.name, name, encode(definition)]);
       await client.commit();
       await addSqlIndex(client, this.name, this.db.columns.get(this.name), key, name);
@@ -656,7 +665,7 @@ class SQLDatabase {
   collection(name) { if (!this.collections.has(name)) this.collections.set(name, new SQLCollection(this, name)); return this.collections.get(name); }
   async createCollection(name) { await this.ensureColumns(name); return this.collection(name); }
   listCollections() { return new Cursor(async () => { const [rows] = await this.pool.query('SELECT collection_name AS name FROM `_humaeli_locks`'); return rows; }); }
-  async command(command) { if (command.ping) { await this.pool.query('SELECT 1'); return { ok: 1 }; } throw new Error('Unsupported database command'); }
+  async command(command) { if (command.ping) { await this.pool.query({ sql: 'SELECT 1', timeout: 5000 }); return { ok: 1 }; } throw new Error('Unsupported database command'); }
 }
 
 class Connection extends BaseConnection {

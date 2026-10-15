@@ -3,6 +3,8 @@ import { mysqlConfig } from '../persistence/mysqlDriver.js';
 import { loadModels } from '../persistence/models.js';
 import { initQueueTables } from '../services/initQueueTables.js';
 import { quote } from '../persistence/columns.js';
+import { runDatabaseMigration } from './databaseMigration.js';
+import { runDatabaseTasks } from './databaseStartup.js';
 
 let connecting;
 const phoneIndexPattern = /^\+?\d{7,15}$/;
@@ -299,6 +301,7 @@ export default async function connectDB() {
   if (connecting) return connecting;
   if (modelStorage.connection.readyState === 1) return modelStorage.connection;
   connecting = (async () => {
+    const startupStarted = Date.now();
     try {
       // Reads MYSQL_HOST/PORT/USER/PASSWORD/DATABASE, provider aliases or MYSQL_URL.
       // connectMySQL uses the custom mysql2 driver shared by all application models.
@@ -308,24 +311,30 @@ export default async function connectDB() {
       console.log('MySQL transport connected; validating application schema.');
       await repairLegacyProfileQrUrlColumn(connection);
       // Install constraints before accepting requests; no background index races.
-      for (const model of Object.values(modelStorage.models)) {
+      const models = Object.values(modelStorage.models);
+      const concurrency = Math.min(4, config.connectionLimit);
+      await runDatabaseTasks(models, async model => {
         if (process.env.MYSQL_STARTUP_DEBUG === 'true') console.log(`MySQL startup: collection ${model.modelName}`);
         await model.createCollection();
-      }
+      }, concurrency);
       console.log('MySQL tables ready; checking legacy chat/message IDs.');
-      await repairLegacyChatIds();
-      await repairLegacyMessageIds();
+      const repair = await runDatabaseMigration(config, 'legacy-chat-message-identifiers-v1', async () => {
+        await repairLegacyChatIds();
+        await repairLegacyMessageIds();
+      }, { force: process.env.MYSQL_REPAIR_LEGACY_IDS === 'true' });
+      if (repair.skipped) console.log('Legacy chat/message IDs already repaired; skipping full record scan.');
       if (process.env.MYSQL_REPAIR_DUPLICATE_USER_PHONES === 'true') {
         await repairLegacyUserPhoneNumbers();
       }
-      for (const model of Object.values(modelStorage.models)) {
+      await runDatabaseTasks(models, async model => {
         if (process.env.MYSQL_STARTUP_DEBUG === 'true') console.log(`MySQL startup: indexes ${model.modelName}`);
         await createModelIndexes(model);
-      }
+      }, concurrency);
       console.log('MySQL model indexes ready; initializing queue tables.');
       await initQueueTables();
       const details = await verifyMySQLConnection(connection);
       console.log('✅ MySQL connected successfully');
+      console.log(`MySQL schema startup completed in ${Date.now() - startupStarted}ms.`);
       console.log(`Database: ${details.database}`);
       console.log(`Host: ${details.host}${details.port ? `:${details.port}` : ''}`);
       return connection;

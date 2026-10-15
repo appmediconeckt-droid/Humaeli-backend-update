@@ -1005,14 +1005,15 @@ export const nurseCheckIn = handle(async (req, res) => {
         status: "confirmed",
         queue_status: "waiting",
         checked_in_at: new Date(),
-        vitals: pick(req.body, [
+        // Preserve pre-recorded measurements when check-in has no vitals payload.
+        ...Object.fromEntries(Object.entries(pick(req.body, [
           "blood_pressure",
           "temperature",
           "pulse",
           "weight",
           "height",
           "spo2",
-        ]),
+        ])).map(([key, value]) => [`vitals.${key}`, value])),
       },
     },
     {

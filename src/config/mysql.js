@@ -18,12 +18,11 @@ export function getPool() {
       ...settings,
       waitForConnections: true,
       connectionLimit: settings.connectionLimit,
-      queueLimit: 0,
       enableKeepAlive: true,
       keepAliveInitialDelay: 10000,
     });
 
-    // Start keep-alive interval to prevent Railway TCP proxy idle disconnects
+    // Keep-alive complements pool replacement of closed connections.
     startKeepAlive();
   }
   return pool;
@@ -35,7 +34,7 @@ function startKeepAlive() {
   keepAliveTimer = setInterval(async () => {
     try {
       if (pool) {
-        await pool.query("SELECT 1");
+        await pool.query({ sql: 'SELECT 1', timeout: 5000 });
       }
     } catch (err) {
       console.warn("⚠️ Railway MySQL keep-alive ping failed:", err.message);
@@ -76,7 +75,7 @@ export async function checkHealth() {
   try {
     const currentPool = getPool();
     const startTime = Date.now();
-    await currentPool.query("SELECT 1");
+    await currentPool.query({ sql: 'SELECT 1', timeout: 5000 });
     const latency = Date.now() - startTime;
     return { status: "healthy", latencyMs: latency, host: settings.host, database: settings.database };
   } catch (error) {

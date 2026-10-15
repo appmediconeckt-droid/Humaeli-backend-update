@@ -1,5 +1,7 @@
 import dotenv from "dotenv";
-import connectDB from "./src/config/db.js";
+import connectDB, { verifyMySQLConnection } from "./src/config/db.js";
+import { getPool } from './src/config/mysql.js';
+import { createDatabaseMonitor } from './src/config/databaseMonitor.js';
 import { databaseFailureDetails } from "./src/config/databaseStartup.js";
 
 // IMPORTANT: Load environment variables FIRST
@@ -86,10 +88,30 @@ server.listen(PORT, "0.0.0.0", () => {
   }
 });
 
+const databaseMonitor = createDatabaseMonitor({
+  probe: async () => {
+    const connection = await connectDB();
+    await verifyMySQLConnection(connection);
+    await getPool().query({ sql: 'SELECT 1', timeout: 5000 });
+  },
+  onHealthy: () => {
+    if (!app.locals.databaseReady) console.log('MySQL health restored; API is ready.');
+    app.locals.databaseReady = true;
+    app.locals.databaseLastError = null;
+  },
+  onUnavailable: error => {
+    const details = databaseFailureDetails(error);
+    if (app.locals.databaseReady || app.locals.databaseLastError !== details) console.error(`MySQL health check failed: ${details}`);
+    app.locals.databaseReady = false;
+    app.locals.databaseLastError = details;
+  },
+});
+
 connectWithRetry()
   .then(async () => {
     app.locals.databaseReady = true;
     console.log("Database initialization complete; API is ready.");
+    databaseMonitor.start();
     startDatabaseJobs().catch((error) => {
       console.error("Database background jobs failed to start:", databaseFailureDetails(error));
     });

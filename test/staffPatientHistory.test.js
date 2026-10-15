@@ -61,6 +61,23 @@ describe('Doctor-scoped staff patient history', () => {
     expect(res.json.firstCall.args[0].separatePrescriptionsExcluded).to.equal(true);
     expect(Appointment.find.firstCall.args[0].clinic_id).to.equal('clinic-one');
   });
+  it('reads native walk-in tables without querying optional status columns and excludes unfinished visits', async () => {
+    prepare();
+    WalkinAppointment.find.returns(chain([
+      walkin,
+      { ...walkin, id: 'pending', appointment_status: 'pending' },
+      { ...walkin, id: 'canceled', appointment_status: 'canceled' },
+      { ...walkin, id: 'queue-complete', appointment_status: 'confirmed', queue_status: 'completed' },
+    ]));
+    const res = response();
+    await staffPatientHistory({ userId: 'staff', query: { clinic_id: 'clinic-one', source: 'walkin' } }, res);
+    expect(WalkinAppointment.find.firstCall.args[0]).to.deep.equal({ doctor_id: 'doctor-one', clinic_id: 'clinic-one' });
+    expect(res.status.called).to.equal(false);
+    const data = res.json.firstCall.args[0];
+    expect(data.records.map(row => row.id)).to.have.members(['walkin:walkin:walkin-one', 'walkin:walkin:queue-complete']);
+    expect(data.records.every(row => row.hasPrescription)).to.equal(true);
+    expect(data.records[0].prescription.medicines[0].name).to.equal(medicine.name);
+  });
   it('rejects a clinic belonging to a different doctor', async () => {
     prepare(); const res = response();
     await staffPatientHistory({ userId: 'staff', query: { clinic_id: 'clinic-two' } }, res);

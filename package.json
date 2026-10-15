@@ -10,7 +10,7 @@
     "test:watch": "cross-env NODE_ENV=test mocha --timeout 10000 --watch --require @babel/register test/**/*.test.js",
     "test:coverage": "nyc npm test",
     "test:single": "cross-env NODE_ENV=test mocha --timeout 10000 --exit --require @babel/register",
-    "dev": "node server.js",
+    "dev": "node --watch server.js",
     "migrate:chat-deletion": "node scripts/migrate-chat-participant-deletion.js",
     "seed:play-review": "node scripts/seed-play-review-accounts.js",
     "db:setup": "node scripts/setup-mysql.js",

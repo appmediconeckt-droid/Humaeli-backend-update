@@ -1,4 +1,14 @@
 // Do not register timers or run database jobs while the initial connection retries.
+export async function runDatabaseTasks(items, task, concurrency = 4) {
+  if (!Number.isInteger(concurrency) || concurrency < 1) throw new Error('Invalid database startup concurrency');
+  for (let index = 0; index < items.length; index += concurrency) {
+    // Finish every task in the batch before closing the pool on a failure.
+    const results = await Promise.allSettled(items.slice(index, index + concurrency).map(task));
+    const failed = results.find(result => result.status === 'rejected');
+    if (failed) throw failed.reason;
+  }
+}
+
 export function createDatabaseStartup(connection, initialize) {
   let startup;
   return function start() {

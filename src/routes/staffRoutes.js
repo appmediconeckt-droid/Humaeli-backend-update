@@ -2,7 +2,7 @@ import { staffAppointments } from '../controllers/staffAppointmentsController.js
 import { Router } from 'express';
 import { protect, allowRoles } from '../middleware/authMiddleware.js';
 import { addStaff, listStaff, updateStaff, removeStaff, resendStaffWelcomeEmail } from '../controllers/staffController.js';
-import { receptionistDashboard } from '../controllers/receptionistController.js';
+import { receptionistDashboard, saveAppointmentVitals } from '../controllers/receptionistController.js';
 import { staffPatientHistory } from '../controllers/staffPatientHistoryController.js';
 import { staffRoles } from '../utils/clinicAccess.js';
 import { handleStaffPhotoUpload } from '../middleware/multerConfig.js';
@@ -10,6 +10,7 @@ const router = Router();
 router.get('/appointments', protect, allowRoles(...staffRoles, 'doctor', 'admin'), staffAppointments);
 router.get('/patient-history', protect, allowRoles(...staffRoles, 'doctor', 'admin'), staffPatientHistory);
 router.get('/receptionist/dashboard', protect, allowRoles('receptionist'), receptionistDashboard);
+router.patch('/appointments/:id/vitals', protect, allowRoles('receptionist', 'doctor'), saveAppointmentVitals);
 router.use(protect, allowRoles('doctor', 'admin'));
 router.post('/', handleStaffPhotoUpload, addStaff);
 router.post('/:id/resend-welcome-email', resendStaffWelcomeEmail);
