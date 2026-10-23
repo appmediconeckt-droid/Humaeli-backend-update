@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
-import connectDB, { verifyMySQLConnection } from "./src/config/db.js";
+import connectDB from "./src/config/db.js";
 import { getPool } from './src/config/mysql.js';
-import { createDatabaseMonitor } from './src/config/databaseMonitor.js';
+import { createDatabaseMonitor, probeMySQLPool } from './src/config/databaseMonitor.js';
 import { databaseFailureDetails } from "./src/config/databaseStartup.js";
 
 // IMPORTANT: Load environment variables FIRST
@@ -89,10 +89,14 @@ server.listen(PORT, "0.0.0.0", () => {
 });
 
 const databaseMonitor = createDatabaseMonitor({
-  probe: async () => {
+  probe: async signal => {
     const connection = await connectDB();
-    await verifyMySQLConnection(connection);
-    await getPool().query({ sql: 'SELECT 1', timeout: 5000 });
+    const results = await Promise.allSettled([
+      probeMySQLPool(connection.db.pool, signal),
+      probeMySQLPool(getPool(), signal),
+    ]);
+    const failed = results.find(result => result.status === 'rejected');
+    if (failed) throw failed.reason;
   },
   onHealthy: () => {
     if (!app.locals.databaseReady) console.log('MySQL health restored; API is ready.');

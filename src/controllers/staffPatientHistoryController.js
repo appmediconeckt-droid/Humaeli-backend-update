@@ -4,7 +4,7 @@ import Appointment from '../models/appointmentModel.js';
 import WalkinAppointment from '../models/walkinAppointmentModel.js';
 import Prescription from '../models/Prescription.js';
 import { doctorScope, receptionistClinicScope, handle, fail, dateOnly } from '../utils/clinicAccess.js';
-import { appointmentToPrescriptionResponse, asWalkinConsultation, expandConsultationDetails, toResponse } from './prescriptionController.js';
+import { appointmentToPrescriptionResponse, asWalkinConsultation, expandConsultationDetails, toResponse, prescriptionWithDoctorSignature } from './prescriptionController.js';
 
 const idOf = value => String(value?._id || value?.id || value || '');
 const dayIST = value => {
@@ -23,7 +23,7 @@ export const staffPatientHistory = handle(async (req, res) => {
   const page = Number(req.query?.page ?? 1), limit = Number(req.query?.limit ?? 10);
   if (!Number.isInteger(page) || page < 1 || !Number.isInteger(limit) || limit < 1 || limit > 50) throw fail(400, 'Invalid pagination');
   const [doctor, clinics] = await Promise.all([
-    User.findOne({ _id: doctorId, role: 'doctor', isActive: true }).select('fullName qualification specialization role accountType'),
+    User.findOne({ _id: doctorId, role: 'doctor', isActive: true }).select('fullName qualification specialization role accountType prescriptionSignature prescriptionSeal email phoneNumber'),
     Clinic.find({ doctor_id: doctorId, ...(clinicId ? { _id: clinicId } : {}) }),
   ]);
   if (!doctor) throw fail(404, 'Assigned doctor is unavailable');
@@ -43,7 +43,7 @@ export const staffPatientHistory = handle(async (req, res) => {
   const visits = [...online.map(row => ({ row, visitSource: 'online' })), ...completedWalkins.map(row => ({ row: asWalkinConsultation(row), visitSource: 'walkin' }))].map(({ row, visitSource }) => {
     const expanded = expandConsultationDetails(row);
     const patient = { id: idOf(row.patient), name: row.patient?.fullName || row.patient_name || 'Patient', phoneNumber: row.patient?.phoneNumber || row.phone_number || '', gender: row.patient?.gender || row.gender, age: row.patient?.age ?? row.age };
-    const prescription = { ...appointmentToPrescriptionResponse(row, doctor), patient };
+    const prescription = { ...appointmentToPrescriptionResponse(row, doctor, clinics.find(clinic => idOf(clinic) === idOf(row.clinic_id))), patient };
     return { id: `${visitSource}:${idOf(row)}`, source: visitSource, patient, clinicId: idOf(row.clinic_id),
       doctor: { id: doctorId, name: doctor.fullName }, appointmentDate: row.appointment_date || dayIST(row.date),
       checkedDate: dayIST(row.consultation_ended_at) || row.appointment_date || dayIST(row.date),
@@ -54,7 +54,7 @@ export const staffPatientHistory = handle(async (req, res) => {
   const issued = prescriptions.map(row => ({ id: `prescription:${idOf(row)}`, source: 'prescription',
     patient: { id: idOf(row.patientId), name: row.patientSnapshot?.name || 'Patient' },
     doctor: { id: doctorId, name: doctor.fullName }, clinicId: '', checkedDate: dayIST(row.issuedAt),
-    checkedAt: row.issuedAt, hasPrescription: true, prescription: { ...toResponse(row), source: 'prescription', canViewFile: false, canDownload: false } }));
+    checkedAt: row.issuedAt, hasPrescription: true, prescription: { ...prescriptionWithDoctorSignature(toResponse(row), doctor), source: 'prescription', canViewFile: false, canDownload: false } }));
   const search = String(req.query?.search || '').trim().toLowerCase().slice(0, 150);
   const records = [...visits, ...issued].filter(row => (!from || row.checkedDate >= from) && (!to || row.checkedDate <= to) &&
     `${row.patient.name} ${row.patient.phoneNumber || ''} ${row.token ?? ''}`.toLowerCase().includes(search))

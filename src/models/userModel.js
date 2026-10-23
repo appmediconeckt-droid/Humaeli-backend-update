@@ -230,6 +230,8 @@ const userSchema = new mongoose.Schema({
         type: [String],
         required: function() { return ["counsellor", "doctor"].includes(this.role) && !this.googleId; }
     },
+    consultationCurrency: { type: String, uppercase: true, match: /^[A-Z]{3}$/ },
+    consultationFee: { type: Number, min: 0, max: 9999999.99 },
     experience: {
         type: Number,
         required: function() { return ["counsellor", "doctor"].includes(this.role) && !this.googleId; }

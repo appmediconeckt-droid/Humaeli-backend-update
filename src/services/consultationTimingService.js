@@ -1,3 +1,4 @@
+import { emitAppointmentUpdated } from "./portalRealtimeService.js";
 import { buildDaySlots, indiaDateTime, slotRepository, timeMinutes } from "./appointmentSlotService.js";
 import { notifyNextQueueTokens } from './queueTurnNotificationService.js';
 import { normalizeQueueAppointment } from "./queueTimingService.js";
@@ -107,6 +108,7 @@ export const findOtherActiveConsultation = async (appointment) => {
 
 // Timing updates contain no patient details and go only to affected users.
 export const emitQueueUpdated = async (appointment) => {
+  emitAppointmentUpdated(appointment);
   if (!global.io) return;
   try {
     const doctorId = appointment.doctor_id || appointment.counselor;

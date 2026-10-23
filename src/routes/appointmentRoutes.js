@@ -49,7 +49,7 @@ import {
   setAppointmentEmergency,
 } from "../controllers/appointmentController.js";
 import { getMyTokenStatus } from "../controllers/tokenStatusController.js";
-import { submitDoctorRating } from "../controllers/doctorRatingController.js";
+import { submitDoctorRating, submitClinicRating } from "../controllers/doctorRatingController.js";
 import { requestPatientEmergency } from "../controllers/patientEmergencyController.js";
 import { cancelAppointmentManually } from '../controllers/manualAppointmentCancellationController.js';
 
@@ -65,6 +65,7 @@ import {
 
 const router = express.Router();
 router.patch('/:id/cancel', protect, allowRoles('user', 'receptionist'), cancelAppointmentManually);
+router.post('/:id/clinic-rating', protect, allowRoles('user'), submitClinicRating);
 router.post('/:id/doctor-rating', protect, allowRoles('user'), submitDoctorRating);
 
 // =====================================================

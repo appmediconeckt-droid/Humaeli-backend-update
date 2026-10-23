@@ -1,3 +1,4 @@
+import { emitAvailabilityUpdated } from "../services/portalRealtimeService.js";
 import { Clinic, Availability, UnavailableDate } from '../models/clinicModels.js';
 import LegacyDateRange from '../models/dateRangeModel.js';
 import LegacyUnavailableDate from '../models/unavailableDateModel.js';
@@ -186,6 +187,7 @@ const changeUnavailableDate = async (req, res, blocked) => {
       if (req.body?.scope === 'all') await LegacyUnavailableDate.deleteMany({ doctor_id: doctorId, unavailable_date: date });
       await LegacyDateRange.deleteMany(filter);
     }
+    emitAvailabilityUpdated(doctorId);
     return res.json({ success: true, blocked, date, clinic_id: String(clinicId), message: blocked ? 'Clinic marked unavailable for this date' : 'Availability restored; saved timings preserved' });
   } catch (error) {
     console.error('Availability exception failed:', error.message);
@@ -210,6 +212,7 @@ export const clearAllRanges = async (req, res) => {
     if (!clinicId || clinicId === "all") {
       await LegacyUnavailableDate.deleteMany({ doctor_id: doctorId });
     }
+    emitAvailabilityUpdated(doctorId);
     return res.json({ success: true, message: "Availability cleared successfully" });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Failed to clear availability" });
@@ -220,6 +223,7 @@ const availabilityController = {
   getAllRanges: getAvailabilityRanges, getAvailableDates: read(true), getAvailableRanges, getAvailabilityRanges, setUnavailableDate, removeUnavailableDate, clearAllRanges,
   addDateRange: handle(async (req, res) => {
     const row = await Availability.create(await payload(req));
+    emitAvailabilityUpdated(row.doctor_id);
     res.status(201).json({ success: true, rangeId: String(row._id), range: format(row) });
   }),
   updateDateRange: handle(async (req, res) => {
@@ -229,30 +233,35 @@ const availabilityController = {
     const data = await payload(req);
     if (String(row.doctor_id) !== String(data.doctor_id)) throw fail(403, 'Cannot transfer availability');
     Object.assign(row, data); await row.save();
+    emitAvailabilityUpdated(row.doctor_id);
     res.json({ success: true, range: format(row) });
   }),
   deleteDateRange: handle(async (req, res) => {
     const doctor_id = await scope(req);
     const row = await Availability.findOneAndDelete({ _id: req.params.id, doctor_id });
     if (!row) throw fail(404, 'Availability not found');
+    emitAvailabilityUpdated(doctor_id);
     res.json({ success: true });
   }),
   markDateUnavailable: handle(async (req, res) => {
     const doctor_id = await scope(req), unavailable_date = dateOnly(req.body.date);
     if (unavailable_date < todayIST()) throw fail(400, 'Cannot mark a past date');
     await UnavailableDate.findOneAndUpdate({ doctor_id, unavailable_date }, { $set: { doctor_id, unavailable_date } }, { upsert: true, returnDocument: 'after', runValidators: true });
+    emitAvailabilityUpdated(doctor_id);
     res.json({ success: true });
   }),
   clearDateRange: handle(async (req, res) => {
     const doctor_id = await scope(req), date = dateOnly(req.body.date);
     await UnavailableDate.deleteMany({ doctor_id, unavailable_date: date });
     await Availability.deleteMany({ doctor_id, availability_date: date, is_unavailable: true });
+    emitAvailabilityUpdated(doctor_id);
     res.json({ success: true });
   }),
   clearAllUnavailableDates: handle(async (req, res) => {
     const doctor_id = await scope(req);
     await UnavailableDate.deleteMany({ doctor_id });
     await Availability.deleteMany({ doctor_id, is_unavailable: true });
+    emitAvailabilityUpdated(doctor_id);
     res.json({ success: true });
   }),
 };

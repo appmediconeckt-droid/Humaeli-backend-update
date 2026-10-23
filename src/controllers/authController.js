@@ -1,3 +1,5 @@
+import { currencyForCountry, feeCurrency, validFee } from '../utils/consultationCurrency.js';
+import { emitResourceUpdated } from "../services/portalRealtimeService.js";
 import mongoose from "../persistence/mongoose.js";
 import User from "../models/userModel.js";
 import { markUserOnlineAndNotify } from "../services/onlinePresenceService.js";
@@ -599,7 +601,6 @@ export const updateUserById = async (req, res) => {
 
     // Prepare updates object
     const updates = {};
-
     // 1. Handle profile image. Patient users are avatar-only: direct photo
     // uploads and Google profile pictures must never become their profile image.
     if (
@@ -1373,6 +1374,19 @@ export const updateUserById = async (req, res) => {
       delete updates.googleId;
     }
 
+    // Resolve from the final address, including multipart address updates.
+    if (req.body.consultationFee !== undefined || req.body.consultationCurrency !== undefined || (updates.address && currentUser.consultationFee != null)) {
+      if (!["doctor", "counsellor"].includes(currentUser.role)) return res.status(403).json({ success: false, message: 'Only doctors and consultants can set a checkup fee' });
+      const currency = currencyForCountry((updates.address || currentUser.address)?.country);
+      if (!currency) return res.status(400).json({ success: false, field: 'address.country', message: 'Select a valid profile country before setting your checkup fee' });
+      if (req.body.consultationCurrency !== undefined && req.body.consultationCurrency !== currency) return res.status(400).json({ success: false, message: 'Checkup fee currency must match your profile country' });
+      const amount = req.body.consultationFee !== undefined ? req.body.consultationFee : currentUser.consultationFee;
+      if (!['string', 'number'].includes(typeof amount) || !validFee(amount, currency)) return res.status(400).json({ success: false, field: 'consultationFee', message: `Enter a valid checkup fee for ${currency}` });
+      if (currentUser.consultationCurrency && currency !== currentUser.consultationCurrency && req.body.consultationFee === undefined) return res.status(400).json({ success: false, message: 'Confirm your checkup fee when changing your country' });
+      updates.consultationFee = Number(amount);
+      updates.consultationCurrency = currency;
+    }
+
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       {
@@ -1423,6 +1437,8 @@ export const updateUserById = async (req, res) => {
     // Add counsellor fields if applicable
     if (["counsellor", "doctor"].includes(updatedUser.role)) {
       Object.assign(formattedUser, {
+        consultationFee: updatedUser.consultationFee,
+        consultationCurrency: feeCurrency(updatedUser),
         qualification: updatedUser.qualification,
         specialization: updatedUser.specialization,
         experience: updatedUser.experience,
@@ -1448,7 +1464,8 @@ export const updateUserById = async (req, res) => {
     //   formattedUser.certifications?.length,
     // );
 
-    if (["counsellor", "counselor"].includes(updatedUser.role)) {
+    emitResourceUpdated("profile", [updatedUser._id]);
+    if (["doctor", "consultant", "counsellor", "counselor", "counsellour"].includes(updatedUser.role)) {
       // Invalidate the public directory without broadcasting private profile data.
       global.io?.emit("counselor-directory-updated", { counselorId: String(updatedUser._id) });
     }
@@ -3734,6 +3751,8 @@ export const getMyProfile = async (req, res) => {
     // Add counsellor-specific fields if user is counsellor
     if (["counsellor", "doctor"].includes(user.role)) {
       formattedProfile.qualification = user.qualification;
+      formattedProfile.consultationFee = user.consultationFee;
+      formattedProfile.consultationCurrency = feeCurrency(user);
       formattedProfile.specialization = user.specialization;
       formattedProfile.experience = user.experience;
       formattedProfile.location = user.location;
@@ -4704,7 +4723,7 @@ export const getUsers = async (req, res) => {
         filter = { _id: { $in: appointments.map(row => row.patient) } };
       }
     } else if (professionalDirectoryRoles.includes(role)) filter = { role, isActive: true };
-    const users = await User.find(filter).select('fullName role accountType profilePhoto qualification education specialization experience location aboutMe profileCompleted isActive languages consultationMode rating ratingCount totalSessions activeClients lastSeen').lean();
+    const users = await User.find(filter).select('fullName role accountType consultationFee consultationCurrency address.country profilePhoto qualification education specialization experience location aboutMe profileCompleted isActive languages consultationMode rating ratingCount totalSessions activeClients lastSeen').lean();
     return res.json({ success: true, count: users.length, data: users, users });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -4729,7 +4748,7 @@ export const updateProfileById = async (req, res) => {
 };
 
 export const getProfileById = async (req, res) => {
-  const user = await User.findOne({ _id: req.params.id, role: 'doctor', isActive: true, profileCompleted: true }).select('fullName role qualification specialization experience location aboutMe profilePhoto doctorQrCode').lean();
+  const user = await User.findOne({ _id: req.params.id, role: 'doctor', isActive: true, profileCompleted: true }).select('fullName role consultationFee consultationCurrency address.country qualification specialization experience location aboutMe profilePhoto doctorQrCode').lean();
   if (!user) return res.status(404).json({ success: false, message: 'User profile not found' });
   await recordDoctorAnalyticsEvent({ doctorId: user._id, eventType: 'profile_view', source: req.query.source });
   const profile = { ...user, doctorId: String(user._id), profileQrUrl: doctorProfileUrl(user._id), clinics: await doctorClinics(String(user._id)) };

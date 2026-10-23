@@ -15,6 +15,66 @@ describe('Doctor profile details and completion', () => {
     await updateUserById({ params: { userId: current._id }, body, files: {} }, res);
     return { res, save };
   }
+  for (const role of ['doctor', 'counsellor']) {
+    for (const value of ['450.50', 0]) {
+      it(`saves ${role} checkup fee ${value}`, async () => {
+        const user = complete(); user.role = role;
+        user.address = address;
+        const { res, save } = await update({ consultationFee: value }, user);
+        expect(res.status.calledWith(200)).to.equal(true);
+        expect(save.firstCall.args[1].$set.consultationFee).to.equal(Number(value));
+        expect(res.json.firstCall.args[0].user.consultationFee).to.equal(Number(value));
+      });
+    }
+  }
+  for (const value of [-1, '', null, {}, true, '1.234', 'Infinity', '10000000']) {
+    it(`rejects invalid checkup fee ${JSON.stringify(value)}`, async () => {
+      const { res, save } = await update({ consultationFee: value });
+      expect(res.status.calledWith(400)).to.equal(true);
+      expect(save.called).to.equal(false);
+    });
+  }
+  for (const [country, currency, amount] of [['United States', 'USD', '100.25'], ['United Arab Emirates', 'AED', '250.50'], ['Japan', 'JPY', '1000'], ['Kuwait', 'KWD', '12.345']]) {
+    it(`saves country checkup fee in ${currency}`, async () => {
+      const user = complete(); user.address = { ...address, country };
+      const { res, save } = await update({ consultationFee: amount }, user);
+      expect(res.status.calledWith(200)).to.equal(true);
+      expect(save.firstCall.args[1].$set.consultationCurrency).to.equal(currency);
+      expect(res.json.firstCall.args[0].user.consultationCurrency).to.equal(currency);
+    });
+  }
+  it('rejects a checkup fee currency that differs from the country', async () => {
+    const user = complete(); user.address = address;
+    const { res, save } = await update({ consultationFee: 20, consultationCurrency: 'USD' }, user);
+    expect(res.status.calledWith(400)).to.equal(true); expect(save.called).to.equal(false);
+  });
+  it('rejects fractional checkup fee in Japan', async () => {
+    const user = complete(); user.address = { ...address, country: 'Japan' };
+    const { res, save } = await update({ consultationFee: '100.25' }, user);
+    expect(res.status.calledWith(400)).to.equal(true); expect(save.called).to.equal(false);
+  });
+  it('uses the updated multipart country for the checkup fee', async () => {
+    const { res, save } = await update({ consultationFee: '50.25', address: JSON.stringify({ ...address, country: 'Canada' }) });
+    expect(res.status.calledWith(200)).to.equal(true);
+    expect(save.firstCall.args[1].$set.consultationCurrency).to.equal('CAD');
+  });
+  it('rejects a checkup fee for an unknown country', async () => {
+    const user = complete(); user.address = { ...address, country: 'Unknown' };
+    const { res, save } = await update({ consultationFee: 100 }, user);
+    expect(res.status.calledWith(400)).to.equal(true); expect(save.called).to.equal(false);
+  });
+  it('persists an uploaded prescription signature and returns it in the profile', async () => {
+    const current = complete();
+    sinon.stub(User, 'findById').resolves(current);
+    const save = sinon.stub(User, 'findByIdAndUpdate').callsFake((id, change) => ({ select: async () => new User({ ...current.toObject(), ...change.$set }) }));
+    const res = response();
+    await updateUserById({ params: { userId: current._id }, body: {}, files: {
+      prescriptionSignature: [{ path: 'https://example.test/signature.png', filename: 'prescription-assets/test-signature', format: 'png', size: 2048 }],
+    } }, res);
+    expect(res.status.calledWith(200)).to.equal(true);
+    expect(save.firstCall.args[1].$set.prescriptionSignature).to.include({ url: 'https://example.test/signature.png', publicId: 'prescription-assets/test-signature', bytes: 2048 });
+    expect(res.json.firstCall.args[0].user.prescriptionSignatureUrl).to.equal('https://example.test/signature.png');
+  });
   it('saves doctor professional fields, identity aliases and multipart address and completes the profile', async () => {
     const { res, save } = await update({ about: 'Updated about', aadharNumber: '1234 5678 9012', pan: 'abcde1234f', permanentAddress: JSON.stringify(address), languages: '["Hindi","English"]' });
     expect(res.status.calledWith(200)).to.equal(true);

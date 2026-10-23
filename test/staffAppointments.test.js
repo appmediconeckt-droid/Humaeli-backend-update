@@ -24,6 +24,17 @@ describe('Staff appointment history includes completed appointments across dates
   expect(Appointment.find.firstCall.args[0]).to.deep.equal({counselor:'doctor-one',clinic_id:'clinic-one'});
   expect(Walkin.find.firstCall.args[0]).to.deep.equal({doctor_id:'doctor-one',clinic_id:'clinic-one'});
  });
+ it('returns the emergency reason for online and walk-in appointments in the assigned clinic',async()=>{
+  prepare([{...online,priority:'emergency',emergency_reason:'Severe chest pain since morning'}],[{...walkin,priority:'emergency',emergency_reason:'Breathing difficulty after exercise'}]);
+  const res=response();await staffAppointments({userId:'staff',query:{}},res);
+  const rows=res.json.firstCall.args[0].appointments;
+  expect(rows.find(row=>row.source==='online')).to.include({emergency:true,emergencyReason:'Severe chest pain since morning'});
+  expect(rows.find(row=>row.source==='walkin')).to.include({emergency:true,emergencyReason:'Breathing difficulty after exercise'});
+ });
+ it('returns an empty reason for a normal appointment',async()=>{
+  prepare([online]);const res=response();await staffAppointments({userId:'staff',query:{}},res);
+  expect(res.json.firstCall.args[0].appointments[0]).to.include({emergency:false,emergencyReason:''});
+ });
  it('completed filter includes ended consultations and excludes pending appointments',async()=>{
   prepare([online,{...online,_id:'ended',status:'confirmed',consultation_ended_at:'2026-09-01T10:00:00Z'},{...online,_id:'pending',status:'pending'}],[walkin]);
   const res=response();await staffAppointments({userId:'staff',query:{status:'completed'}},res);

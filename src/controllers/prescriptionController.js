@@ -1,9 +1,11 @@
+import { emitPrescriptionUpdated } from "../services/portalRealtimeService.js";
 import mongoose from "../persistence/mongoose.js";
 import Chat from "../models/Chat.js";
 import Appointment from "../models/appointmentModel.js";
 import WalkinAppointment from "../models/walkinAppointmentModel.js";
 import Prescription from "../models/Prescription.js";
 import User from "../models/userModel.js";
+import Clinic from "../models/clinicModel.js";
 import { FollowUp } from "../models/clinicModels.js";
 
 const normalizeSpecializations = (user) => [
@@ -67,8 +69,17 @@ const parseMedicines = (value) => {
 };
 
 const getPhotoUrl = (user) => {
-  const photo = user?.profilePhoto || user?.avatarUrl || user?.avatar;
-  return typeof photo === "string" ? photo : photo?.url || photo?.secure_url || "";
+  const readPhoto = (photo) => {
+    if (!photo) return "";
+    if (typeof photo === "object") return readPhoto(photo.url || photo.secure_url || photo.uri || photo.src || photo.path);
+    if (typeof photo !== "string") return "";
+    const value = photo.trim();
+    if (value.startsWith("{")) {
+      try { return readPhoto(JSON.parse(value)); } catch { return ""; }
+    }
+    return value;
+  };
+  return [user?.profilePhoto, user?.profileImage, user?.avatarUrl, user?.avatar, user?.photo].map(readPhoto).find(Boolean) || "";
 };
 
 const getImageUrl = (value) => {
@@ -110,6 +121,15 @@ export const toResponse = (record) => ({
   verificationStatus: record.identityVerification?.status || "photo_required",
   rejectionReason: record.identityVerification?.rejectionReason || "",
 });
+
+// Older issued records may predate the doctor's saved signature. Keep an
+// issued signature when present; otherwise use only that record's doctor.
+export const prescriptionWithDoctorSignature = (response, doctor) => {
+  if (!doctor || idValue(response.psychiatrist?.id) !== recordId(doctor)) return response;
+  const signature = getImageUrl(response.prescriptionSignatureUrl || response.signatureUrl || response.psychiatrist?.prescriptionSignature) || getImageUrl(doctor.prescriptionSignature);
+  return { ...response, prescriptionSignatureUrl: signature, signatureUrl: signature,
+    psychiatrist: { ...response.psychiatrist, photo: getPhotoUrl(doctor) || getPhotoUrl(response.psychiatrist), prescriptionSignature: signature } };
+};
 
 const consultationFields = [
   "medicine",
@@ -209,15 +229,22 @@ const getDoctorSnapshot = (doctor, fallbackName = "Doctor") => ({
   role: doctor?.role || "",
   accountType: doctor?.accountType || "",
   qualification: doctor?.qualification || "",
+  email: doctor?.email || "",
+  phoneNumber: doctor?.phoneNumber || doctor?.phone || "",
+  registrationNumber: doctor?.registrationNumber || doctor?.registration_number || doctor?.medicalRegistrationNumber || doctor?.licenseNumber || "",
   specialization: normalizeSpecializations(doctor),
   photo: getPhotoUrl(doctor),
   prescriptionSignature: getImageUrl(doctor?.prescriptionSignature),
   prescriptionSeal: getImageUrl(doctor?.prescriptionSeal),
 });
 
-export const appointmentToPrescriptionResponse = (appointment, doctor) => {
+export const appointmentToPrescriptionResponse = (appointment, doctor, clinic = null) => {
   const expanded = expandConsultationDetails(appointment);
   const doctorSnapshot = getDoctorSnapshot(doctor);
+  const clinicId = idValue(expanded.clinic_id || expanded.clinicId);
+  const matchingClinic = clinic && recordId(clinic) === clinicId && idValue(clinic.doctor_id) === idValue(expanded.counselor)
+    ? { id: recordId(clinic), doctor_id: idValue(clinic.doctor_id), clinic_name: clinic.clinic_name || clinic.name || '', location: clinic.location || clinic.address || '', phone_number: clinic.phone_number || clinic.phoneNumber || '' }
+    : null;
   const issuedAt = expanded.consultation_ended_at || expanded.updatedAt || expanded.date;
   const followUpRequired = [true, 1, "1", "true"].includes(expanded.follow_up_required ?? expanded.followUpRequired);
   const followUpDate = expanded.follow_up_date || expanded.followUpDate || "";
@@ -226,6 +253,10 @@ export const appointmentToPrescriptionResponse = (appointment, doctor) => {
     id: `appointment:${recordId(expanded)}`,
     source: "appointment",
     recordType: "completed_appointment",
+    clinicId,
+    clinic: matchingClinic,
+    token: expanded.token_number ?? null,
+    vitals: expanded.vitals || null,
     appointmentId: recordId(expanded),
     visitSource: expanded.visitSource || "online",
     appointmentDate: expanded.appointment_date || "",
@@ -406,6 +437,7 @@ export const issuePrescription = async (req, res) => {
       },
       psychiatristSnapshot: {
         name: psychiatrist.fullName || psychiatrist.name || "Psychiatrist",
+        photo: getPhotoUrl(psychiatrist),
         role: psychiatrist.role || "",
         accountType: psychiatrist.accountType || "",
         qualification: psychiatrist.qualification || "",
@@ -425,6 +457,7 @@ export const issuePrescription = async (req, res) => {
       },
     });
 
+    emitPrescriptionUpdated(record);
     return res.status(201).json({ success: true, prescription: toResponse(record) });
   } catch (error) {
     console.error("Issue prescription error:", error);
@@ -477,6 +510,7 @@ export const getMyPrescriptions = async (req, res) => {
     prescriptionResponses.forEach((prescription) => {
       const provider = doctorsById.get(idValue(prescription.psychiatrist?.id));
       if (provider) {
+        Object.assign(prescription, prescriptionWithDoctorSignature(prescription, provider));
         prescription.psychiatrist.role = provider.role || prescription.psychiatrist.role || "";
         prescription.psychiatrist.accountType = provider.accountType || prescription.psychiatrist.accountType || "";
       }
@@ -499,13 +533,18 @@ export const getMyPrescriptions = async (req, res) => {
         followUpsByDoctor.set(doctorId, list);
       }
     });
+    const clinicIds = [...new Set(appointments.map(row => idValue(row.clinic_id)).filter(Boolean))];
+    const clinics = clinicIds.length ? await Clinic.find({ _id: { $in: clinicIds }, doctor_id: { $in: doctorIds } }).lean() : [];
+    const clinicsById = new Map(clinics.map(clinic => [recordId(clinic), clinic]));
     const patientProfile = appointments.length ? await User.findById(req.user._id).lean() : null;
     const appointmentRecords = appointments.map((appointment) => ({
-      ...appointmentToPrescriptionResponse(appointment, doctorsById.get(idValue(appointment.counselor))),
+      ...appointmentToPrescriptionResponse(appointment, doctorsById.get(idValue(appointment.counselor)), clinicsById.get(idValue(appointment.clinic_id))),
       patient: {
         id: req.user._id,
         name: patientProfile?.name || patientProfile?.fullName || patientProfile?.full_name || "Patient",
         gender: patientProfile?.gender || "",
+        age: patientProfile?.age,
+        phoneNumber: patientProfile?.phoneNumber || "",
       },
     }));
     const prescriptions = [...prescriptionResponses, ...appointmentRecords]
@@ -586,6 +625,7 @@ export const uploadPatientPhoto = async (req, res) => {
       { returnDocument: 'after', runValidators: true },
     );
     if (!record) return res.status(404).json({ success: false, error: "Prescription not found" });
+    emitPrescriptionUpdated(record);
     return res.json({ success: true, hasPatientPhoto: true });
   } catch (error) {
     console.error("Upload prescription patient photo error:", error);
@@ -657,6 +697,7 @@ export const reviewPatientPhoto = async (req, res) => {
       rejectionReason: action === "reject" ? reason : "",
     };
     await record.save();
+    emitPrescriptionUpdated(record);
     return res.json({
       success: true,
       verificationStatus: record.identityVerification.status,
@@ -684,6 +725,7 @@ export const updatePrescriptionFestivalTheme = async (req, res) => {
     }
     record.festivalTheme = festivalTheme;
     await record.save();
+    emitPrescriptionUpdated(record);
     return res.json({ success: true, festivalTheme });
   } catch (error) {
     console.error("Update prescription festival theme error:", error);

@@ -1,3 +1,4 @@
+import { emitChatUpdated } from "../services/portalRealtimeService.js";
 import mongoose from "../persistence/mongoose.js";
 import Chat from "../models/Chat.js";
 import Message from "../models/Message.js";
@@ -698,6 +699,7 @@ export const acceptChat = async (req, res) => {
       });
     }
 
+    emitChatUpdated(chat);
     res.json({
       success: true,
       message: "Chat request accepted",
@@ -815,6 +817,7 @@ export const rejectChat = async (req, res) => {
       });
     }
 
+    emitChatUpdated(chat);
     res.json({
       success: true,
       message: "Chat request rejected",
@@ -1071,6 +1074,7 @@ export const completeChatSession = async (req, res) => {
       await chat.save();
     }
 
+    emitChatUpdated(chat);
     res.json({
       success: true,
       message: "Chat session completed",
@@ -1514,6 +1518,7 @@ export const deleteChat = async (req, res) => {
     }
     await chat.save();
 
+    emitChatUpdated(chat);
     res.json({
       success: true,
       message: "Chat hidden successfully",

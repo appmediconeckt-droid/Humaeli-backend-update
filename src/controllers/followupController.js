@@ -36,7 +36,7 @@ const list = today => handle(async (req, res) => {
     const start = new Date(todayIST() + 'T00:00:00+05:30');
     filter.follow_up_date = { $gte: start, $lt: new Date(start.getTime() + 86400000) };
   }
-  const rows = await FollowUp.find(filter).populate('patient_id', 'fullName age phoneNumber').populate('doctor_id', 'fullName').sort({ follow_up_date: -1 }).lean();
+  const rows = await FollowUp.find(filter).populate('patient_id', 'fullName age gender phoneNumber').populate('doctor_id', 'fullName').sort({ follow_up_date: -1 }).lean();
   res.json(rows.map(r => ({ ...jsonRecord(r), patient: r.patient_id, doctor: r.doctor_id,
     patient_id: r.patient_id?._id || r.patient_id, doctor_id: r.doctor_id?._id || r.doctor_id,
     patient_name: r.patient_id?.fullName || r.patient_name, doctor_name: r.doctor_id?.fullName })));

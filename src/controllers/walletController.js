@@ -1,3 +1,4 @@
+import { emitResourceUpdated } from "../services/portalRealtimeService.js";
 import { sendWalletRefundStatusNotification } from "../services/walletRefundNotificationService.js";
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
@@ -785,6 +786,7 @@ export const requestWithdrawal = async (req, res) => {
             throw transactionError;
         }
 
+        emitResourceUpdated("wallet", [counselorId]);
         res.status(200).json({
             success: true,
             message: payoutType === 'instant'

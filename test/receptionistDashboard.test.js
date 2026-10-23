@@ -34,7 +34,7 @@ describe('Receptionist dashboard', () => {
   });
   it('combines online and walk-in records and follows checkup completion', async () => {
     prepare();
-    const online = { _id: 'online', counselor: doctorId, appointment_date: '2026-10-12', appointment_time: '10:00', token_number: 1, status: 'confirmed', queue_status: 'in_progress', patient: { fullName: 'Online patient', phoneNumber: '1234567890' }, consultation_started_at: '2026-10-12T04:30:00Z' };
+    const online = { priority: 'emergency', emergency_reason: 'Severe chest pain since morning', _id: 'online', counselor: doctorId, appointment_date: '2026-10-12', appointment_time: '10:00', token_number: 1, status: 'confirmed', queue_status: 'in_progress', patient: { fullName: 'Online patient', phoneNumber: '1234567890' }, consultation_started_at: '2026-10-12T04:30:00Z' };
     const chain = { populate: sinon.stub().returnsThis(), sort: sinon.stub().returnsThis(), lean: async () => [online] };
     const find = sandbox.stub(Appointment, 'find').returns(chain);
     sandbox.stub(WalkinAppointment, 'find').returns({ lean: async () => [{ id: 'walkin', doctor_id: doctorId, patient_name: 'Walk-in patient', appointment_date: '2026-10-12', appointment_time: '10:15', token_number: 2, status: 'pending', queue_status: 'waiting' }] });
@@ -46,6 +46,7 @@ describe('Receptionist dashboard', () => {
     expect(Clinic.find.firstCall.args[0]).to.deep.equal({ doctor_id: doctorId, _id: 'clinic' });
     expect(data.appointments).to.have.length(2);
     expect(data.currentPatients[0].patientName).to.equal('Online patient');
+    expect(data.currentPatients[0].emergencyReason).to.equal('Severe chest pain since morning');
     expect(data.waiting[0].source).to.equal('walkin');
     expect(data.summary).to.deep.equal({ total: 2, waiting: 1, ongoing: 1, completed: 0 });
     online.queue_status = 'completed'; online.status = 'completed';

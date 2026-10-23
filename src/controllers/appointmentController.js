@@ -1,3 +1,4 @@
+import { emitAppointmentUpdated } from "../services/portalRealtimeService.js";
 import { filterPatientDirectory } from '../services/patientDirectoryService.js';
 // import Appointment from '../models/appointmentModel.js';
 // import User from '../models/userModel.js';
@@ -126,7 +127,9 @@ import { filterPatientDirectory } from '../services/patientDirectoryService.js';
 //       });
 //     });
 
-//     // Notify the counselor via socket if global.io exists
+//     emitAppointmentUpdated(appointment);
+
+    // Notify the counselor via socket if global.io exists
 //     if (global.io) {
 //       const targetRooms = [
 //         `user_${counselorId}`,
@@ -254,6 +257,7 @@ import { filterPatientDirectory } from '../services/patientDirectoryService.js';
 //     if (['canceled', 'rejected'].includes(status)) appointment.slot_key = undefined;
 //     else appointment.slot_key = `${appointment.counselor}:${new Date(appointment.date).toISOString()}`;
 //     await saveOnlineAppointment(appointment);
+//     emitAppointmentUpdated(appointment);
 
 //     await createNotificationSafely({
 //       recipientId: appointment.patient,
@@ -333,6 +337,7 @@ import { filterPatientDirectory } from '../services/patientDirectoryService.js';
 //   if (['canceled', 'rejected'].includes(row.status)) row.slot_key = undefined;
 //   else row.slot_key = String(row.counselor) + ':' + new Date(row.date).toISOString();
 //   await saveOnlineAppointment(row);
+//   emitAppointmentUpdated(row);
 //   res.json({ success: true, appointment: await appointmentView(row) });
 // });
 // export const deleteAppointment = handle(async (req, res) => {
@@ -490,6 +495,7 @@ export const book = async (req, res) => {
           actionUrl: "/counselor/appointments",
         });
       }
+      emitAppointmentUpdated(appointment);
       return res.status(201).json(appointment);
     }
 
@@ -587,6 +593,8 @@ export const book = async (req, res) => {
         }, createAppointmentRecord)
       : await createAppointmentRecord();
 
+    emitAppointmentUpdated(appointment);
+
     // Notify the counselor via socket if global.io exists
     if (global.io) {
       const targetRooms = [
@@ -676,6 +684,7 @@ export const getAppointments = async (req, res) => {
     })
       .populate("patient", "fullName profilePhoto anonymous phoneNumber phone dateOfBirth age gender bloodGroup address locationData isActive")
       .populate("counselor", "fullName name profilePhoto anonymous role accountType specialization experience qualification rating consultationMode")
+      .populate("clinic_id", "clinic_name")
       .sort({ date: -1 })
       .lean();
 
@@ -685,6 +694,12 @@ export const getAppointments = async (req, res) => {
     }
     appointments = await enrichAppointmentGroups(appointments);
     appointments = appointments.map(expandConsultationNotes);
+    // Include the clinic label while preserving the ID shape used by appointment actions.
+    appointments = appointments.map(appointment => ({
+      ...appointment,
+      clinic_name: appointment.clinic_id?.clinic_name || '',
+      clinic_id: appointment.clinic_id?._id || appointment.clinic_id,
+    }));
 
     if (isProvider) {
       // Legacy doctor accounts can still have the counsellor role.
@@ -867,6 +882,7 @@ export const updateStatus = async (req, res) => {
     }
 
     await saveOnlineAppointment(appointment);
+    emitAppointmentUpdated(appointment);
     emitQueueUpdated(appointment.counselor, appointment.appointment_date);
     if (starting || appointment.$locals?.notifyQueueSoon) await notifyUpcomingQueuePatients(appointment);
 
@@ -1023,6 +1039,7 @@ export const nurseCheckIn = handle(async (req, res) => {
   );
 
   if (!row) throw fail(404, "Active appointment not found");
+  emitAppointmentUpdated(row);
 
   emitQueueUpdated(row.counselor, row.appointment_date);
 
@@ -1159,6 +1176,7 @@ export const deleteDoctorAppointment = async (req, res) => {
       return res.status(403).json({ message: "Unauthorized" });
     }
     await Appointment.findByIdAndDelete(req.params.id);
+    emitAppointmentUpdated(appointment);
     return res.json({ success: true, message: "Appointment deleted" });
   } catch (error) {
     return res.status(500).json({ message: "Failed to delete appointment" });
@@ -1268,6 +1286,7 @@ export const updateAppointment = handle(async (req, res) => {
   }
 
   await saveOnlineAppointment(row);
+  emitAppointmentUpdated(row);
   emitQueueUpdated(row.counselor, row.appointment_date);
   if (requestedQueueStatus || requestedStatus) await notifyUpcomingQueuePatients(row);
 
@@ -1280,6 +1299,7 @@ export const updateAppointment = handle(async (req, res) => {
 export const deleteAppointment = handle(async (req, res) => {
   const row = await Appointment.findOneAndDelete({ ...await filterFor(req), _id: req.params.id });
   if (!row) throw fail(404, 'Appointment not found');
+  emitAppointmentUpdated(row);
   res.json({ success: true, message: 'Appointment deleted' });
 });
 

@@ -29,6 +29,14 @@ describe('Patient profile vitals', () => {
   it('returns no snapshot for empty or malformed readings', () => {
     expect(latestPatientVitals([{ vitals: '{bad' }, { vitals: { notes: 'only notes' } }], [])).to.equal(null);
   });
+  it('shows older appointments that only have the original date field', () => {
+    const latest = latestPatientVitals([{ _id: 'legacy', date: new Date('2026-10-10T10:00:00Z'), vitals: { pulse: 72 } }], []);
+    expect(latest.vitals.pulse).to.equal(72);
+  });
+  it('falls back to the visit date if legacy recorder timestamps are invalid', () => {
+    const latest = latestPatientVitals([{ ...old, vitals: { pulse: 72, recorded_at: 'invalid' } }], []);
+    expect(latest.appointmentId).to.equal('old');
+  });
   it('uses only authenticated patient links even if another user is requested', async () => {
     const find = sinon.stub(Appointment, 'find').returns({ select: () => ({ lean: async () => [old] }) });
     const walkins = sinon.stub(WalkinAppointment, 'find').returns({ lean: async () => [] });

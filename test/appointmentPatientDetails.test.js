@@ -5,6 +5,17 @@ import Appointment from "../src/models/appointmentModel.js";
 
 describe("Doctor appointment patient details", () => {
   afterEach(() => sinon.restore());
+  it("returns the actual clinic name for patient ratings and preserves the clinic ID", async () => {
+    const record = { status: "completed", clinic_id: { _id: "clinic-123", clinic_name: "Sunrise Clinic" } };
+    const chain = { populate: sinon.stub().returnsThis(), sort() { return this; }, lean: async () => [record] };
+    sinon.stub(Appointment, "find").returns(chain);
+    const res = { json: sinon.spy(), status() { return this; } };
+    await getAppointments({ user: { _id: "patient", role: "user" }, query: {} }, res);
+    const appointment = res.json.firstCall.args[0][0];
+    expect(chain.populate.calledWith("clinic_id", "clinic_name")).to.equal(true);
+    expect(appointment.clinic_name).to.equal("Sunrise Clinic");
+    expect(appointment.clinic_id).to.equal("clinic-123");
+  });
   it("returns Online as the appointment source without changing registered patient details", async () => {
     const record = { status: "completed", patient: { _id: "patient", fullName: "Registered Patient", phoneNumber: "9876543210" } };
     const chain = { populate() { return this; }, sort() { return this; }, lean: async () => [record] };

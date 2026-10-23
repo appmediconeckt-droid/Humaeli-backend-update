@@ -17,3 +17,10 @@ serviceAccountKey.json
 .npm-cache/
 .mysql-test/
 .migration-backups/
+
+# Generated test coverage and local runtime output
+.nyc_output/
+.runtime/
+.DS_Store
+Thumbs.db
+*.tmp

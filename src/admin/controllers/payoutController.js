@@ -1,3 +1,4 @@
+import { emitResourceUpdated } from "../../services/portalRealtimeService.js";
 import Payout from "../models/Payout.js";
 import Transaction from "../models/Transaction.js";
 import User from "../models/User.js";
@@ -52,6 +53,7 @@ const updateWithdrawal = async (syntheticId, status, extra = {}) => {
 
 const createCounselorNotification = async ({ recipientId, title, message, transaction, status }) => {
   if (!recipientId) return;
+  emitResourceUpdated("wallet", [recipientId]);
   try {
     await Notification.create({
       recipientId,
@@ -67,6 +69,7 @@ const createCounselorNotification = async ({ recipientId, title, message, transa
       },
       actionUrl: "/counselor/earnings"
     });
+    emitResourceUpdated("notifications", [recipientId]);
   } catch (error) {
     console.error("Payout notification failed:", error.message);
   }

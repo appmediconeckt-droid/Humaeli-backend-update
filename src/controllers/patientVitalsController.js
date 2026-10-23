@@ -8,7 +8,7 @@ export const getMyVitals = handle(async (req, res) => {
   if (!patientId) throw fail(401, 'Authentication required');
   // Only explicit account links grant access, including visits with other doctors.
   const [online, walkins] = await Promise.all([
-    Appointment.find({ patient: patientId }).select('vitals appointment_date checked_in_at').lean(),
+    Appointment.find({ patient: patientId }).select('vitals appointment_date date checked_in_at').lean(),
     WalkinAppointment.find({ patient_id: patientId }).lean(),
   ]);
   res.set('Cache-Control', 'no-store');

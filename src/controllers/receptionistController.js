@@ -61,6 +61,7 @@ export const receptionistDashboard = handle(async (req, res) => {
       patientName: row.patient?.fullName || row.patient_name || 'Patient',
       phoneNumber: appointmentPatientPhone(row),
       age: row.patient?.age ?? row.age, gender: row.patient?.gender || row.gender,
+      emergencyReason: row.emergency_reason || row.emergencyReason || '',
       symptoms: row.symptoms || '', diagnosis: row.diagnosis || '', advice: row.advice || '',
       vitals: row.vitals || null,
     })).sort((a, b) => Number(b.emergency) - Number(a.emergency) || a.time.localeCompare(b.time) || (a.token || 0) - (b.token || 0));

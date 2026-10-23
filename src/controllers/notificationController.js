@@ -1,3 +1,4 @@
+import { emitResourceUpdated } from "../services/portalRealtimeService.js";
 import NotificationToken from '../models/NotificationToken.js';
 import Notification from '../models/Notification.js';
 import User from '../models/userModel.js';
@@ -76,6 +77,7 @@ export const markAllAsRead = async (req, res) => {
   try {
     const recipientId = getAuthenticatedUserId(req);
     const result = await Notification.updateMany({ recipientId, isRead: false }, { $set: { isRead: true, readAt: new Date() } });
+    emitResourceUpdated("notifications", [recipientId]);
     return res.json({ success: true, message: `${result.modifiedCount} notifications marked as read`, updated_count: result.modifiedCount });
   } catch (error) {
     console.error('Mark all notifications read error:', error);
@@ -266,6 +268,7 @@ export const markNotificationRead = async (req, res) => {
     if (!notification) {
       return res.status(404).json({ success: false, message: 'Notification not found' });
     }
+    emitResourceUpdated("notifications", [getAuthenticatedUserId(req)]);
     return res.json({ success: true, notification });
   } catch (error) {
     console.error('Mark notification read error:', error);
@@ -279,6 +282,7 @@ export const markAllNotificationsRead = async (req, res) => {
       { recipientId: getRecipientId(req), isRead: false },
       { $set: { isRead: true, readAt: new Date() } },
     );
+    emitResourceUpdated("notifications", [getAuthenticatedUserId(req)]);
     return res.json({ success: true, updatedCount: result.modifiedCount });
   } catch (error) {
     console.error('Mark all notifications read error:', error);
@@ -295,6 +299,7 @@ export const deleteNotification = async (req, res) => {
     if (!notification) {
       return res.status(404).json({ success: false, message: 'Notification not found' });
     }
+    emitResourceUpdated('notifications', [getAuthenticatedUserId(req)]);
     return res.json({ success: true, message: 'Notification deleted' });
   } catch (error) {
     console.error('Delete notification error:', error);

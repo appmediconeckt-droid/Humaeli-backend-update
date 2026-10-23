@@ -1,3 +1,4 @@
+import { emitResourceUpdated } from "./portalRealtimeService.js";
 import Notification from "../models/Notification.js";
 import User from "../models/userModel.js";
 import NotificationToken from "../models/NotificationToken.js";
@@ -45,6 +46,9 @@ export const createNotification = async ({
   });
 
   const payload = notification.toObject();
+  if (type === "payment") emitResourceUpdated("wallet", [recipientId]);
+  if (type === "appointment") emitResourceUpdated("appointments", [recipientId]);
+  if (type === "message") emitResourceUpdated("chats", [recipientId]);
   if (global.io) {
     const recipient = String(recipientId);
     const rooms = [

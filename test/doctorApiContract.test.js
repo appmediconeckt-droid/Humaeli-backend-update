@@ -79,6 +79,9 @@ describe("Doctor frontend API contracts", () => {
   });
 
   it("filters numeric clinic IDs instead of returning every clinic's ranges", async () => {
+    // Calendar reads need an explicit empty occupancy fixture without MySQL.
+    sandbox.stub(Appointment.collection, 'find').returns({ project() { return this; }, toArray: async () => [] });
+    sandbox.stub(WalkinAppointment, 'find').returns({ select() { return this; }, lean: async () => [] });
     const find = sandbox.stub(DateRange, "find").returns({ sort: async () => [] });
     sandbox.stub(UnavailableDate, "find").resolves([]);
     const res = await request(app).get("/api/availability/ranges?doctor_id=doctor-test-1234&clinic_id=1");

@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { createDatabaseMonitor } from '../src/config/databaseMonitor.js';
+import { createDatabaseMonitor, probeMySQLPool } from '../src/config/databaseMonitor.js';
 import { runDatabaseMigration } from '../src/config/databaseMigration.js';
 import { mysqlConfig } from '../src/persistence/mysqlDriver.js';
 import { runDatabaseTasks } from '../src/config/databaseStartup.js';
@@ -21,17 +21,40 @@ describe('Database runtime recovery', () => {
     expect(onHealthy.calledOnce).to.equal(true);
     monitor.stop();
   });
-  it('marks slow probes unhealthy without accumulating concurrent connection requests', async () => {
+  it('recovers after a hung probe and ignores its late success', async () => {
     let resolve;
-    const probe = sinon.stub().returns(new Promise(done => { resolve = done; }));
+    const probe = sinon.stub().onFirstCall().returns(new Promise(done => { resolve = done; })).onSecondCall().resolves();
     const onHealthy = sinon.spy(), onUnavailable = sinon.spy();
     const monitor = createDatabaseMonitor({ probe, onHealthy, onUnavailable, intervalMs: 100, timeoutMs: 50 });
     const pending = monitor.start();
-    await clock.tickAsync(500);
+    await clock.tickAsync(50);
+    await pending;
     expect(onUnavailable.calledOnce).to.equal(true);
     expect(probe.calledOnce).to.equal(true);
-    resolve(); await pending;
+    expect(probe.firstCall.args[0].aborted).to.equal(true);
+    await clock.tickAsync(50);
     expect(onHealthy.calledOnce).to.equal(true);
+    resolve(); await clock.tickAsync(0);
+    expect(onHealthy.calledOnce).to.equal(true);
+    monitor.stop();
+  });
+  it('does not let late success clear a subsequent outage', async () => {
+    let resolve;
+    const probe = sinon.stub().onFirstCall().returns(new Promise(done => { resolve = done; })).onSecondCall().rejects(new Error('still down'));
+    const onHealthy = sinon.spy(), onUnavailable = sinon.spy();
+    const monitor = createDatabaseMonitor({ probe, onHealthy, onUnavailable, intervalMs: 100, timeoutMs: 50 });
+    monitor.start();
+    await clock.tickAsync(100);
+    resolve(); await clock.tickAsync(0);
+    expect(onUnavailable.calledTwice).to.equal(true);
+    expect(onHealthy.called).to.equal(false);
+    monitor.stop();
+  });
+  it('shares a probe between simultaneous checks', async () => {
+    const probe = sinon.stub().resolves();
+    const monitor = createDatabaseMonitor({ probe, onHealthy: sinon.spy(), onUnavailable: sinon.spy() });
+    await Promise.all([monitor.check(), monitor.check()]);
+    expect(probe.calledOnce).to.equal(true);
     monitor.stop();
   });
   it('stops scheduled probes and ignores an old result after shutdown', async () => {
@@ -43,6 +66,43 @@ describe('Database runtime recovery', () => {
     await clock.tickAsync(60000);
     expect(onHealthy.called).to.equal(false);
     expect(clock.countTimers()).to.equal(0);
+  });
+});
+
+describe('Cancellable MySQL health probes', () => {
+  const connection = () => ({ query: sinon.stub().resolves(), release: sinon.spy(), destroy: sinon.spy() });
+  it('returns the connection to the pool after a successful ping', async () => {
+    const client = connection();
+    await probeMySQLPool({ getConnection: async () => client }, new AbortController().signal);
+    expect(client.release.calledOnce).to.equal(true);
+    expect(client.destroy.called).to.equal(false);
+  });
+  it('releases a connection acquired after the deadline without querying it', async () => {
+    const client = connection(), controller = new AbortController();
+    let acquire;
+    const pending = probeMySQLPool({ getConnection: () => new Promise(done => { acquire = done; }) }, controller.signal);
+    await Promise.resolve();
+    controller.abort(new Error('deadline'));
+    await pending.catch(error => expect(error.message).to.equal('deadline'));
+    acquire(client); await new Promise(done => setImmediate(done));
+    expect(client.release.calledOnce).to.equal(true);
+    expect(client.query.called).to.equal(false);
+  });
+  it('destroys a stuck probe connection on timeout without affecting application connections', async () => {
+    const client = connection(), controller = new AbortController();
+    client.query.returns(new Promise(() => {}));
+    const pending = probeMySQLPool({ getConnection: async () => client }, controller.signal);
+    await new Promise(done => setImmediate(done));
+    controller.abort(new Error('deadline'));
+    await pending.catch(error => expect(error.message).to.equal('deadline'));
+    expect(client.destroy.calledOnce).to.equal(true);
+    expect(client.release.called).to.equal(false);
+  });
+  it('propagates pool connection errors', async () => {
+    const error = new Error('pool unavailable');
+    let caught;
+    try { await probeMySQLPool({ getConnection: async () => { throw error; } }); } catch (value) { caught = value; }
+    expect(caught).to.equal(error);
   });
 });
 

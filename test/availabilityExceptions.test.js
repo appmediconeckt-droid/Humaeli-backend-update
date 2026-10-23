@@ -7,6 +7,8 @@ import { setUnavailableDate, removeUnavailableDate, getAvailableRanges } from ".
 import DateRange from "../src/models/dateRangeModel.js";
 import UnavailableDate from "../src/models/unavailableDateModel.js";
 import Clinic from "../src/models/clinicModel.js";
+import Appointment from "../src/models/appointmentModel.js";
+import WalkinAppointment from "../src/models/walkinAppointmentModel.js";
 
 const response = () => ({ statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } });
 const req = () => ({ userId: "doctor", body: { doctor_id: "doctor", clinic_id: "clinic-a", date: "2099-01-01" } });
@@ -73,6 +75,9 @@ describe("Clinic unavailability exceptions", () => {
     expect(res.body.success).to.equal(false);
   });
   it("publishes clinic-scoped blocked dates alongside global exceptions", async () => {
+    // Slot occupancy is a separate read; this schedule fixture has no bookings.
+    sinon.stub(Appointment.collection, 'find').returns({ project() { return this; }, toArray: async () => [] });
+    sinon.stub(WalkinAppointment, 'find').returns({ select() { return this; }, lean: async () => [] });
     sinon.stub(DateRange, "find").callsFake(async filter => filter.is_unavailable === true
       ? [{ availability_date: "2099-01-01", clinic_id: "clinic-a" }] : []);
     sinon.stub(UnavailableDate, "find").resolves([{ unavailable_date: "2099-01-02" }]);

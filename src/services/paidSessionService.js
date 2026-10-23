@@ -1,3 +1,4 @@
+import { emitResourceUpdated, emitChatUpdated } from "./portalRealtimeService.js";
 import Chat from "../models/Chat.js";
 import ChatSession from "../models/ChatSession.js";
 import CounselorEarning from "../models/CounselorEarning.js";
@@ -377,6 +378,7 @@ export const stopTimedChatUsage = async (chat, { endedAt = Date.now() } = {}) =>
     }),
   ]);
 
+  emitResourceUpdated("wallet", [session.userId, session.counselorId]);
   return {
     session,
     charged: charge,
@@ -559,6 +561,8 @@ export const refundPaidSession = async (chat, reason = "request_not_accepted") =
   chat.cancelledAt = chat.cancelledAt || new Date();
   await chat.save();
 
+  emitResourceUpdated("wallet", [session.userId, session.counselorId]);
+  emitChatUpdated(chat);
   return session;
 };
 
@@ -684,6 +688,7 @@ export const chargeCallByDuration = async ({
       actionUrl: "/counselor/earnings",
     }),
   ]);
+  emitResourceUpdated("wallet", [userId, counselorId]);
   return { transaction, amount, walletBalance: user.walletBalance };
 };
 
@@ -768,6 +773,8 @@ export const completePaidSession = async (chat) => {
   chat.isActive = false;
   await chat.save();
 
+  emitResourceUpdated("wallet", [session.userId, session.counselorId]);
+  emitChatUpdated(chat);
   return session;
 };
 

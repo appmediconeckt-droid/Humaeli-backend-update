@@ -1,3 +1,4 @@
+import { emitResourceUpdated } from "./portalRealtimeService.js";
 import User from "../models/userModel.js";
 import Transaction from "../models/transactionModel.js";
 
@@ -86,6 +87,7 @@ export const creditCapturedWalletPayment = async ({
   );
 
   const user = await User.findById(transaction.userId).select("walletBalance");
+  if (!alreadyCredited || transaction.status !== "completed") emitResourceUpdated("wallet", [transaction.userId]);
   return {
     transaction: updatedTransaction,
     balance: Number(user?.walletBalance || 0),

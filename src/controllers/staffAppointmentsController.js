@@ -34,7 +34,7 @@ export const staffAppointments = handle(async (req, res) => {
   normalized.queueStatus=canonicalStatus(normalized.queueStatus);
   const ended = normalized.timing?.endedAt && Number.isFinite(new Date(normalized.timing.endedAt).getTime());
   if (normalized.queueStatus==='completed' || (ended && !['canceled','rejected','skipped','no_show'].includes(normalized.status))) {normalized.status='completed';normalized.queueStatus='completed';}
-  return {...normalized, patientName:row.patient?.fullName||row.patient_name||'Patient',phoneNumber:appointmentPatientPhone(row),age:row.patient?.age??row.age,gender:row.patient?.gender||row.gender,symptoms:row.symptoms||'',diagnosis:row.diagnosis||'',advice:row.advice||'',vitals:row.vitals||null};
+  return {...normalized, patientName:row.patient?.fullName||row.patient_name||'Patient',phoneNumber:appointmentPatientPhone(row),age:row.patient?.age??row.age,gender:row.patient?.gender||row.gender,emergencyReason:row.emergency_reason||row.emergencyReason||'',symptoms:row.symptoms||'',diagnosis:row.diagnosis||'',advice:row.advice||'',vitals:row.vitals||null};
  }).filter(row=>(!vitalsOnly||(row.date===today&&isActiveQueueAppointment(row)))&&(!from||row.date>=from)&&(!to||row.date<=to)&&(status==='all'||row.status===status||row.queueStatus===status)&&`${row.patientName} ${row.phoneNumber} ${row.token??''}`.toLowerCase().includes(search))
  .sort((a,b)=>b.date.localeCompare(a.date)||b.time.localeCompare(a.time)||b.id.localeCompare(a.id));
  res.set('Cache-Control','no-store');
