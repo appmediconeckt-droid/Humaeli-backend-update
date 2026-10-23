@@ -1,3 +1,4 @@
+import Appointment from '../src/models/appointmentModel.js';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { Query } from 'mingo';
@@ -18,6 +19,7 @@ const profiles = [
 ];
 
 describe('Professional counsellor directory', () => {
+  beforeEach(() => sinon.stub(Appointment, 'find').returns({ select() { return this; }, lean: async () => [] }));
   afterEach(() => sinon.restore());
 
   function stubDirectory() {

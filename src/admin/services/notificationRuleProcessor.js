@@ -1,4 +1,5 @@
 import mongoose from "../../persistence/mongoose.js";
+import { isDisabledGreetingNotification } from "../../utils/disabledGreetingNotification.js";
 import NotificationDelivery from "../models/NotificationDelivery.js";
 import { matchRuleRecipients, SUPPORTED_RULE_CONDITIONS } from "./notificationRecipientMatcher.js";
 import { sendPromotionNotificationToMainBackend } from "./mainBackendNotificationClient.js";
@@ -143,6 +144,11 @@ export const processNotificationRule = async (
 
   if (!rule) {
     summary.skippedReason = "missing_rule";
+    return summary;
+  }
+
+  if (isDisabledGreetingNotification(rule)) {
+    summary.skippedReason = "disabled_test_greeting";
     return summary;
   }
 

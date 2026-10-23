@@ -22,3 +22,6 @@ export function formatFee(amount, currency) {
   if (!currency) return `${amount} (currency not set)`;
   return new Intl.NumberFormat(undefined, { style: 'currency', currency, currencyDisplay: 'code' }).format(Number(amount));
 }
+
+export const consultationCurrencies = [...new Set(Object.values(currencies))].sort();
+export const isConsultationCurrency = value => consultationCurrencies.includes(value);

@@ -49,7 +49,7 @@ import {
   setAppointmentEmergency,
 } from "../controllers/appointmentController.js";
 import { getMyTokenStatus } from "../controllers/tokenStatusController.js";
-import { submitDoctorRating, submitClinicRating } from "../controllers/doctorRatingController.js";
+import { submitDoctorRating, submitClinicRating, getDoctorRatingSummary } from "../controllers/doctorRatingController.js";
 import { requestPatientEmergency } from "../controllers/patientEmergencyController.js";
 import { cancelAppointmentManually } from '../controllers/manualAppointmentCancellationController.js';
 
@@ -64,6 +64,9 @@ import {
 } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
+// Keep the two-segment endpoint distinct from appointment IDs; retain the old
+// URL for clients that have not refreshed yet.
+router.get(['/doctor/ratings-summary', '/doctor-ratings-summary'], protect, allowRoles('doctor'), getDoctorRatingSummary);
 router.patch('/:id/cancel', protect, allowRoles('user', 'receptionist'), cancelAppointmentManually);
 router.post('/:id/clinic-rating', protect, allowRoles('user'), submitClinicRating);
 router.post('/:id/doctor-rating', protect, allowRoles('user'), submitDoctorRating);

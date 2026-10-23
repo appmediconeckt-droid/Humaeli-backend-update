@@ -1,4 +1,5 @@
-import { currencyForCountry, feeCurrency, validFee } from '../utils/consultationCurrency.js';
+import { attachDoctorRatings } from '../services/doctorRatingService.js';
+import { feeCurrency, validFee, isConsultationCurrency } from '../utils/consultationCurrency.js';
 import { emitResourceUpdated } from "../services/portalRealtimeService.js";
 import mongoose from "../persistence/mongoose.js";
 import User from "../models/userModel.js";
@@ -1374,15 +1375,21 @@ export const updateUserById = async (req, res) => {
       delete updates.googleId;
     }
 
-    // Resolve from the final address, including multipart address updates.
-    if (req.body.consultationFee !== undefined || req.body.consultationCurrency !== undefined || (updates.address && currentUser.consultationFee != null)) {
+    if (req.body.acceptedPaymentMethods !== undefined) {
+      if (!["doctor", "counsellor"].includes(currentUser.role)) return res.status(403).json({ success: false, message: 'Only providers can set payment methods' });
+      const methods = req.body.acceptedPaymentMethods;
+      if (!Array.isArray(methods) || !methods.length || methods.some(method => !['cash', 'online', 'upi', 'insurance'].includes(method))) return res.status(400).json({ success: false, field: 'acceptedPaymentMethods', message: 'Select at least one valid payment method' });
+      updates.acceptedPaymentMethods = [...new Set(methods)];
+    }
+
+    // Store the fee in the currency selected by the provider.
+    if (req.body.consultationFee !== undefined || req.body.consultationCurrency !== undefined) {
       if (!["doctor", "counsellor"].includes(currentUser.role)) return res.status(403).json({ success: false, message: 'Only doctors and consultants can set a checkup fee' });
-      const currency = currencyForCountry((updates.address || currentUser.address)?.country);
-      if (!currency) return res.status(400).json({ success: false, field: 'address.country', message: 'Select a valid profile country before setting your checkup fee' });
-      if (req.body.consultationCurrency !== undefined && req.body.consultationCurrency !== currency) return res.status(400).json({ success: false, message: 'Checkup fee currency must match your profile country' });
+      const currency = req.body.consultationCurrency !== undefined ? String(req.body.consultationCurrency).trim().toUpperCase() : feeCurrency(currentUser);
+      if (!isConsultationCurrency(currency)) return res.status(400).json({ success: false, field: 'consultationCurrency', message: 'Select a valid currency for your checkup fee' });
       const amount = req.body.consultationFee !== undefined ? req.body.consultationFee : currentUser.consultationFee;
       if (!['string', 'number'].includes(typeof amount) || !validFee(amount, currency)) return res.status(400).json({ success: false, field: 'consultationFee', message: `Enter a valid checkup fee for ${currency}` });
-      if (currentUser.consultationCurrency && currency !== currentUser.consultationCurrency && req.body.consultationFee === undefined) return res.status(400).json({ success: false, message: 'Confirm your checkup fee when changing your country' });
+      if (currentUser.consultationCurrency && currency !== currentUser.consultationCurrency && req.body.consultationFee === undefined) return res.status(400).json({ success: false, message: 'Confirm your checkup fee when changing your currency' });
       updates.consultationFee = Number(amount);
       updates.consultationCurrency = currency;
     }
@@ -1437,6 +1444,7 @@ export const updateUserById = async (req, res) => {
     // Add counsellor fields if applicable
     if (["counsellor", "doctor"].includes(updatedUser.role)) {
       Object.assign(formattedUser, {
+        acceptedPaymentMethods: updatedUser.acceptedPaymentMethods,
         consultationFee: updatedUser.consultationFee,
         consultationCurrency: feeCurrency(updatedUser),
         qualification: updatedUser.qualification,
@@ -3567,7 +3575,7 @@ export const getAllCounsellors = async (req, res) => {
       ]),
     );
 
-    const counsellorsWithLoginStatus = counsellors.map((counsellor) => {
+    const counsellorsWithLoginStatus = (await attachDoctorRatings(counsellors)).map((counsellor) => {
       // A saved login session is not presence. Only a currently connected
       // authenticated socket makes a counselor online in the directory.
       const liveOnline = global.socketHandler?.isUserOnline(counsellor._id) === true;
@@ -3632,7 +3640,7 @@ export const getCounsellorById = async (req, res) => {
     return res.status(200).json({
       message: "Counsellor fetched successfully",
       success: true,
-      counsellor: counsellor.toJSON(),
+      counsellor: (await attachDoctorRatings([counsellor.toJSON()]))[0],
     });
   } catch (error) {
     console.log("Get counsellor error:", error);
@@ -3751,6 +3759,7 @@ export const getMyProfile = async (req, res) => {
     // Add counsellor-specific fields if user is counsellor
     if (["counsellor", "doctor"].includes(user.role)) {
       formattedProfile.qualification = user.qualification;
+      formattedProfile.acceptedPaymentMethods = user.acceptedPaymentMethods;
       formattedProfile.consultationFee = user.consultationFee;
       formattedProfile.consultationCurrency = feeCurrency(user);
       formattedProfile.specialization = user.specialization;
@@ -3773,7 +3782,7 @@ export const getMyProfile = async (req, res) => {
     return res.status(200).json({
       message: "Profile fetched successfully",
       success: true,
-      user: formattedProfile,
+      user: (await attachDoctorRatings([formattedProfile]))[0],
     });
   } catch (error) {
     console.log("Get profile error:", error);
@@ -4209,7 +4218,7 @@ export const getUser = async (req, res) => {
     return res.status(200).json({
       message: "User fetched successfully",
       success: true,
-      user: user.toJSON(),
+      user: (await attachDoctorRatings([user.toJSON()]))[0],
     });
   } catch (error) {
     return res
@@ -4723,8 +4732,9 @@ export const getUsers = async (req, res) => {
         filter = { _id: { $in: appointments.map(row => row.patient) } };
       }
     } else if (professionalDirectoryRoles.includes(role)) filter = { role, isActive: true };
-    const users = await User.find(filter).select('fullName role accountType consultationFee consultationCurrency address.country profilePhoto qualification education specialization experience location aboutMe profileCompleted isActive languages consultationMode rating ratingCount totalSessions activeClients lastSeen').lean();
-    return res.json({ success: true, count: users.length, data: users, users });
+    const users = await User.find(filter).select('fullName role accountType acceptedPaymentMethods consultationFee consultationCurrency address.country profilePhoto qualification education specialization experience location aboutMe profileCompleted isActive languages consultationMode rating ratingCount totalSessions activeClients lastSeen').lean();
+    const ratedUsers = await attachDoctorRatings(users);
+    return res.json({ success: true, count: ratedUsers.length, data: ratedUsers, users: ratedUsers });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -4748,10 +4758,11 @@ export const updateProfileById = async (req, res) => {
 };
 
 export const getProfileById = async (req, res) => {
-  const user = await User.findOne({ _id: req.params.id, role: 'doctor', isActive: true, profileCompleted: true }).select('fullName role consultationFee consultationCurrency address.country qualification specialization experience location aboutMe profilePhoto doctorQrCode').lean();
+  const user = await User.findOne({ _id: req.params.id, role: 'doctor', isActive: true, profileCompleted: true }).select('fullName role acceptedPaymentMethods consultationFee consultationCurrency address.country qualification specialization experience location aboutMe profilePhoto doctorQrCode').lean();
   if (!user) return res.status(404).json({ success: false, message: 'User profile not found' });
   await recordDoctorAnalyticsEvent({ doctorId: user._id, eventType: 'profile_view', source: req.query.source });
-  const profile = { ...user, doctorId: String(user._id), profileQrUrl: doctorProfileUrl(user._id), clinics: await doctorClinics(String(user._id)) };
+  const [ratedUser] = await attachDoctorRatings([user]);
+  const profile = { ...ratedUser, doctorId: String(user._id), profileQrUrl: doctorProfileUrl(user._id), clinics: await doctorClinics(String(user._id)) };
   return res.json({ success: true, data: profile, user: profile });
 };
 

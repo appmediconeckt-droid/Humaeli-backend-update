@@ -191,9 +191,15 @@ export const enrichAppointmentGroups = async (appointments) => {
     groups.get(key).records.push(record);
   }
   const enriched = new Map();
-  for (const group of groups.values()) {
-    const rows = await enrichAppointmentsWithDelay(group.records, group.doctorId, group.date);
-    for (const row of rows) enriched.set(String(row._id || row.id), row);
-  }
+  // Independent doctor/day queues can run together. Bound concurrency so a
+  // long patient history does not flood the database connection pool.
+  const pending = [...groups.values()];
+  await Promise.all(Array.from({ length: Math.min(4, pending.length) }, async () => {
+    while (pending.length) {
+      const group = pending.shift();
+      const rows = await enrichAppointmentsWithDelay(group.records, group.doctorId, group.date);
+      for (const row of rows) enriched.set(String(row._id || row.id), row);
+    }
+  }));
   return appointments.map((row) => enriched.get(String(row._id || row.id)) || row);
 };

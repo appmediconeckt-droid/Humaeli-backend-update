@@ -69,7 +69,7 @@ export const slotRepository = {
 
 // One lock shared by both booking paths prevents simultaneous requests from
 // reserving the same doctor/time. The dedicated connection owns the lock.
-export const withAppointmentSlot = async ({ doctorId, date, time, clinicId, earliestTime = null, excludeWalkinId = null }, create) => {
+export const withAppointmentSlot = async ({ doctorId, date, time, clinicId, patientId, earliestTime = null, excludeWalkinId = null }, create) => {
   buildDaySlots([], date); // Validate before database access.
   const minute = time ? timeMinutes(time) : null;
   if (time && minute === null) throw slotError("Invalid appointment time");
@@ -92,6 +92,15 @@ export const withAppointmentSlot = async ({ doctorId, date, time, clinicId, earl
       .filter(slot => slot.clinicIds.length);
     const eligible = slots.filter((slot) => !clinicId || slot.clinicIds.includes(String(clinicId)) || slot.clinicIds.includes(""));
     const [online, walkins] = await Promise.all([slotRepository.online(doctorId, date), slotRepository.walkins(doctorId, date)]);
+    // This check shares the doctor/day lock with slot allocation and saving.
+    // Completed visits still count; only cancellation/rejection permits rebooking.
+    if (patientId && [...online, ...walkins].some(record => {
+      const patient = record.patient || record.patient_id;
+      return patient && String(patient._id || patient) === String(patientId) &&
+        !["cancelled", "canceled", "rejected", "reject"].includes(String(record.appointment_status || record.status || "").toLowerCase());
+    })) {
+      throw Object.assign(slotError("You already have an appointment with this doctor on this date. Cancel it before booking another slot.", 409), { code: "DUPLICATE_APPOINTMENT" });
+    }
     const occupied = new Set([...online, ...walkins.filter((record) => !excludeWalkinId || String(record.id || record._id) !== String(excludeWalkinId))].filter((record) => {
       if (String(record.priority || "").toLowerCase() === "emergency" && !record.appointment_time) return false;
       return !["cancelled", "canceled", "rejected", "reject"].includes(String(record.appointment_status || record.status || "").toLowerCase());

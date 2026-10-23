@@ -1,3 +1,4 @@
+import Appointment from '../src/models/appointmentModel.js';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import express from 'express';
@@ -17,6 +18,7 @@ describe('Clinic uploaded image persistence and GET responses', () => {
  let token, filePath, record, secret;
  const cloud='https://res.cloudinary.com/test/image/upload/clinic-photos/photo.png';
  beforeEach(() => {
+  sinon.stub(Appointment, 'find').returns({select(){return this;},lean:async()=>[]});
   secret=process.env.ACCESS_SECRET;process.env.ACCESS_SECRET='clinic-photo-test';
   token=jwt.sign({userId:'doctor-test',sessionId:'session-test'},process.env.ACCESS_SECRET);
   filePath=cloud;

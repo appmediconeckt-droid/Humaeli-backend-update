@@ -1,4 +1,5 @@
 import { messaging } from "../config/firebaseAdmin.js";
+import { isDisabledGreetingNotification } from "../utils/disabledGreetingNotification.js";
 
 const isCallPush = (data = {}) => {
   const presentation = String(data.presentation || data.presentAs || "")
@@ -21,6 +22,9 @@ export const sendPushNotification = async ({
   body,
   data = {},
 }) => {
+  if (isDisabledGreetingNotification({ title, body, data })) {
+    return { skipped: true, reason: 'disabled_test_greeting' };
+  }
   try {
     if (!token) {
       throw new Error('FCM token is required');

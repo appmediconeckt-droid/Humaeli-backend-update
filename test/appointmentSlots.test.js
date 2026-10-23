@@ -31,6 +31,40 @@ describe("Availability-based appointment tokens", () => {
   afterEach(() => sandbox.restore());
   const reserve = (time, options = {}) => withAppointmentSlot({ doctorId: "doctor-1", date, time, ...options }, async (slot) => slot);
 
+  for (const status of ["pending", "confirmed", "in-progress", "completed"]) {
+    it(`blocks another slot for the same patient and doctor after a ${status} booking`, async () => {
+      slotRepository.online.resolves([{ patient: "patient-1", appointment_time: "10:00:00", status }]);
+      const save = sandbox.spy();
+      try {
+        await withAppointmentSlot({ doctorId: "doctor-1", date, time: "10:15", patientId: "patient-1" }, save);
+        throw new Error("Should reject");
+      } catch (error) {
+        expect(error.status).to.equal(409);
+        expect(error.code).to.equal("DUPLICATE_APPOINTMENT");
+      }
+      expect(save.called).to.equal(false);
+      expect(connection.release.calledOnce).to.equal(true);
+    });
+  }
+
+  for (const status of ["canceled", "cancelled", "rejected"]) {
+    it(`allows a different slot after ${status} by either party`, async () => {
+      slotRepository.online.resolves([{ patient: "patient-1", appointment_time: "10:00:00", status }]);
+      expect((await reserve("10:15", { patientId: "patient-1" })).time).to.equal("10:15:00");
+    });
+  }
+
+  it("allows another patient to book a different slot", async () => {
+    slotRepository.online.resolves([{ patient: "patient-2", appointment_time: "10:00:00", status: "pending" }]);
+    expect((await reserve("10:15", { patientId: "patient-1" })).token).to.equal(2);
+  });
+
+  it("blocks a second online booking when the patient already has a linked walk-in", async () => {
+    slotRepository.walkins.resolves([{ patient_id: "patient-1", appointment_time: "10:00:00", appointment_status: "booked" }]);
+    try { await reserve("10:15", { patientId: "patient-1" }); throw new Error("Should reject"); }
+    catch (error) { expect(error.code).to.equal("DUPLICATE_APPOINTMENT"); }
+  });
+
   it("blocks new bookings only at the unavailable clinic and keeps other tokens stable", async () => {
     slotRepository.ranges.resolves([range,
       { ...range, clinic_id: "clinic-2", start_time: "14:00:00", end_time: "15:00:00" },
@@ -151,6 +185,15 @@ describe("Availability-based appointment tokens", () => {
     expect(create.firstCall.args[0]).to.include({ token_number: 3, appointment_time: "10:30:00", appointment_date: date });
     expect(response.body.token_number).to.equal(3);
     expect(create.firstCall.args[0].patient_location).to.equal("12 Main Road");
+  });
+  it("rejects payment methods disabled by the doctor before reserving a slot", async () => {
+    sandbox.stub(User, "findOne").returns({ select: async () => ({ _id: "doctor-1", role: "doctor", acceptedPaymentMethods: ["cash"] }) });
+    const create = sandbox.stub(Appointment, "create");
+    const response = res();
+    await book({ user: { _id: "patient-1" }, body: { counselorId: "doctor-1", date: `${date}T10:30:00+05:30`, payment_method: "UPI" } }, response);
+    expect(response.statusCode).to.equal(400);
+    expect(create.called).to.equal(false);
+    expect(slotRepository.connection.called).to.equal(false);
   });
   for (const accountType of ["consultant", null]) {
   it(`consultant booking succeeds without slots (accountType: ${accountType})`, async () => {

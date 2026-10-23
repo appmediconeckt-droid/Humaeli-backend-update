@@ -372,6 +372,7 @@ import { checkAndAutoCancelLateAppointments } from '../services/lateAppointmentS
 import { syncAppointmentFollowUp } from '../services/appointmentFollowUpService.js';
 import { finishAppointmentCancellation } from '../services/appointmentCancellationService.js';
 import { enrichAppointmentGroups } from '../services/appointmentDelayService.js';
+import { attachAppointmentDoctorRatings } from '../services/doctorRatingService.js';
 // Keep the existing scheduler entry point; slot/session end never expires bookings.
 export const markExpiredAppointmentsNoShow = checkAndAutoCancelLateAppointments;
 
@@ -552,7 +553,7 @@ export const book = async (req, res) => {
 
     const counselor = await User.findOne(
       appointmentProviderFilter(counselorId),
-    ).select("_id role accountType profileCompleted");
+    ).select("_id role accountType profileCompleted acceptedPaymentMethods");
 
     if (!counselor) {
       return res.status(404).json({
@@ -563,7 +564,13 @@ export const book = async (req, res) => {
     const localDate = new Date(appointmentDate.getTime() + 19800000).toISOString();
     const appointment_date = localDate.slice(0, 10), appointment_time = localDate.slice(11, 19);
     const clinic_id = req.body.clinic_id;
+    const paymentMethod = req.body.payment_method || req.body.paymentMethod;
+    const methodKey = { Cash: 'cash', Card: 'online', UPI: 'upi', Insurance: 'insurance' }[paymentMethod] || String(paymentMethod || '').toLowerCase();
+    if (Array.isArray(counselor.acceptedPaymentMethods) && !counselor.acceptedPaymentMethods.includes(methodKey)) {
+      return res.status(400).json({ message: 'Select a payment method accepted by this doctor' });
+    }
     const createAppointmentRecord = async (slot = {}) => Appointment.create({
+      payment_method: paymentMethod,
       patient: req.user._id,
       counselor: counselorId,
       date: appointmentDate,
@@ -587,6 +594,7 @@ export const book = async (req, res) => {
     const appointment = isDoctor
       ? await withAppointmentSlot({
           doctorId: counselorId,
+          patientId: req.user._id,
           date: appointment_date,
           time: appointment_time,
           clinicId: clinic_id,
@@ -683,7 +691,7 @@ export const getAppointments = async (req, res) => {
       ...statusFilter,
     })
       .populate("patient", "fullName profilePhoto anonymous phoneNumber phone dateOfBirth age gender bloodGroup address locationData isActive")
-      .populate("counselor", "fullName name profilePhoto anonymous role accountType specialization experience qualification rating consultationMode")
+      .populate("counselor", "fullName name profilePhoto anonymous role accountType specialization experience qualification rating ratingCount consultationMode")
       .populate("clinic_id", "clinic_name")
       .sort({ date: -1 })
       .lean();
@@ -692,7 +700,11 @@ export const getAppointments = async (req, res) => {
       appointments = await filterPatientDirectory(appointments, 'online');
       res.set('Cache-Control', 'no-store');
     }
-    appointments = await enrichAppointmentGroups(appointments);
+    const [delayedAppointments, ratedAppointments] = await Promise.all([
+      enrichAppointmentGroups(appointments),
+      attachAppointmentDoctorRatings(appointments),
+    ]);
+    appointments = delayedAppointments.map((row, index) => ({ ...row, counselor: ratedAppointments[index].counselor }));
     appointments = appointments.map(expandConsultationNotes);
     // Include the clinic label while preserving the ID shape used by appointment actions.
     appointments = appointments.map(appointment => ({
@@ -989,6 +1001,7 @@ export const getAppointmentAll = handle(async (req, res) => {
   res.json({ success: true, appointments: await Promise.all(rows.map(appointmentView)) });
 });
 export const getAppointmentById = handle(async (req, res) => {
+  if (!/^[a-f\d]{24}$/i.test(String(req.params.id || ''))) throw fail(400, 'Invalid appointment ID');
   const row = await Appointment.findOne({ ...await filterFor(req), _id: req.params.id })
     .populate("patient", PATIENT_APPOINTMENT_FIELDS)
     .populate("counselor", DOCTOR_APPOINTMENT_FIELDS)

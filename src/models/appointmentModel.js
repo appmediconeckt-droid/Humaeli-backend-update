@@ -2,6 +2,7 @@ import mongoose from "../persistence/mongoose.js";
 
 const appointmentSchema = new mongoose.Schema(
   {
+    payment_method: { type: String },
     patient: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

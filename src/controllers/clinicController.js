@@ -1,3 +1,4 @@
+import { summarizeAppointmentRatings } from '../services/doctorRatingService.js';
 import Appointment from '../models/appointmentModel.js';
 import { emitAvailabilityUpdated } from "../services/portalRealtimeService.js";
 import { clinicPhotoPath, serializeClinicPhoto } from '../services/clinicPhotoService.js';
@@ -14,23 +15,19 @@ export const createClinic = handle(async (req, res) => {
 });
 export const getClinics = handle(async (req, res) => {
   const clinics = await Clinic.find(req.query.doctor_id ? { doctor_id: req.query.doctor_id } : {}).sort({ createdAt: -1 }).lean();
-  const rated = clinics.length ? await Appointment.find({ clinic_id: { $in: clinics.map(row => row._id) }, clinicRating: { $exists: true } }).select('clinic_id clinicRating').lean() : [];
-  const summaries = new Map();
-  for (const row of rated) {
-    const key = String(row.clinic_id);
-    const summary = summaries.get(key) || { sum: 0, count: 0 };
-    if (Number.isInteger(row.clinicRating?.stars)) { summary.sum += row.clinicRating.stars; summary.count += 1; }
-    summaries.set(key, summary);
-  }
+  const rated = clinics.length ? await Appointment.find({ clinic_id: { $in: clinics.map(row => row._id) }, clinicRating: { $exists: true } }).select('clinic_id patient clinicRating').lean() : [];
+  const summaries = summarizeAppointmentRatings(rated, 'clinic');
   res.json({ success: true, clinics: clinics.map(row => {
     const summary = summaries.get(String(row._id));
-    return { ...serializeClinicPhoto(jsonRecord(row)), rating: summary?.count ? Math.round(summary.sum / summary.count * 10) / 10 : 0, ratingCount: summary?.count || 0 };
+    return { ...serializeClinicPhoto(jsonRecord(row)), rating: summary?.rating || 0, ratingCount: summary?.ratingCount || 0 };
   }) });
 });
 export const getClinicById = handle(async (req, res) => {
   const clinic = await Clinic.findById(req.params.id).lean();
   if (!clinic) throw fail(404, 'Clinic not found');
-  res.json({ success: true, clinic: serializeClinicPhoto(jsonRecord(clinic)) });
+  const rated = await Appointment.find({ clinic_id: clinic._id, clinicRating: { $exists: true } }).select('clinic_id patient clinicRating').lean();
+  const summary = summarizeAppointmentRatings(rated, 'clinic').get(String(clinic._id));
+  res.json({ success: true, clinic: { ...serializeClinicPhoto(jsonRecord(clinic)), rating: summary?.rating || 0, ratingCount: summary?.ratingCount || 0 } });
 });
 export const updateClinic = handle(async (req, res) => {
   const clinic = await Clinic.findById(req.params.id);

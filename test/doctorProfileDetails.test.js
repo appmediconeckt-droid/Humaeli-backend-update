@@ -1,3 +1,4 @@
+import Appointment from '../src/models/appointmentModel.js';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import User from '../src/models/userModel.js';
@@ -7,6 +8,7 @@ const address = { line1: 'Test street', city: 'Delhi', state: 'Delhi', pincode: 
 const complete = () => new User({ fullName: 'Test Doctor', email: 'doctor@example.test', role: 'doctor', phoneNumber: '9876543210', phoneCountryCode: '+91', profilePhoto: { url: 'https://example.test/photo.jpg' }, dateOfBirth: '1990-01-01', gender: 'male', specialization: ['Medicine'], experience: 3, qualification: 'MBBS', aboutMe: 'About doctor', languages: ['Hindi'], consultationMode: ['online'], certifications: [{ name: 'Degree', documentUrl: 'https://example.test/degree.jpg' }], aadhaarNumber: '123456789012', panNumber: 'ABCDE1234F', permanentAddress: address });
 const response = () => ({ status: sinon.stub().returnsThis(), json: sinon.spy() });
 describe('Doctor profile details and completion', () => {
+  beforeEach(() => sinon.stub(Appointment, 'find').returns({ select() { return this; }, lean: async () => [] }));
   afterEach(() => sinon.restore());
   async function update(body, current = complete()) {
     sinon.stub(User, 'findById').resolves(current);
@@ -43,18 +45,18 @@ describe('Doctor profile details and completion', () => {
       expect(res.json.firstCall.args[0].user.consultationCurrency).to.equal(currency);
     });
   }
-  it('rejects a checkup fee currency that differs from the country', async () => {
+  it('accepts a doctor-selected currency independently of country', async () => {
     const user = complete(); user.address = address;
     const { res, save } = await update({ consultationFee: 20, consultationCurrency: 'USD' }, user);
-    expect(res.status.calledWith(400)).to.equal(true); expect(save.called).to.equal(false);
+    expect(res.status.calledWith(200)).to.equal(true); expect(save.firstCall.args[1].$set.consultationCurrency).to.equal('USD');
   });
   it('rejects fractional checkup fee in Japan', async () => {
     const user = complete(); user.address = { ...address, country: 'Japan' };
     const { res, save } = await update({ consultationFee: '100.25' }, user);
     expect(res.status.calledWith(400)).to.equal(true); expect(save.called).to.equal(false);
   });
-  it('uses the updated multipart country for the checkup fee', async () => {
-    const { res, save } = await update({ consultationFee: '50.25', address: JSON.stringify({ ...address, country: 'Canada' }) });
+  it('uses the explicitly selected currency with multipart country updates', async () => {
+    const { res, save } = await update({ consultationFee: '50.25', consultationCurrency: 'CAD', address: JSON.stringify({ ...address, country: 'Canada' }) });
     expect(res.status.calledWith(200)).to.equal(true);
     expect(save.firstCall.args[1].$set.consultationCurrency).to.equal('CAD');
   });
@@ -105,10 +107,10 @@ describe('Doctor profile details and completion', () => {
     expect(res.json.firstCall.args[0].user.permanentAddress).to.deep.equal(address);
     expect(user.toJSON()).not.to.have.any.keys('aadhaarNumber', 'panNumber', 'permanentAddress');
   });
-  it('only lists completed active professionals to patients', async () => {
+  it('lists active professionals including legacy incomplete profiles', async () => {
     const find = sinon.stub(User, 'find').returns({ select: () => ({ lean: async () => [] }) });
     await getUsers({ query: { role: 'doctor' }, user: { role: 'user' } }, response());
-    expect(find.firstCall.args[0]).to.deep.equal({ role: 'doctor', isActive: true, profileCompleted: true });
+    expect(find.firstCall.args[0]).to.deep.equal({ role: 'doctor', isActive: true });
   });
   it('does not expose incomplete doctor public profiles', async () => {
     const find = sinon.stub(User, 'findOne').returns({ select: () => ({ lean: async () => null }) });

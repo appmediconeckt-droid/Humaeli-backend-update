@@ -10,6 +10,7 @@ import User from "../src/models/userModel.js";
 import Appointment from "../src/models/appointmentModel.js";
 import Notification from "../src/models/Notification.js";
 import Clinic from "../src/models/clinicModel.js";
+import { Query } from "mingo";
 import { clinicStaffRepository } from "../src/services/clinicStaffService.js";
 
 const now = new Date("2026-09-24T04:00:00Z"); // 09:30 India
@@ -121,6 +122,32 @@ describe("Emergency appointment booking", () => {
     expect(Appointment.create.called).to.equal(false);
     expect(Notification.create.called).to.equal(false);
   });
+  for (const priority of ["normal", "emergency"]) {
+    it(`allows a new emergency after today's ${priority} appointment is completed`, async () => {
+      const completed = { patient: "patient-1", counselor: "doctor-1", clinic_id: "clinic-1",
+        appointment_date: "2026-09-24", priority, status: "completed",
+        appointment_time: priority === "normal" ? "09:00:00" : null };
+      Appointment.findOne.callsFake(async filter => new Query(filter).test(completed) ? completed : null);
+      // Even a completed regular visit returned by the slot repository must not
+      // send an emergency through the regular daily-booking restriction.
+      slotRepository.online.resolves([completed]);
+      const res = await run();
+      expect(res.statusCode).to.equal(201);
+      expect(res.body).to.include({ priority: "emergency", status: "pending", patient: "patient-1" });
+      expect(Appointment.create.calledOnce).to.equal(true);
+      expect(slotRepository.connection.called).to.equal(false);
+    });
+  }
+  for (const status of ["pending", "accepted", "booked", "confirmed", "in-progress"]) {
+    it(`blocks another emergency while an existing request is ${status}`, async () => {
+      const active = { patient: "patient-1", counselor: "doctor-1", clinic_id: "clinic-1",
+        appointment_date: "2026-09-24", priority: "emergency", appointment_time: null, status };
+      Appointment.findOne.callsFake(async filter => new Query(filter).test(active) ? active : null);
+      expect((await run()).statusCode).to.equal(409);
+      expect(Appointment.create.called).to.equal(false);
+      expect(Notification.create.called).to.equal(false);
+    });
+  }
   it("still notifies the doctor when a clinic has no assigned staff", async () => {
     User.find.returns({ select: async () => [] });
     expect((await run()).statusCode).to.equal(201);

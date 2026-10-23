@@ -14,6 +14,44 @@ describe("Counsellor profile update certification validation", function () {
     sandbox.restore();
   });
 
+  it('saves doctor payment methods to the profile', async () => {
+    sandbox.stub(User, 'findById').resolves({ _id: 'doctor123', role: 'doctor' });
+    const update = sandbox.stub(User, 'findByIdAndUpdate').returns({ select: async () => ({ _id: 'doctor123', role: 'doctor', acceptedPaymentMethods: ['cash', 'upi'] }) });
+    const res = { status: sinon.stub().returnsThis(), json: sinon.spy() };
+    await updateUserById({ params: { userId: 'doctor123' }, body: { acceptedPaymentMethods: ['cash', 'upi', 'cash'] }, files: {} }, res);
+    expect(res.status.calledWith(200)).to.equal(true);
+    expect(update.firstCall.args[1].$set.acceptedPaymentMethods).to.deep.equal(['cash', 'upi']);
+  });
+
+  for (const methods of [[], ['invalid'], 'cash']) {
+    it(`rejects invalid payment settings ${JSON.stringify(methods)}`, async () => {
+      sandbox.stub(User, 'findById').resolves({ _id: 'doctor123', role: 'doctor' });
+      const update = sandbox.stub(User, 'findByIdAndUpdate');
+      const res = { status: sinon.stub().returnsThis(), json: sinon.spy() };
+      await updateUserById({ params: { userId: 'doctor123' }, body: { acceptedPaymentMethods: methods }, files: {} }, res);
+      expect(res.status.calledWith(400)).to.equal(true);
+      expect(update.called).to.equal(false);
+    });
+  }
+
+  it('saves the doctor-selected fee currency independently of profile country', async () => {
+    sandbox.stub(User, 'findById').resolves({ _id: 'doctor123', role: 'doctor', address: { country: 'India' } });
+    const update = sandbox.stub(User, 'findByIdAndUpdate').returns({ select: async () => ({ _id: 'doctor123', role: 'doctor', consultationFee: 50, consultationCurrency: 'USD' }) });
+    const res = { status: sinon.stub().returnsThis(), json: sinon.spy() };
+    await updateUserById({ params: { userId: 'doctor123' }, body: { consultationFee: '50', consultationCurrency: 'USD' }, files: {} }, res);
+    expect(res.status.calledWith(200)).to.equal(true);
+    expect(update.firstCall.args[1].$set).to.include({ consultationFee: 50, consultationCurrency: 'USD' });
+  });
+
+  it('rejects unsupported fee currencies before saving', async () => {
+    sandbox.stub(User, 'findById').resolves({ _id: 'doctor123', role: 'doctor' });
+    const update = sandbox.stub(User, 'findByIdAndUpdate');
+    const res = { status: sinon.stub().returnsThis(), json: sinon.spy() };
+    await updateUserById({ params: { userId: 'doctor123' }, body: { consultationFee: '50', consultationCurrency: 'XYZ' }, files: {} }, res);
+    expect(res.status.calledWith(400)).to.equal(true);
+    expect(update.called).to.equal(false);
+  });
+
   for (const [input, expected] of [['Male', 'male'], [' FEMALE ', 'female'], ['Other', 'other']]) {
     it(`normalizes ${input} before persisting a profile update`, async () => {
       sandbox.stub(User, 'findById').resolves({ _id: 'user123', role: 'user' });

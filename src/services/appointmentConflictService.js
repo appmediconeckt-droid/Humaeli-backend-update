@@ -17,14 +17,18 @@ export function bookingMinute(value) {
   if (!/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(text)) throw fail(400, 'appointment_time must be HH:mm or HH:mm:ss');
   return text.slice(0, 5);
 }
-const isActive = value => !['canceled', 'cancelled', 'rejected'].includes(String(value || '').toLowerCase());
-const duplicate = () => Object.assign(fail(409, 'This patient already has a booking with this doctor at the selected date and time'), { code: 'DUPLICATE_APPOINTMENT' });
+const isActive = value => !['canceled', 'cancelled', 'rejected', 'reject'].includes(String(value || '').toLowerCase());
+const duplicate = () => Object.assign(fail(409, 'This patient already has an appointment with this doctor on this date. Cancel it before booking another slot.'), { code: 'DUPLICATE_APPOINTMENT' });
 
 export async function hasAppointmentConflict({ doctorId, patientId, phoneNumber, appointmentDate, appointmentTime, excludeId }) {
-  const day = dateOnly(appointmentDate), minute = bookingMinute(appointmentTime);
+  const day = dateOnly(appointmentDate);
+  bookingMinute(appointmentTime);
   const start = new Date(day + 'T00:00:00+05:30');
   const [online, walkins] = await Promise.all([
-    Appointment.find({ counselor: doctorId, date: { $gte: start, $lt: new Date(start.getTime() + 86400000) } }).lean(),
+    Appointment.find({ counselor: doctorId, $or: [
+      { appointment_date: day },
+      { date: { $gte: start, $lt: new Date(start.getTime() + 86400000) } },
+    ] }).lean(),
     WalkinAppointment.find({ doctor_id: doctorId, appointment_date: day }).lean(),
   ]);
   let phone = normalizeBookingPhone(phoneNumber);
@@ -38,9 +42,8 @@ export async function hasAppointmentConflict({ doctorId, patientId, phoneNumber,
   const matchingIds = new Set(patients.filter(p => normalizeBookingPhone(p.phoneNumber) === phone).map(p => String(p._id)));
   if (patientId) matchingIds.add(String(patientId));
   return online.some(r => String(r._id) !== String(excludeId) && isActive(r.status) &&
-    new Date(new Date(r.date).getTime() + 19800000).toISOString().slice(11, 16) === minute && matchingIds.has(String(r.patient))) ||
+    matchingIds.has(String(r.patient))) ||
     walkins.some(r => String(r._id) !== String(excludeId) && isActive(r.appointment_status) &&
-      String(r.appointment_time).slice(0, 5) === minute &&
       ((patientId && r.patient_id && String(r.patient_id) === String(patientId)) ||
        (phone && normalizeBookingPhone(r.phone_number) === phone)));
 }

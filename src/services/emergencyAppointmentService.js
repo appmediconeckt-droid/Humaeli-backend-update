@@ -48,6 +48,9 @@ export async function createEmergencyAppointment({ patientId, doctorId, body }) 
   return withOwnedClinic(doctorId, body.clinic_id, async () => {
     const now = new Date();
     const today = new Date(now.getTime() + 330 * 60000).toISOString().slice(0, 10);
+    // Emergency requests bypass the regular one-visit-per-day slot rule.
+    // A completed visit (normal or emergency) must never block a new emergency;
+    // only an ongoing emergency request is a duplicate.
     const existing = await Appointment.findOne({ patient: patientId, counselor: doctorId,
       clinic_id: String(body.clinic_id), appointment_date: today, priority: "emergency",
       appointment_time: null, status: { $in: ["pending", "accepted", "booked", "confirmed", "in-progress"] } });
