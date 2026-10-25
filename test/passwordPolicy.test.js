@@ -18,7 +18,15 @@ describe("passwordPolicy", function () {
 
   it("uses field-specific messages when requested", function () {
     expect(getStrongPasswordError("password", "New password")).to.equal(
-      "New password must be at least 8 characters and include uppercase, lowercase, number, and special character.",
+      "New password must be 6 to 20 characters and include uppercase, lowercase, number, and special character.",
     );
+  });
+
+  it('accepts 6 and 20 characters and rejects 5 and 21 characters', () => {
+    for (const length of [5, 6, 20, 21]) {
+      const password = 'Aa1!' + 'x'.repeat(length - 4);
+      expect(isStrongPassword(password)).to.equal(length >= 6 && length <= 20);
+      expect(getStrongPasswordError(password) === '').to.equal(length >= 6 && length <= 20);
+    }
   });
 });

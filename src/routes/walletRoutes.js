@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   createOrder,
+  getPaymentConfig,
   verifyPayment,
   getWalletData,
   getCounselorWalletData,
@@ -16,6 +17,7 @@ const router = express.Router();
 
 // Wallet functionality is typically for users only
 router.get('/data', authenticateToken, authorizeRoles("user"), getWalletData);
+router.get('/payment-config', authenticateToken, authorizeRoles("user"), getPaymentConfig);
 router.post('/create-order', authenticateToken, authorizeRoles("user"), createOrder);
 router.post('/verify-payment', authenticateToken, authorizeRoles("user"), verifyPayment);
 router.post('/refund-request', authenticateToken, authorizeRoles("user"), requestWalletRefund);

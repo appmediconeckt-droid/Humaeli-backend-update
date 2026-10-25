@@ -76,6 +76,16 @@ describe('Appointment vitals', () => {
     expect(find.firstCall.args[0]).to.deep.equal({ _id: 'visit', counselor: 'doctor' });
     expect(res.json.firstCall.args[0].vitals.recorded_role).to.equal('doctor');
   });
+  it('allows the owning doctor to save walk-in vitals with doctor attribution', async () => {
+    user.role = 'doctor'; req.userId = 'doctor'; req.body.source = 'walkin';
+    const find = sandbox.stub(WalkinAppointment, 'findOne').resolves({ appointment_date: '2026-10-15', appointment_status: 'booked' });
+    sandbox.stub(vitalsSchemaRepository, 'query').resolves([[{ Field: 'vitals' }]]);
+    const update = sandbox.stub(WalkinAppointment, 'updateOne').resolves({ matchedCount: 1 });
+    await saveAppointmentVitals(req, res);
+    expect(find.firstCall.args[0]).to.deep.equal({ _id: 'visit', doctor_id: 'doctor' });
+    expect(update.firstCall.args[1].$set.vitals).to.include({ recorded_by: 'doctor', recorded_role: 'doctor', pulse: 75 });
+    expect(res.json.firstCall.args[0].success).to.equal(true);
+  });
   for (const row of [{ status: 'completed' }, { status: 'canceled' }, { status: 'confirmed', queue_status: 'completed' }, { status: 'confirmed', consultation_ended_at: '2026-10-15T10:00:00Z' }]) {
     it(`keeps closed visits read-only: ${JSON.stringify(row)}`, async () => {
       sandbox.stub(Appointment, 'findOne').resolves(row);

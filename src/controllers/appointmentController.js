@@ -565,8 +565,9 @@ export const book = async (req, res) => {
     const appointment_date = localDate.slice(0, 10), appointment_time = localDate.slice(11, 19);
     const clinic_id = req.body.clinic_id;
     const paymentMethod = req.body.payment_method || req.body.paymentMethod;
-    const methodKey = { Cash: 'cash', Card: 'online', UPI: 'upi', Insurance: 'insurance' }[paymentMethod] || String(paymentMethod || '').toLowerCase();
-    if (Array.isArray(counselor.acceptedPaymentMethods) && !counselor.acceptedPaymentMethods.includes(methodKey)) {
+    const methodKey = { Cash: 'cash', Card: 'online', 'Credit Card': 'credit_card', 'Debit Card': 'debit_card', UPI: 'upi', Insurance: 'insurance' }[paymentMethod] || String(paymentMethod || '').toLowerCase();
+    const legacyCard = ['credit_card', 'debit_card'].includes(methodKey) && counselor.acceptedPaymentMethods?.includes('online');
+    if (Array.isArray(counselor.acceptedPaymentMethods) && !counselor.acceptedPaymentMethods.includes(methodKey) && !legacyCard) {
       return res.status(400).json({ message: 'Select a payment method accepted by this doctor' });
     }
     const createAppointmentRecord = async (slot = {}) => Appointment.create({

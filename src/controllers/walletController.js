@@ -8,6 +8,7 @@ import CounselorEarning from '../models/CounselorEarning.js';
 import dotenv from 'dotenv';
 import { createNotificationSafely } from '../services/notificationService.js';
 import { creditCapturedWalletPayment } from '../services/walletPaymentService.js';
+import { recoverAppointmentPayment } from '../services/appointmentPaymentService.js';
 
 dotenv.config();
 
@@ -16,6 +17,20 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_KEY_SECRET || 'YOUR_KEY_SECRET'
 });
 export { razorpay as walletGateway };
+
+export const getPaymentConfig = (req, res) => {
+    const key = process.env.RAZORPAY_KEY_ID || '';
+    const configured = Boolean(key && process.env.RAZORPAY_KEY_SECRET && !key.includes('YOUR'));
+    return res.json({ configured, mode: key.startsWith('rzp_test_') ? 'test' : 'live', minimumAmount: 100 });
+};
+
+const requireGatewayConfig = (res) => {
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET || process.env.RAZORPAY_KEY_ID.includes('YOUR')) {
+        res.status(503).json({ success: false, message: 'Configure RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in the backend .env file.' });
+        return false;
+    }
+    return true;
+};
 
 const fetchCapturedPayment = async ({ paymentId, orderId }) => {
     if (paymentId) {
@@ -74,6 +89,7 @@ const MINIMUM_WALLET_TOP_UP = 100;
 // Create Razorpay Order
 export const createOrder = async (req, res) => {
     try {
+        if (!requireGatewayConfig(res)) return;
         const amount = Number(req.body?.amount);
         const userId = req.user._id;
 
@@ -85,8 +101,12 @@ export const createOrder = async (req, res) => {
             });
         }
 
+        if (!Number.isSafeInteger(Math.round(amount * 100))) {
+            return res.status(400).json({ success: false, message: 'Enter a valid payment amount' });
+        }
+
         const options = {
-            amount: amount * 100, // amount in smallest currency unit (paise for INR)
+            amount: Math.round(amount * 100), // integer paise
             currency: 'INR',
             receipt: `receipt_${Date.now()}`
         };
@@ -97,7 +117,7 @@ export const createOrder = async (req, res) => {
         const transaction = new Transaction({
             userId,
             razorpayOrderId: order.id,
-            amount,
+            amount: options.amount / 100,
             status: 'pending',
             metadata: { walletCreditStatus: 'pending' }
         });
@@ -107,7 +127,9 @@ export const createOrder = async (req, res) => {
             success: true,
             order_id: order.id,
             amount: options.amount,
-            key_id: process.env.RAZORPAY_KEY_ID
+            key_id: process.env.RAZORPAY_KEY_ID,
+            currency: order.currency,
+            mode: process.env.RAZORPAY_KEY_ID.startsWith('rzp_test_') ? 'test' : 'live'
         });
     } catch (error) {
         console.error('Error creating Razorpay order:', error);
@@ -118,6 +140,7 @@ export const createOrder = async (req, res) => {
 // Verify Razorpay Payment
 export const verifyPayment = async (req, res) => {
     try {
+        if (!requireGatewayConfig(res)) return;
         const {
             razorpay_order_id,
             razorpay_payment_id,
@@ -126,11 +149,16 @@ export const verifyPayment = async (req, res) => {
 
         const userId = req.user._id;
 
-        const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || 'YOUR_KEY_SECRET');
+        if (typeof razorpay_order_id !== 'string' || typeof razorpay_payment_id !== 'string' ||
+            typeof razorpay_signature !== 'string' || !/^[a-f0-9]{64}$/i.test(razorpay_signature)) {
+            return res.status(400).json({ success: false, message: 'Valid payment order, payment ID and signature are required' });
+        }
+
+        const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET);
         hmac.update(razorpay_order_id + "|" + razorpay_payment_id);
         const generated_signature = hmac.digest('hex');
 
-        if (generated_signature === razorpay_signature) {
+        if (crypto.timingSafeEqual(Buffer.from(generated_signature, 'hex'), Buffer.from(razorpay_signature, 'hex'))) {
             // Payment verified
             const transaction = await Transaction.findOne({
                 razorpayOrderId: razorpay_order_id,
@@ -140,13 +168,19 @@ export const verifyPayment = async (req, res) => {
                 return res.status(404).json({ message: 'Transaction not found' });
             }
 
+            const payment = await fetchCapturedPayment({ paymentId: razorpay_payment_id, orderId: transaction.razorpayOrderId });
+            if (payment?.status !== 'captured' && payment?.captured !== true) {
+                return res.status(202).json({ success: false, pending: true, message: 'Payment capture is pending. Your wallet will update after confirmation.' });
+            }
+
             transaction.razorpaySignature = razorpay_signature;
             await transaction.save();
 
             const credit = await creditCapturedWalletPayment({
                 transaction,
                 paymentId: razorpay_payment_id,
-                source: 'checkout_callback'
+                source: 'checkout_callback',
+                gatewayPayment: payment
             });
 
             if (!credit.alreadyCredited) await createNotificationSafely({
@@ -258,7 +292,10 @@ export const razorpayWebhook = async (req, res) => {
         if (!payment?.order_id) return res.status(200).json({ success: true, ignored: true });
 
         const transaction = await Transaction.findOne({ razorpayOrderId: payment.order_id });
-        if (!transaction) return res.status(200).json({ success: true, ignored: true });
+        if (!transaction) {
+            if (event === 'payment.captured') await recoverAppointmentPayment(payment.order_id);
+            return res.status(200).json({ success: true });
+        }
 
         if (event === 'payment.captured') {
             await creditCapturedWalletPayment({

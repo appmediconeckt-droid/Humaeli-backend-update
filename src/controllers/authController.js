@@ -1378,7 +1378,7 @@ export const updateUserById = async (req, res) => {
     if (req.body.acceptedPaymentMethods !== undefined) {
       if (!["doctor", "counsellor"].includes(currentUser.role)) return res.status(403).json({ success: false, message: 'Only providers can set payment methods' });
       const methods = req.body.acceptedPaymentMethods;
-      if (!Array.isArray(methods) || !methods.length || methods.some(method => !['cash', 'online', 'upi', 'insurance'].includes(method))) return res.status(400).json({ success: false, field: 'acceptedPaymentMethods', message: 'Select at least one valid payment method' });
+      if (!Array.isArray(methods) || !methods.length || methods.some(method => !['cash', 'online', 'credit_card', 'debit_card', 'upi', 'insurance'].includes(method))) return res.status(400).json({ success: false, field: 'acceptedPaymentMethods', message: 'Select at least one valid payment method' });
       updates.acceptedPaymentMethods = [...new Set(methods)];
     }
 

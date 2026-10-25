@@ -1,8 +1,8 @@
 export const STRONG_PASSWORD_MESSAGE =
-  "Password must be at least 8 characters and include uppercase, lowercase, number, and special character.";
+  "Password must be 6 to 20 characters and include uppercase, lowercase, number, and special character.";
 
 const requirements = [
-  (password) => String(password || "").length >= 8,
+  (password) => String(password || "").length >= 6 && String(password || "").length <= 20,
   (password) => /[A-Z]/.test(String(password || "")),
   (password) => /[a-z]/.test(String(password || "")),
   (password) => /\d/.test(String(password || "")),
@@ -16,5 +16,5 @@ export const getStrongPasswordError = (password, fieldName = "Password") => {
   if (isStrongPassword(password)) return "";
   return fieldName === "Password"
     ? STRONG_PASSWORD_MESSAGE
-    : `${fieldName} must be at least 8 characters and include uppercase, lowercase, number, and special character.`;
+    : `${fieldName} must be 6 to 20 characters and include uppercase, lowercase, number, and special character.`;
 };

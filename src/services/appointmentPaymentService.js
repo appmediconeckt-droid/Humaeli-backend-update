@@ -1,0 +1,70 @@
+import crypto from 'node:crypto';
+import Razorpay from 'razorpay';
+import dotenv from 'dotenv';
+import { getPool } from '../config/mysql.js';
+import Appointment from '../models/appointmentModel.js';
+import AppointmentPayment from '../models/appointmentPaymentModel.js';
+import { emitAppointmentUpdated } from './portalRealtimeService.js';
+import { fail } from '../utils/clinicAccess.js';
+
+dotenv.config();
+export const appointmentGateway = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID || 'not-configured', key_secret: process.env.RAZORPAY_KEY_SECRET || 'not-configured' });
+export const appointmentPaymentRepository = { connection: () => getPool().getConnection() };
+export async function withAppointmentPaymentLock(id, action) {
+  const connection = await appointmentPaymentRepository.connection();
+  const key = 'appointment-pay:' + crypto.createHash('sha256').update(String(id)).digest('hex').slice(0, 40);
+  let locked = false;
+  try {
+    const [rows] = await connection.query('SELECT GET_LOCK(?, 10) AS acquired', [key]);
+    locked = Number(rows[0]?.acquired) === 1;
+    if (!locked) throw fail(503, 'Payment confirmation is busy. Please retry.');
+    return await action();
+  } finally {
+    try { if (locked) await connection.query('SELECT RELEASE_LOCK(?)', [key]); }
+    finally { connection.release(); }
+  }
+}
+
+export function requireAppointmentGateway() {
+  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET || /YOUR/.test(process.env.RAZORPAY_KEY_ID)) {
+    throw fail(503, 'Online payments are not configured. Please contact support.');
+  }
+}
+
+export async function validateCapturedAppointmentPayment(record, payment) {
+  if (!payment || payment.status !== 'captured') throw fail(409, 'Payment capture is pending. Your appointment remains reserved; check payment again shortly.');
+  if (String(payment.order_id) !== record.orderId || Number(payment.amount) !== record.amount || payment.currency !== record.currency) {
+    throw fail(400, 'Payment does not match this appointment order.');
+  }
+  if (record.method === 'upi') {
+    if (payment.method !== 'upi') throw fail(400, 'Pay using the selected UPI method.');
+  } else {
+    if (payment.method !== 'card') throw fail(400, 'Pay using the selected card method.');
+    const card = payment.card || (payment.card_id ? await appointmentGateway.cards.fetch(payment.card_id) : null);
+    if (card?.type !== (record.method === 'credit_card' ? 'credit' : 'debit')) throw fail(400, 'The card type does not match your selected payment method.');
+  }
+}
+
+// This records a collected payment. Provider bank settlement is a separate step.
+export async function completeAppointmentPayment(record, payment) {
+  await validateCapturedAppointmentPayment(record, payment);
+  if (record.status === 'paid' && record.paymentId !== payment.id) throw fail(409, 'This appointment has already been paid.');
+  await AppointmentPayment.updateOne({ _id: record._id }, { $set: { status: 'paid', paymentId: payment.id } });
+  await Appointment.updateOne({ _id: record.appointmentId, patient: record.userId }, { $set: {
+    payment_status: 'paid', payment_amount: record.amount / 100, payment_reference: payment.id, payment_method: record.method,
+  } });
+  emitAppointmentUpdated({ patient: record.userId, counselor: record.providerId });
+  return { success: true, paid: true, paymentId: payment.id, amount: record.amount / 100, currency: record.currency };
+}
+
+export async function recoverAppointmentPayment(orderId) {
+  const record = await AppointmentPayment.findOne({ orderId });
+  if (!record) return null;
+  return withAppointmentPaymentLock(record.appointmentId, async () => {
+    const fresh = await AppointmentPayment.findById(record._id);
+    const result = await appointmentGateway.orders.fetchPayments(orderId);
+    const payment = result?.items?.find((item) => item.status === 'captured');
+    if (!payment) return { success: false, pending: true };
+    return completeAppointmentPayment(fresh, payment);
+  });
+}

@@ -3,6 +3,9 @@ import mongoose from "../persistence/mongoose.js";
 const appointmentSchema = new mongoose.Schema(
   {
     payment_method: { type: String },
+    payment_status: { type: String, default: 'pending' },
+    payment_amount: { type: Number },
+    payment_reference: { type: String },
     patient: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

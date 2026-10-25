@@ -1,4 +1,5 @@
 import express from "express";
+import { getNearbyProfessionals } from '../controllers/nearbyProfessionalsController.js';
 import { getMyVitals } from '../controllers/patientVitalsController.js';
 import {
   loginUser,
@@ -60,6 +61,7 @@ import {
 } from "../middleware/multerConfig.js";
 
 export const authRoutes = express.Router();
+authRoutes.post('/nearby-professionals', authMiddleware, getNearbyProfessionals);
 authRoutes.get('/me/vitals', authMiddleware, authorizeRoles('user'), getMyVitals);
 
 // OTP & REGISTRATION FLOW

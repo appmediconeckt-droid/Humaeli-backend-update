@@ -230,7 +230,7 @@ const userSchema = new mongoose.Schema({
         type: [String],
         required: function() { return ["counsellor", "doctor"].includes(this.role) && !this.googleId; }
     },
-    acceptedPaymentMethods: { type: [String], default: undefined, enum: ["cash", "online", "upi", "insurance"] },
+    acceptedPaymentMethods: { type: [String], default: undefined, enum: ["cash", "online", "credit_card", "debit_card", "upi", "insurance"] },
     consultationCurrency: { type: String, uppercase: true, match: /^[A-Z]{3}$/ },
     consultationFee: { type: Number, min: 0, max: 9999999.99 },
     experience: {
