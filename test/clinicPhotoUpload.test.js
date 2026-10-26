@@ -81,6 +81,10 @@ describe('Clinic uploaded image persistence and GET responses', () => {
   const res=await request(app).post('/api/clinics').auth(token,{type:'bearer'}).send({clinic_name:'Test Clinic',phone_number:'9876543210',location:'Pune',fee:'650'});
   expect(res.status).to.equal(201);expect(res.body.clinic.fee).to.equal(650);
  });
+ it('returns an explicit fee field for legacy clinics with no saved fee',async()=>{
+  const res=await request(app).get('/api/clinics/clinic-test');
+  expect(res.status).to.equal(200);expect(res.body.clinic).to.have.property('fee',null);
+ });
  it('rejects invalid fees without changing the clinic',async()=>{
   for(const fee of [-1,'abc',true,{},'12.345',10000000]) {
    const res=await request(app).patch('/api/clinics/clinic-test').auth(token,{type:'bearer'}).send({fee});

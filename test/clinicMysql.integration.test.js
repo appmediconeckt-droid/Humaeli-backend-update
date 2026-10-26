@@ -80,6 +80,31 @@ suite('Clinic features on actual MySQL storage', function () {
     const tables = rows.map(r => r.TABLE_NAME);
     for (const name of ['clinics', 'date_ranges', 'unavailable_dates', 'walkin_appointments', 'follow_ups', 'leaves', 'medications', 'doctor_breaks', 'doctor_analytics_events', 'appointment_counters', 'appointment_slots']) assert.ok(tables.includes(name), name);
   });
+  it('persists clinic fees through multipart create, edit, GET and physical MySQL columns', async () => {
+    // No profile fee/currency is required: new doctors can set clinic fees.
+    const add = fee => request(app).post('/clinics').auth(token, { type: 'bearer' })
+      .field('doctor_id', String(doctor._id)).field('clinic_name', 'Fee test clinic')
+      .field('phone_number', '9100000000').field('location', 'Test City').field('fee', fee);
+    const first = await add('650.50');
+    assert.equal(first.status, 201, JSON.stringify(first.body));
+    assert.equal(first.body.clinic.fee, 650.5);
+    const second = await add('800');
+    assert.equal(second.status, 201, JSON.stringify(second.body));
+    const id = first.body.clinicId;
+    const changed = await request(app).patch('/clinics/' + id).auth(token, { type: 'bearer' }).field('fee', '975.25');
+    assert.equal(changed.status, 200, JSON.stringify(changed.body));
+    assert.equal(changed.body.clinic.fee, 975.25);
+    assert.equal((await request(app).get('/clinics/' + id)).body.clinic.fee, 975.25);
+    const list = (await request(app).get('/clinics').query({ doctor_id: String(doctor._id) })).body.clinics;
+    assert.equal(list.find(row => row.id === id).fee, 975.25);
+    assert.equal(list.find(row => row.id === second.body.clinicId).fee, 800);
+    const [stored] = await server.execute('SELECT id, fee FROM `' + database + '`.clinics WHERE id IN (?, ?)', [id, second.body.clinicId]);
+    assert.equal(stored.find(row => row.id === id).fee, 975.25);
+    assert.equal(stored.find(row => row.id === second.body.clinicId).fee, 800);
+    const free = await request(app).patch('/clinics/' + id).auth(token, { type: 'bearer' }).field('fee', '0');
+    assert.equal(free.status, 200, JSON.stringify(free.body));
+    assert.equal((await request(app).get('/clinics/' + id)).body.clinic.fee, 0);
+  });
   it('adds staff with persisted assignment, protects other doctors, and excludes secrets', async () => {
     const r = await auth('post', '/staff', { fullName: 'Nurse', email: 'nurse@test.example', phoneNumber: '9100000004', password: 'StrongTest1!', role: 'nurse', staff_id: 'N-1', nursing_license: 'L-1' });
     assert.equal(r.status, 201, JSON.stringify(r.body));

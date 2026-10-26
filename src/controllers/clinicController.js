@@ -13,11 +13,12 @@ export async function clinicFeeUpdate(body, doctorId) {
   if (body.fee === undefined) return {};
   if (body.fee === null || body.fee === '') return { fee: null };
   const doctor = await User.findById(doctorId);
-  if (!['string', 'number'].includes(typeof body.fee) || !validFee(body.fee, feeCurrency(doctor || {}))) {
+  if (!['string', 'number'].includes(typeof body.fee) || !validFee(body.fee, feeCurrency(doctor || {}) || 'INR')) {
     throw fail(400, 'Enter a valid clinic fee in your profile currency.');
   }
   return { fee: Number(body.fee) };
 }
+const clinicRecord = row => ({ ...serializeClinicPhoto(jsonRecord(row)), fee: row.fee ?? null });
 export const createClinic = handle(async (req, res) => {
   const doctor_id = await doctorScope(req, req.body.doctor_id);
   const clinic = await Clinic.create({ ...pick(req.body, ['clinic_name', 'phone_number', 'location']), doctor_id,
@@ -25,7 +26,7 @@ export const createClinic = handle(async (req, res) => {
     clinic_photo: clinicPhotoPath(req.file) });
   const qr = await ensureClinicQr(clinic);
   emitAvailabilityUpdated(doctor_id);
-  res.status(201).json({ success: true, message: 'Clinic created successfully', clinicId: String(clinic._id), clinic: { ...serializeClinicPhoto(jsonRecord(clinic)), ...qr }, ...qr });
+  res.status(201).json({ success: true, message: 'Clinic created successfully', clinicId: String(clinic._id), clinic: { ...clinicRecord(clinic), ...qr }, ...qr });
 });
 export const getClinics = handle(async (req, res) => {
   const clinics = await Clinic.find(req.query.doctor_id ? { doctor_id: req.query.doctor_id } : {}).sort({ createdAt: -1 }).lean();
@@ -33,7 +34,7 @@ export const getClinics = handle(async (req, res) => {
   const summaries = summarizeAppointmentRatings(rated, 'clinic');
   res.json({ success: true, clinics: clinics.map(row => {
     const summary = summaries.get(String(row._id));
-    return { ...serializeClinicPhoto(jsonRecord(row)), rating: summary?.rating || 0, ratingCount: summary?.ratingCount || 0 };
+    return { ...clinicRecord(row), rating: summary?.rating || 0, ratingCount: summary?.ratingCount || 0 };
   }) });
 });
 export const getClinicById = handle(async (req, res) => {
@@ -41,7 +42,7 @@ export const getClinicById = handle(async (req, res) => {
   if (!clinic) throw fail(404, 'Clinic not found');
   const rated = await Appointment.find({ clinic_id: clinic._id, clinicRating: { $exists: true } }).select('clinic_id patient clinicRating').lean();
   const summary = summarizeAppointmentRatings(rated, 'clinic').get(String(clinic._id));
-  res.json({ success: true, clinic: { ...serializeClinicPhoto(jsonRecord(clinic)), rating: summary?.rating || 0, ratingCount: summary?.ratingCount || 0 } });
+  res.json({ success: true, clinic: { ...clinicRecord(clinic), rating: summary?.rating || 0, ratingCount: summary?.ratingCount || 0 } });
 });
 export const updateClinic = handle(async (req, res) => {
   const clinic = await Clinic.findById(req.params.id);
@@ -52,7 +53,7 @@ export const updateClinic = handle(async (req, res) => {
   await clinic.save();
   const qr = await ensureClinicQr(clinic);
   emitAvailabilityUpdated(clinic.doctor_id);
-  res.json({ success: true, message: 'Clinic updated successfully', clinic: { ...serializeClinicPhoto(jsonRecord(clinic)), ...qr } });
+  res.json({ success: true, message: 'Clinic updated successfully', clinic: { ...clinicRecord(clinic), ...qr } });
 });
 export const deleteClinic = handle(async (req, res) => {
   const clinic = await Clinic.findById(req.params.id);
