@@ -5,9 +5,23 @@ import { clinicPhotoPath, serializeClinicPhoto } from '../services/clinicPhotoSe
 import { Clinic, Availability } from '../models/clinicModels.js';
 import { handle, doctorScope, pick, fail, jsonRecord } from '../utils/clinicAccess.js';
 import { ensureClinicQr } from '../services/clinicQrService.js';
+import User from '../models/userModel.js';
+import { feeCurrency, validFee } from '../utils/consultationCurrency.js';
+
+// A null clinic fee follows the doctor's profile fee, including future changes.
+export async function clinicFeeUpdate(body, doctorId) {
+  if (body.fee === undefined) return {};
+  if (body.fee === null || body.fee === '') return { fee: null };
+  const doctor = await User.findById(doctorId);
+  if (!['string', 'number'].includes(typeof body.fee) || !validFee(body.fee, feeCurrency(doctor || {}))) {
+    throw fail(400, 'Enter a valid clinic fee in your profile currency.');
+  }
+  return { fee: Number(body.fee) };
+}
 export const createClinic = handle(async (req, res) => {
   const doctor_id = await doctorScope(req, req.body.doctor_id);
   const clinic = await Clinic.create({ ...pick(req.body, ['clinic_name', 'phone_number', 'location']), doctor_id,
+    ...await clinicFeeUpdate(req.body, doctor_id),
     clinic_photo: clinicPhotoPath(req.file) });
   const qr = await ensureClinicQr(clinic);
   emitAvailabilityUpdated(doctor_id);
@@ -33,7 +47,7 @@ export const updateClinic = handle(async (req, res) => {
   const clinic = await Clinic.findById(req.params.id);
   if (!clinic) throw fail(404, 'Clinic not found');
   await doctorScope(req, clinic.doctor_id);
-  Object.assign(clinic, pick(req.body, ['clinic_name', 'phone_number', 'location']));
+  Object.assign(clinic, pick(req.body, ['clinic_name', 'phone_number', 'location']), await clinicFeeUpdate(req.body, clinic.doctor_id));
   if (req.file) clinic.clinic_photo = clinicPhotoPath(req.file);
   await clinic.save();
   const qr = await ensureClinicQr(clinic);

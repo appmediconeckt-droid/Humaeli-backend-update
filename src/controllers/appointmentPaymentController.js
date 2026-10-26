@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import Appointment from '../models/appointmentModel.js';
 import User from '../models/userModel.js';
-import Clinic from '../models/clinicModel.js';
+import { Clinic } from '../models/clinicModels.js';
 import AppointmentPayment from '../models/appointmentPaymentModel.js';
 import ProviderPaymentSettings from '../models/providerPaymentSettingsModel.js';
 import { actorId, handle, fail } from '../utils/clinicAccess.js';

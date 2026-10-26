@@ -1,3 +1,4 @@
+import { normalizeStaffPhone } from '../utils/staffPhone.js';
 import bcrypt from 'bcryptjs';
 import User from '../models/userModel.js';
 import Session from '../models/sessionModel.js';
@@ -32,12 +33,18 @@ export const addStaff = handle(async (req, res) => {
   const passwordError = getStrongPasswordError(b.password);
   if (passwordError) throw fail(400, passwordError);
   const email = String(b.email || '').trim().toLowerCase();
-  const phoneNumber = String(b.phoneNumber || b.phone_number || b.contact_number || '').replace(/[\s()-]/g, '');
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^\+?\d{7,15}$/.test(phoneNumber)) throw fail(400, 'Valid email and phone number are required');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw fail(400, 'A valid email is required');
+  let phone;
+  try {
+    phone = normalizeStaffPhone(b.phoneNumber || b.phone_number || b.contact_number, b.phoneCountryCode || '+91', b.phoneCountry);
+  } catch (error) {
+    throw fail(400, error.message);
+  }
+  const { phoneNumber, phoneCountryCode } = phone;
   if (await User.exists({ $or: [{ email }, { phoneNumber }] })) throw fail(409, 'Account already exists');
   const clinic = b.clinic_id !== undefined ? await ownedClinic(assignedDoctor, b.clinic_id) : null;
   const user = await User.create({ ...details(b), fullName: b.fullName || b.full_name || b.name, email,
-    phoneNumber, phoneCountryCode: b.phoneCountryCode || '+91', password: await bcrypt.hash(b.password, 10),
+    phoneNumber, phoneCountryCode, password: await bcrypt.hash(b.password, 10),
     role, assignedDoctor, ...(clinic ? { clinic_id: b.clinic_id.trim() } : {}),
     ...(req.file ? { profilePhoto: uploadedPhoto(req.file) } : {}),
     isActive: true, isEmailVerified: false, isPhoneVerified: false, profileCompleted: true });

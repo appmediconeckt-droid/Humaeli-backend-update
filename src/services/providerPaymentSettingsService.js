@@ -33,10 +33,16 @@ export function publicPaymentSettings(provider, settings) {
   const currency = feeCurrency(provider) || 'INR';
   const methods = expandPaymentMethods(settings?.methods || provider.acceptedPaymentMethods || ['cash']);
   // Legacy card settings did not save a receiving bank account on the server.
-  const available = methods.filter((method) => {
-    if (['credit_card', 'debit_card'].includes(method)) return currency === 'INR' && Boolean(settings?.bankAccount?.accountNumber);
-    if (method === 'upi') return currency === 'INR' && Boolean(settings?.upiId);
-    return true;
-  });
-  return { methods: available, consultationFee: provider.consultationFee ?? 0, currency };
+  const unavailableMethods = {};
+  for (const method of methods) {
+    if (['credit_card', 'debit_card', 'upi'].includes(method) && currency !== 'INR') {
+      unavailableMethods[method] = `Online payment is unavailable for ${currency}. This checkout currently supports INR only.`;
+    } else if (['credit_card', 'debit_card'].includes(method) && !settings?.bankAccount?.accountNumber) {
+      unavailableMethods[method] = 'The provider needs to complete card payment setup.';
+    } else if (method === 'upi' && !settings?.upiId) {
+      unavailableMethods[method] = 'The provider needs to complete UPI payment setup.';
+    }
+  }
+  const available = methods.filter(method => !unavailableMethods[method]);
+  return { methods: available, configuredMethods: methods, unavailableMethods, consultationFee: provider.consultationFee ?? 0, currency };
 }

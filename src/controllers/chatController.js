@@ -13,6 +13,8 @@ import { evaluateSafety } from "../services/safetyGuard.js";
 import { rankCounsellors, formatRankedForPrompt } from "../services/counsellorMatcher.js";
 import { translatePlainText } from "./translateController.js";
 
+export const aiChatRuntime = { generateAIResponse, translatePlainText };
+
 let _openaiClient = null;
 const getOpenAIClient = () => {
   if (!_openaiClient) {
@@ -42,7 +44,7 @@ const translateWithAiFallback = async (text, targetLanguageName) => {
   return response.choices?.[0]?.message?.content?.trim() || text;
 };
 const MAX_HISTORY_TURNS = 10;
-const GUEST_CHAT_LIMIT_MS = 5 * 60 * 1000;
+const GUEST_CHAT_LIMIT_MS = 10 * 60 * 1000;
 const AI_OPENING_EVENT = "__humaelio_ai_opening__";
 const AI_OPENING_RESPONSE = "Hello, I'm Humaelio AI. How are you feeling today?";
 const AI_USER_MESSAGE_LIMIT = 5;
@@ -161,7 +163,7 @@ export const chatWithAI = async (req, res) => {
         String(chat.userMessage || "").trim(),
       ).length;
     } else if (sessionId) {
-      const priorChats = await Chat.find({ sessionId })
+      const priorChats = await Chat.find({ sessionId, userId: null })
         .sort({ createdAt: -1 })
         .limit(MAX_HISTORY_TURNS)
         .lean();
@@ -181,9 +183,12 @@ export const chatWithAI = async (req, res) => {
     const nextUserMessageCount = isOpeningEvent
       ? userMessageCount
       : userMessageCount + 1;
-    const chatLimitReached = nextUserMessageCount >= AI_USER_MESSAGE_LIMIT;
+    // Guests have a time-based preview; the signed-in message cap must not
+    // replace every later guest question with the same recommendation.
+    const messageLimit = userId ? AI_USER_MESSAGE_LIMIT : null;
+    const chatLimitReached = Boolean(userId) && nextUserMessageCount >= AI_USER_MESSAGE_LIMIT;
 
-    // Guests get a five-minute preview. This is server-enforced so changing
+    // Guests get a ten-minute preview. This is server-enforced so changing
     // the browser timer cannot extend the public chat session.
     if (!userId && req.body.sessionId) {
       const firstGuestTurn = await Chat.findOne({ sessionId, userId: null })
@@ -198,7 +203,7 @@ export const chatWithAI = async (req, res) => {
         return res.status(403).json({
           success: false,
           code: "GUEST_CHAT_LIMIT_REACHED",
-          message: "Your five-minute guest chat has ended. Please sign up to continue.",
+          message: "Your free chat has ended. Please sign up to continue.",
           data: { signupRequired: true },
         });
       }
@@ -226,7 +231,7 @@ export const chatWithAI = async (req, res) => {
     let localizedUserMessage = typeof message === "string" ? message.trim() : "";
     if (!isOpeningEvent && localizedUserMessage) {
       try {
-        const translatedUserMessage = await translatePlainText({
+        const translatedUserMessage = await aiChatRuntime.translatePlainText({
           text: localizedUserMessage,
           to: detectedLanguage.code,
         });
@@ -264,7 +269,7 @@ export const chatWithAI = async (req, res) => {
       let openingResponse = AI_OPENING_RESPONSE;
       if (detectedLanguage.code !== "en") {
         try {
-          const translatedOpening = await translatePlainText({
+          const translatedOpening = await aiChatRuntime.translatePlainText({
             text: AI_OPENING_RESPONSE,
             from: "en",
             to: detectedLanguage.code,
@@ -292,8 +297,8 @@ export const chatWithAI = async (req, res) => {
           detectedLanguage: detectedLanguage.name,
           opening: true,
           userMessageCount: 0,
-          messageLimit: AI_USER_MESSAGE_LIMIT,
-          remainingMessages: AI_USER_MESSAGE_LIMIT,
+          messageLimit,
+          remainingMessages: messageLimit,
           chatLimitReached: false,
         },
       });
@@ -424,7 +429,7 @@ export const chatWithAI = async (req, res) => {
 
     // Build system instruction - INTERACTIVE, SUPPORTIVE CHATBOT STYLE
     const systemInstruction = `
-${isFirstTurn ? `🚨 FIRST MESSAGE OF THE CONVERSATION.
+${isFirstTurn && userId ? `🚨 FIRST MESSAGE OF THE CONVERSATION.
 The greeting is normally returned deterministically before reaching you. If you ARE generating this, follow this rule:
 - If the Known profile already shows age AND gender → warm welcome + ask only how they're feeling. DO NOT re-ask age/gender.
 - If age or gender is missing → ask ONLY the missing field, warmly, plus how they're feeling.
@@ -735,7 +740,7 @@ Your goal: Be a supportive friend who helps them feel heard, understood, and gui
       );
       if (detectedLanguage.code !== "en") {
         try {
-          const translatedRecommendation = await translatePlainText({
+          const translatedRecommendation = await aiChatRuntime.translatePlainText({
             text: aiResponse,
             from: "en",
             to: detectedLanguage.code,
@@ -771,11 +776,8 @@ Your goal: Be a supportive friend who helps them feel heard, understood, and gui
           sessionId,
           consultants: recommendedConsultants,
           userMessageCount: nextUserMessageCount,
-          messageLimit: AI_USER_MESSAGE_LIMIT,
-          remainingMessages: Math.max(
-            0,
-            AI_USER_MESSAGE_LIMIT - nextUserMessageCount,
-          ),
+          messageLimit,
+          remainingMessages: messageLimit == null ? null : Math.max(0, messageLimit - nextUserMessageCount),
           chatLimitReached,
         },
       });
@@ -792,6 +794,7 @@ Your goal: Be a supportive friend who helps them feel heard, understood, and gui
     // goes through the model so its first reply follows the native-script rule
     // rather than the old Roman-script greeting templates.
     const isFirstTurnOnboarding =
+      Boolean(userId) &&
       isFirstTurn &&
       detectedLanguage.code === "en" &&
       !(crisisDetection.isCrisis && crisisDetection.level !== "medium");
@@ -893,8 +896,8 @@ Your goal: Be a supportive friend who helps them feel heard, understood, and gui
           onboarding: true,
           quickReplies: [],
           userMessageCount: nextUserMessageCount,
-          messageLimit: AI_USER_MESSAGE_LIMIT,
-          remainingMessages: Math.max(0, AI_USER_MESSAGE_LIMIT - nextUserMessageCount),
+          messageLimit,
+          remainingMessages: messageLimit == null ? null : Math.max(0, messageLimit - nextUserMessageCount),
           chatLimitReached,
         },
       });
@@ -950,7 +953,7 @@ Your goal: Be a supportive friend who helps them feel heard, understood, and gui
         }
       } else {
         // Generate normal AI response
-        aiResponse = await generateAIResponse(
+        aiResponse = await aiChatRuntime.generateAIResponse(
           localizedUserMessage,
           history,
           systemInstruction,
@@ -1005,11 +1008,8 @@ Your goal: Be a supportive friend who helps them feel heard, understood, and gui
         type: "answer",
         consultants: [],
         userMessageCount: nextUserMessageCount,
-        messageLimit: AI_USER_MESSAGE_LIMIT,
-        remainingMessages: Math.max(
-          0,
-          AI_USER_MESSAGE_LIMIT - nextUserMessageCount,
-        ),
+        messageLimit,
+        remainingMessages: messageLimit == null ? null : Math.max(0, messageLimit - nextUserMessageCount),
         chatLimitReached,
       },
     });

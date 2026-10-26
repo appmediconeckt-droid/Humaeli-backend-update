@@ -24,7 +24,7 @@ describe('Clinic uploaded image persistence and GET responses', () => {
   filePath=cloud;
   record={_id:'clinic-test',doctor_id:'doctor-test',clinic_name:'Test Clinic',clinic_photo:null};
   record.save=async()=>record;
-  const doctor={_id:'doctor-test',role:'doctor',isActive:true,isOnline:true};
+  const doctor={_id:'doctor-test',role:'doctor',isActive:true,isOnline:true,consultationFee:500,consultationCurrency:'INR'};
   sinon.stub(User,'findById').callsFake(()=>Object.assign(Promise.resolve(doctor),{select(){return this;}}));
   sinon.stub(Session,'findOne').resolves({_id:'session-test',isActive:true});
   sinon.stub(Session,'updateOne').resolves({});
@@ -69,5 +69,22 @@ describe('Clinic uploaded image persistence and GET responses', () => {
  it('returns an explicit null photo for clinics without an image',async()=>{
   const res=await request(app).post('/api/clinics').auth(token,{type:'bearer'}).send({clinic_name:'Test Clinic',phone_number:'9876543210',location:'Pune'});
   expect(res.status).to.equal(201);expect(res.body.clinic.clinic_photo).to.equal(null);
+ });
+ it('saves an independent clinic fee, preserves it on unrelated edits and resets to the common fee',async()=>{
+  const patch=body=>request(app).patch('/api/clinics/clinic-test').auth(token,{type:'bearer'}).send(body);
+  expect((await patch({fee:'750.50'})).body.clinic.fee).to.equal(750.5);
+  expect((await patch({clinic_name:'Renamed'})).body.clinic.fee).to.equal(750.5);
+  expect((await patch({fee:0})).body.clinic.fee).to.equal(0);
+  expect((await patch({fee:''})).body.clinic.fee).to.equal(null);
+ });
+ it('accepts a clinic fee during creation',async()=>{
+  const res=await request(app).post('/api/clinics').auth(token,{type:'bearer'}).send({clinic_name:'Test Clinic',phone_number:'9876543210',location:'Pune',fee:'650'});
+  expect(res.status).to.equal(201);expect(res.body.clinic.fee).to.equal(650);
+ });
+ it('rejects invalid fees without changing the clinic',async()=>{
+  for(const fee of [-1,'abc',true,{},'12.345',10000000]) {
+   const res=await request(app).patch('/api/clinics/clinic-test').auth(token,{type:'bearer'}).send({fee});
+   expect(res.status).to.equal(400);expect(record.fee).to.equal(undefined);
+  }
  });
 });

@@ -11,18 +11,22 @@ const ownProvider = async (req) => {
 export const getOwnPaymentSettings = handle(async (req, res) => {
   const provider = await ownProvider(req);
   const saved = await ProviderPaymentSettings.findOne({ providerId: provider._id }).lean();
-  res.json({ success: true, methods: expandPaymentMethods(saved?.methods || provider.acceptedPaymentMethods || ['cash']), bankAccount: saved?.bankAccount || {}, upiId: saved?.upiId || '', upiApp: saved?.upiApp || '' });
+  const { currency, unavailableMethods } = publicPaymentSettings(provider, saved);
+  res.json({ success: true, methods: expandPaymentMethods(saved?.methods || provider.acceptedPaymentMethods || ['cash']), currency, unavailableMethods, bankAccount: saved?.bankAccount || {}, upiId: saved?.upiId || '', upiApp: saved?.upiApp || '' });
 });
 export const saveOwnPaymentSettings = handle(async (req, res) => {
   const provider = await ownProvider(req);
   const settings = validateProviderPaymentSettings(req.body);
   await ProviderPaymentSettings.findOneAndUpdate({ providerId: provider._id }, { $set: settings }, { upsert: true, returnDocument: 'after' });
   await User.updateOne({ _id: provider._id }, { $set: { acceptedPaymentMethods: settings.methods } });
-  res.json({ success: true, ...settings });
+  global.io?.emit?.('provider-payment-settings-updated', { providerId: String(provider._id) });
+  const { currency, unavailableMethods } = publicPaymentSettings(provider, settings);
+  res.json({ success: true, ...settings, currency, unavailableMethods });
 });
 export const getProviderPaymentMethods = handle(async (req, res) => {
   const provider = await User.findOne({ _id: req.params.providerId, isActive: true });
   if (!provider || !providerRoles.includes(provider.role)) throw fail(404, 'Provider not found.');
   const saved = await ProviderPaymentSettings.findOne({ providerId: provider._id }).lean();
+  res.set?.('Cache-Control', 'no-store');
   res.json({ success: true, ...publicPaymentSettings(provider, saved) });
 });

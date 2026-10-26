@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import sinon from 'sinon';
 import crypto from 'node:crypto';
 import User from '../src/models/userModel.js';
+import { Clinic } from '../src/models/clinicModels.js';
 import Appointment from '../src/models/appointmentModel.js';
 import AppointmentPayment from '../src/models/appointmentPaymentModel.js';
 import ProviderPaymentSettings from '../src/models/providerPaymentSettingsModel.js';
@@ -75,7 +76,7 @@ describe('Provider payment settings', () => {
   it('expands legacy card settings while exposing no private bank details', () => {
     expect(expandPaymentMethods(['online', 'upi'])).to.deep.equal(['credit_card', 'debit_card', 'upi']);
     const visible = publicPaymentSettings({ consultationFee: 500, consultationCurrency: 'INR' }, settings);
-    expect(visible).to.have.keys('methods', 'consultationFee', 'currency');
+    expect(visible).to.have.keys('methods', 'configuredMethods', 'unavailableMethods', 'consultationFee', 'currency');
     expect(visible.methods).to.include('credit_card').and.include('debit_card').and.include('upi');
     expect(publicPaymentSettings({ acceptedPaymentMethods: ['online', 'upi', 'cash'] }, null).methods).to.deep.equal(['cash']);
   });
@@ -86,6 +87,21 @@ describe('Provider payment settings', () => {
     await getOwnPaymentSettings({ userId: 'patient' }, res);
     expect(res.status.firstCall.args[0]).to.equal(403);
     expect(read.called).to.equal(false);
+  });
+  it('keeps the saved card and UPI methods visible for EUR with an availability reason', () => {
+    const visible = publicPaymentSettings({ consultationCurrency: 'EUR' }, settings);
+    expect(visible.configuredMethods).to.deep.equal(settings.methods);
+    expect(visible.methods).to.deep.equal(['cash']);
+    for (const method of ['credit_card', 'debit_card', 'upi']) expect(visible.unavailableMethods[method]).to.include('EUR');
+    expect(visible).not.to.have.property('bankAccount');
+    expect(visible).not.to.have.property('upiId');
+  });
+  it('shows incomplete legacy payment methods with reasons while keeping them unavailable for checkout', () => {
+    const visible = publicPaymentSettings({ consultationCurrency: 'INR', acceptedPaymentMethods: ['online', 'upi', 'cash'] }, null);
+    expect(visible.configuredMethods).to.deep.equal(['credit_card', 'debit_card', 'upi', 'cash']);
+    expect(visible.methods).to.deep.equal(['cash']);
+    expect(visible.unavailableMethods.credit_card).to.include('setup');
+    expect(visible.unavailableMethods.upi).to.include('setup');
   });
   it('returns payment choices without bank details to the patient', async () => {
     sinon.stub(User, 'findOne').resolves({ _id: 'provider', role: 'doctor', consultationFee: 500, consultationCurrency: 'INR' });
@@ -135,6 +151,20 @@ describe('Appointment card and UPI payments', () => {
     expect(create.called).to.equal(false);
     expect(res.json.firstCall.args[0].order_id).to.equal('order_test');
   });
+  for (const [clinicFee, expected] of [[750, 76000], [null, 51000], [undefined, 51000], [0, 1000]]) {
+    it(`uses clinic fee ${clinicFee} with profile fallback and video surcharge`, async () => {
+      sinon.stub(Appointment, 'findOne').resolves({ _id: 'appointment', counselor: 'provider', clinic_id: 'clinic', status: 'confirmed', consultation_mode: 'video' });
+      sinon.stub(Clinic, 'findById').resolves({ _id: 'clinic', doctor_id: 'provider', fee: clinicFee });
+      sinon.stub(AppointmentPayment, 'findOne').resolves(null);
+      sinon.stub(User, 'findById').resolves({ _id: 'provider', isActive: true, consultationFee: 500, consultationCurrency: 'INR' });
+      sinon.stub(ProviderPaymentSettings, 'findOne').returns({ lean: async () => settings });
+      const create = sinon.stub(appointmentGateway.orders, 'create').resolves({ id: 'order_test' });
+      sinon.stub(AppointmentPayment, 'create').callsFake(async data => data);
+      const res = response();
+      await createAppointmentPaymentOrder({ user: { role: 'user', _id: 'patient' }, params: { appointmentId: 'appointment' }, body: { method: 'credit_card', amount: 1 } }, res);
+      expect(create.firstCall.args[0].amount).to.equal(expected);
+    });
+  }
   it('rejects payment for another patient appointment', async () => {
     sinon.stub(Appointment, 'findOne').resolves(null);
     const create = sinon.spy(appointmentGateway.orders, 'create');
