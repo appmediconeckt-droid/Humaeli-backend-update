@@ -8,6 +8,12 @@ const schema = new mongoose.Schema({
     accountHolder: String, bankName: String, accountNumber: String, ifscCode: String,
   },
   upiId: { type: String, default: '' },
+  payoutFundAccountId: { type: String, select: false },
+  payoutBankFingerprint: { type: String, select: false },
+  payoutBankKeyId: { type: String, select: false },
+  payoutTestFundAccountId: { type: String, select: false },
+  payoutTestBankFingerprint: { type: String, select: false },
+  payoutTestKeyId: { type: String, select: false },
   upiApp: { type: String, enum: ['', 'phonepe', 'google_pay', 'paytm', 'bhim', 'other'], default: '' },
 }, { timestamps: true });
 

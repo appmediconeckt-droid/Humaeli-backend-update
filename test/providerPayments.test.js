@@ -17,16 +17,20 @@ const response = () => ({ status: sinon.stub().returnsThis(), json: sinon.spy() 
 const settings = { methods: ['credit_card', 'debit_card', 'upi', 'cash'], bankAccount, upiId: 'provider@testbank' };
 
 describe('Provider payment settings', () => {
+  let savedMode;
+  beforeEach(() => { savedMode = process.env.PAYMENTS_MODE; process.env.PAYMENTS_MODE = 'live'; });
+  afterEach(() => { if (savedMode === undefined) delete process.env.PAYMENTS_MODE; else process.env.PAYMENTS_MODE = savedMode; });
   afterEach(() => sinon.restore());
-  it('requires receiving bank details when either card type is enabled', () => {
+  it('allows selecting card methods before receiving bank details are added', () => {
     for (const method of ['credit_card', 'debit_card']) {
-      expect(() => validateProviderPaymentSettings({ methods: [method] })).to.throw('account holder');
+      expect(validateProviderPaymentSettings({ methods: [method] }).methods).to.deep.equal([method]);
       expect(validateProviderPaymentSettings({ methods: [method], bankAccount }).bankAccount.accountNumber).to.equal('001234567890');
     }
   });
   for (const role of ['doctor', 'counsellor']) {
     it(`saves and reloads private receiving details for the authenticated ${role}`, async () => {
       sinon.stub(User, 'findById').resolves({ _id: 'owner', role });
+      sinon.stub(ProviderPaymentSettings, 'findOne').returns({ lean: async () => settings });
       const write = sinon.stub(ProviderPaymentSettings, 'findOneAndUpdate').resolves(settings);
       const methods = sinon.stub(User, 'updateOne').resolves({ matchedCount: 1 });
       const res = response();
@@ -34,7 +38,6 @@ describe('Provider payment settings', () => {
       expect(write.firstCall.args[0]).to.deep.equal({ providerId: 'owner' });
       expect(write.firstCall.args[1].$set.bankAccount).to.deep.equal(bankAccount);
       expect(methods.firstCall.args[0]).to.deep.equal({ _id: 'owner' });
-      sinon.stub(ProviderPaymentSettings, 'findOne').returns({ lean: async () => settings });
       const reload = response();
       await getOwnPaymentSettings({ userId: 'owner' }, reload);
       expect(reload.json.firstCall.args[0].bankAccount).to.deep.equal(bankAccount);
@@ -53,6 +56,26 @@ describe('Provider payment settings', () => {
   it('accepts a UPI-only configuration without bank details', () => {
     expect(validateProviderPaymentSettings({ methods: ['upi'], upiId: 'provider@testbank' }).methods).to.deep.equal(['upi']);
     expect(() => validateProviderPaymentSettings({ methods: ['upi'], upiId: 'invalid' })).to.throw('UPI ID');
+  });
+  it('saves method selections without erasing existing receiving details', async () => {
+    sinon.stub(User, 'findById').resolves({ _id: 'owner', role: 'doctor' });
+    sinon.stub(ProviderPaymentSettings, 'findOne').returns({ lean: async () => ({ ...settings, upiApp: 'phonepe' }) });
+    const write = sinon.stub(ProviderPaymentSettings, 'findOneAndUpdate').resolves(settings);
+    sinon.stub(User, 'updateOne').resolves({ matchedCount: 1 });
+    const res = response();
+    await saveOwnPaymentSettings({ userId: 'owner', body: { methods: ['cash', 'upi'] } }, res);
+    expect(res.json.firstCall.args[0].success).to.equal(true);
+    expect(write.firstCall.args[1].$set).to.deep.include({ bankAccount, upiId: settings.upiId, upiApp: 'phonepe' });
+    expect(write.firstCall.args[1].$set.methods).to.deep.equal(['cash', 'upi']);
+  });
+  it('supports selecting UPI before its receiving ID is added', () => {
+    const selected = validateProviderPaymentSettings({ methods: ['upi'] });
+    expect(selected.methods).to.deep.equal(['upi']);
+    expect(publicPaymentSettings({ consultationCurrency: 'INR' }, selected).unavailableMethods.upi).to.include('setup');
+  });
+  it('validates bank details independently of the selected methods', () => {
+    expect(validateProviderPaymentSettings({ methods: ['cash'], bankAccount }).bankAccount).to.deep.equal(bankAccount);
+    expect(() => validateProviderPaymentSettings({ methods: ['cash'], bankAccount: { accountHolder: 'Incomplete' } })).to.throw('account holder');
   });
   it('saves supported UPI app preferences and rejects unknown apps', () => {
     for (const upiApp of ['phonepe', 'google_pay', 'paytm', 'bhim', 'other']) {
@@ -78,7 +101,7 @@ describe('Provider payment settings', () => {
     const visible = publicPaymentSettings({ consultationFee: 500, consultationCurrency: 'INR' }, settings);
     expect(visible).to.have.keys('methods', 'configuredMethods', 'unavailableMethods', 'consultationFee', 'currency');
     expect(visible.methods).to.include('credit_card').and.include('debit_card').and.include('upi');
-    expect(publicPaymentSettings({ acceptedPaymentMethods: ['online', 'upi', 'cash'] }, null).methods).to.deep.equal(['cash']);
+    expect(publicPaymentSettings({ acceptedPaymentMethods: ['online', 'upi', 'cash'] }, null).methods).to.deep.equal(['cash', 'wallet']);
   });
   it('does not allow patients to read private provider bank details', async () => {
     sinon.stub(User, 'findById').resolves({ role: 'user' });
@@ -98,8 +121,8 @@ describe('Provider payment settings', () => {
   });
   it('shows incomplete legacy payment methods with reasons while keeping them unavailable for checkout', () => {
     const visible = publicPaymentSettings({ consultationCurrency: 'INR', acceptedPaymentMethods: ['online', 'upi', 'cash'] }, null);
-    expect(visible.configuredMethods).to.deep.equal(['credit_card', 'debit_card', 'upi', 'cash']);
-    expect(visible.methods).to.deep.equal(['cash']);
+    expect(visible.configuredMethods).to.deep.equal(['credit_card', 'debit_card', 'upi', 'cash', 'wallet']);
+    expect(visible.methods).to.deep.equal(['cash', 'wallet']);
     expect(visible.unavailableMethods.credit_card).to.include('setup');
     expect(visible.unavailableMethods.upi).to.include('setup');
   });
@@ -115,16 +138,17 @@ describe('Provider payment settings', () => {
 
 describe('Appointment card and UPI payments', () => {
   let savedEnv;
-  const record = { _id: 'payment', appointmentId: 'appointment', userId: 'patient', providerId: 'provider', orderId: 'order_test', method: 'credit_card', amount: 50000, currency: 'INR', status: 'pending' };
+  const record = { _id: 'payment', appointmentId: 'appointment', userId: 'patient', providerId: 'provider', orderId: 'order_test', method: 'credit_card', mode: 'test', amount: 50000, currency: 'INR', status: 'pending' };
   const captured = { id: 'pay_test', order_id: 'order_test', amount: 50000, currency: 'INR', status: 'captured', method: 'card', card: { type: 'credit' } };
   beforeEach(() => {
-    savedEnv = [process.env.RAZORPAY_KEY_ID, process.env.RAZORPAY_KEY_SECRET];
+    savedEnv = [process.env.RAZORPAY_KEY_ID, process.env.RAZORPAY_KEY_SECRET, process.env.PAYMENTS_MODE];
+    process.env.PAYMENTS_MODE = 'test';
     process.env.RAZORPAY_KEY_ID = 'rzp_test_fixture'; process.env.RAZORPAY_KEY_SECRET = 'fixture-secret';
     sinon.stub(appointmentPaymentRepository, 'connection').resolves({ query: async () => [[{ acquired: 1 }]], release: sinon.spy() });
   });
   afterEach(() => {
     sinon.restore();
-    ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET'].forEach((key, index) => {
+    ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'PAYMENTS_MODE'].forEach((key, index) => {
       if (savedEnv[index] === undefined) delete process.env[key]; else process.env[key] = savedEnv[index];
     });
   });

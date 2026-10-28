@@ -6,6 +6,7 @@ import Appointment from '../models/appointmentModel.js';
 import AppointmentPayment from '../models/appointmentPaymentModel.js';
 import { emitAppointmentUpdated } from './portalRealtimeService.js';
 import { fail } from '../utils/clinicAccess.js';
+import { paymentMode, requireGatewayEnvironment, requireRecordEnvironment } from './paymentEnvironment.js';
 
 dotenv.config();
 export const appointmentGateway = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID || 'not-configured', key_secret: process.env.RAZORPAY_KEY_SECRET || 'not-configured' });
@@ -26,9 +27,7 @@ export async function withAppointmentPaymentLock(id, action) {
 }
 
 export function requireAppointmentGateway() {
-  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET || /YOUR/.test(process.env.RAZORPAY_KEY_ID)) {
-    throw fail(503, 'Online payments are not configured. Please contact support.');
-  }
+  requireGatewayEnvironment(process.env.RAZORPAY_KEY_ID, process.env.RAZORPAY_KEY_SECRET);
 }
 
 export async function validateCapturedAppointmentPayment(record, payment) {
@@ -47,6 +46,7 @@ export async function validateCapturedAppointmentPayment(record, payment) {
 
 // This records a collected payment. Provider bank settlement is a separate step.
 export async function completeAppointmentPayment(record, payment) {
+  requireRecordEnvironment(record);
   await validateCapturedAppointmentPayment(record, payment);
   if (record.status === 'paid' && record.paymentId !== payment.id) throw fail(409, 'This appointment has already been paid.');
   await AppointmentPayment.updateOne({ _id: record._id }, { $set: { status: 'paid', paymentId: payment.id } });
@@ -54,7 +54,7 @@ export async function completeAppointmentPayment(record, payment) {
     payment_status: 'paid', payment_amount: record.amount / 100, payment_reference: payment.id, payment_method: record.method,
   } });
   emitAppointmentUpdated({ patient: record.userId, counselor: record.providerId });
-  return { success: true, paid: true, paymentId: payment.id, amount: record.amount / 100, currency: record.currency };
+  return { success: true, paid: true, paymentId: payment.id, amount: record.amount / 100, currency: record.currency, mode: paymentMode() };
 }
 
 export async function recoverAppointmentPayment(orderId) {
@@ -62,6 +62,7 @@ export async function recoverAppointmentPayment(orderId) {
   if (!record) return null;
   return withAppointmentPaymentLock(record.appointmentId, async () => {
     const fresh = await AppointmentPayment.findById(record._id);
+    requireRecordEnvironment(fresh);
     const result = await appointmentGateway.orders.fetchPayments(orderId);
     const payment = result?.items?.find((item) => item.status === 'captured');
     if (!payment) return { success: false, pending: true };

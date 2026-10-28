@@ -5,11 +5,12 @@ import { getAppointments } from "../src/controllers/appointmentController.js";
 import Chat from "../src/models/Chat.js";
 import Message from "../src/models/Message.js";
 import Appointment from "../src/models/appointmentModel.js";
+import User from "../src/models/userModel.js";
 import { getUserPhotoUrl } from "../src/utils/anonymousUser.js";
 
 const photo = "https://api.dicebear.com/7.x/avataaars/png?seed=patient";
 const patient = { _id: "patient-1", anonymous: "Boss", profilePhoto: { url: photo } };
-const response = () => ({ json: sinon.spy(), status() { return this; } });
+const response = () => ({ statusCode: 200, json: sinon.spy(), status(code) { this.statusCode = code; return this; } });
 
 describe("Counselor patient profile images", () => {
   afterEach(() => sinon.restore());
@@ -59,15 +60,24 @@ describe("Counselor patient profile images", () => {
     });
 
     it(`includes the user's saved photo in the ${role} appointment response`, async () => {
+      sinon.stub(User, "findById").returns({ select() { return this; }, lean: async () => ({ role, accountType: role }) });
       sinon.stub(Appointment, "deleteMany").resolves({ deletedCount: 0 });
       const chain = { populate: sinon.stub().returnsThis(), sort() { return this; },
         lean: async () => [{ _id: "appointment-1", patient }] };
       sinon.stub(Appointment, "find").returns(chain);
       const res = response();
       await getAppointments({ user: { _id: "provider-1", role }, query: {} }, res);
+      expect(res.statusCode).to.equal(200);
       expect(chain.populate.firstCall.args[1]).to.include("profilePhoto");
       expect(res.json.firstCall.args[0][0].patient.profilePhoto.url).to.equal(photo);
-      expect(res.json.firstCall.args[0][0].patient.name).to.equal("Boss");
+      const returnedPatient = res.json.firstCall.args[0][0].patient;
+      if (role === "doctor") {
+        expect(returnedPatient).to.deep.equal(patient);
+      } else {
+        expect(returnedPatient.name).to.equal("Boss");
+        expect(returnedPatient.fullName).to.equal("");
+        expect(returnedPatient.email).to.equal("");
+      }
     });
   }
 });

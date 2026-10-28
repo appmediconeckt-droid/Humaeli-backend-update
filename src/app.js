@@ -532,6 +532,12 @@ app.use("/api/admin/refunds", adminRefundRoutes);
 export const startDatabaseJobs = createDatabaseStartup(mongoose.connection, async () => {
   if (process.env.NODE_ENV === "test") return;
   await resetAllUsersPresence();
+  const { reconcileDoctorSettlements } = await import('./services/doctorSettlementService.js');
+  const doctorPayoutInterval = setInterval(() => {
+    if (mongoose.connection.readyState !== 1) return;
+    reconcileDoctorSettlements().catch(error => console.error('Doctor payout reconciliation failed:', error.message));
+  }, 60000);
+  doctorPayoutInterval.unref?.();
   let appointmentCleanupRunning = false;
   const runAppointmentCleanup = async () => {
     if (mongoose.connection.readyState !== 1 || appointmentCleanupRunning) return;

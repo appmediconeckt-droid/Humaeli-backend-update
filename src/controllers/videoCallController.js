@@ -329,6 +329,7 @@ export const videoCallController = {
       const {
         receiverId,
         receiverType,
+        socketId,
         callType = "video",
         message = "I'd like to start a video call with you.",
         initiatorName,
@@ -336,7 +337,7 @@ export const videoCallController = {
 
       const initiatorId = req.user?._id;
       const initiatorType = normalizeParticipantType(req.user?.role || "user");
-      const receiverTypeNormalized = normalizeParticipantType(receiverType);
+      let receiverTypeNormalized = normalizeParticipantType(receiverType);
 
       if (!initiatorId || !receiverType || !receiverId) {
         return res.status(400).json({
@@ -370,6 +371,9 @@ export const videoCallController = {
         receiverId,
         receiverTypeNormalized,
       );
+      // Older clients label all professionals as counsellors. Route using the
+      // recipient's stored role so doctor calls have the correct lifecycle.
+      if (receiverDetails?.type) receiverTypeNormalized = normalizeParticipantType(receiverDetails.type);
 
       if (!initiatorDetails) {
         return res.status(404).json({
@@ -383,6 +387,22 @@ export const videoCallController = {
           success: false,
           error: `Receiver not found`,
         });
+      }
+
+      // Patients receive doctor calls; only doctors may initiate this pair.
+      if (['user', 'patient'].includes(initiatorType) && receiverTypeNormalized === 'doctor') {
+        return res.status(403).json({ success: false, code: 'DOCTOR_CALLS_ONLY', error: 'Only the doctor can start this consultation call. Please wait for the doctor to call you.' });
+      }
+
+      // Tie delivery readiness to the authenticated HTTP caller, rather than
+      // requiring a custom socket acknowledgement before this request can run.
+      if (socketId !== undefined) {
+        const callerSocket = typeof socketId === 'string' ? global.io?.sockets?.sockets?.get(socketId) : null;
+        if (!callerSocket || String(callerSocket.userId) !== String(initiatorId)) {
+          return res.status(409).json({ success: false, code: 'CALL_CONNECTION_NOT_READY', error: 'Your call connection changed. Reconnect and retry.' });
+        }
+        await callerSocket.join(`user_${initiatorId}`);
+        await global.socketHandler?.markUserOnline?.(callerSocket);
       }
 
       // Check for existing active call request
@@ -406,7 +426,11 @@ export const videoCallController = {
         isParticipantLiveOnline(receiverId),
       ]);
 
-      if (!initiatorOnline || !receiverOnline) {
+      // An appointment patient can be reconnecting or waking the app from
+      // the incoming push. Keep the doctor's request pending and accept-able
+      // instead of replacing it with an already-missed notification.
+      const doctorPatientCall = initiatorType === 'doctor' && receiverTypeNormalized === 'user';
+      if (!initiatorOnline || (!receiverOnline && !doctorPatientCall)) {
         if (existingCall?.callId) {
           existingCall.status = "cancelled";
           existingCall.isActive = false;
@@ -441,11 +465,12 @@ export const videoCallController = {
 
       const callId = uuidv4();
       const roomId = uuidv4();
+      const requestTimeoutSeconds = doctorPatientCall ? 60 : CALL_REQUEST_TIMEOUT_SECONDS;
 
       // Set expiration time for unanswered call requests.
       const expiresAt = new Date();
       expiresAt.setSeconds(
-        expiresAt.getSeconds() + CALL_REQUEST_TIMEOUT_SECONDS,
+        expiresAt.getSeconds() + requestTimeoutSeconds,
       );
 
       // If existing pending call exists, check if expired
@@ -513,7 +538,7 @@ export const videoCallController = {
                 callType,
                 message,
                 expiresAt,
-                remainingSeconds: CALL_REQUEST_TIMEOUT_SECONDS,
+                remainingSeconds: requestTimeoutSeconds,
                 timestamp: new Date(),
               },
             );
@@ -653,6 +678,17 @@ export const videoCallController = {
         profilePhoto: initiatorDetails.profilePhoto,
       });
 
+      // Validate and persist before publishing an incoming call. Otherwise a
+      // schema failure can ring the patient for a call that was never saved.
+      await Call.create({
+        callId, roomId,
+        callType: normalizeCallMediaType(callType), status: 'pending',
+        callerId: initiatorId, initiatorType,
+        receiverId, receiverType: receiverTypeNormalized,
+        callerName: initiatorDetails.fullName, receiverName: receiverDetails.fullName,
+        callerAvatar: initiatorDetails.profilePhoto, receiverAvatar: receiverDetails.profilePhoto,
+        isActive: true, expiresAt,
+      });
       activeCalls.set(callId, callData);
 
       const initiatorDisplayNameForReceiver = videoCallController.getDisplayName(
@@ -679,29 +715,11 @@ export const videoCallController = {
             callType,
             message,
             expiresAt,
-            remainingSeconds: CALL_REQUEST_TIMEOUT_SECONDS,
+            remainingSeconds: requestTimeoutSeconds,
             timestamp: new Date(),
           },
         );
       }
-
-      // Create new call record in DB
-      await Call.create({
-        callId,
-        roomId,
-        callType: (callType === "voice" || callType === "audio") ? "voice" : "video",
-        status: "pending",
-        callerId: initiatorId,
-        initiatorType: initiatorType,
-        receiverId: receiverId,
-        receiverType: receiverTypeNormalized,
-        callerName: initiatorDetails.fullName,
-        receiverName: receiverDetails.fullName,
-        callerAvatar: initiatorDetails.profilePhoto,
-        receiverAvatar: receiverDetails.profilePhoto,
-        isActive: true,
-        expiresAt,
-      });
 
       await createNotificationSafely({
         recipientId: receiverId,
@@ -730,6 +748,7 @@ export const videoCallController = {
         callId,
         roomId,
         status: "pending",
+        receiverOffline: !receiverOnline,
         expiresAt,
         callData: {
           id: callId,
@@ -2523,9 +2542,10 @@ getCallHistory: async (req, res) => {
 };
 
 // Auto-cancel expired requests every second
-setInterval(async () => {
+const callExpiryInterval = setInterval(async () => {
   const cancelled = await videoCallController.cancelExpiredRequests();
   if (cancelled > 0) {
     console.log(`Auto-cancelled ${cancelled} expired call requests`);
   }
 }, 1000);
+callExpiryInterval.unref?.();

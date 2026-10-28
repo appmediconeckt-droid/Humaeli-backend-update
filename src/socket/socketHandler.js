@@ -204,6 +204,16 @@ class SocketHandler {
 
   initialize() {
     this.io.on("connection", async (socket) => {
+      // A caller must be in its delivery room and present before initiating
+      // the HTTP call request. Transport connection alone is not sufficient.
+      socket.on('call:ready', async (ack) => {
+        if (typeof ack !== 'function') return;
+        try {
+          await socket.join(`user_${socket.userId}`);
+          await this.markUserOnline(socket);
+          ack({ ready: true });
+        } catch { ack({ ready: false }); }
+      });
       // console.log(`📱 User connected: ${socket.userId} (${socket.userRole})`);
 
       // Get user details
@@ -213,8 +223,6 @@ class SocketHandler {
         socket.disconnect();
         return;
       }
-
-      await this.markUserOnline(socket);
 
       // Join the role-specific room and a stable fallback room so
       // call notifications can be delivered regardless of role spelling.
@@ -227,6 +235,7 @@ class SocketHandler {
       if (socket.userRole === "counselor") {
         socket.join(`counsellor_${socket.userId}`);
       }
+      await this.markUserOnline(socket);
 
       // Join all active chats for this user
       await this.joinExistingChats(socket);

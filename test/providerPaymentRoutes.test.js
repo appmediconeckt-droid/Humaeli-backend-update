@@ -5,6 +5,10 @@ import { app } from '../src/app.js';
 describe('Payment route authentication', () => {
   for (const [method, path] of [
     ['get', '/api/payments/preferences'],
+    ['get', '/api/payments/wallet'],
+    ['post', '/api/payments/wallet/test-bank'],
+    ['post', '/api/payments/wallet/payment/settlement'],
+    ['put', '/api/payments/providers/provider/payout-bank'],
     ['put', '/api/payments/preferences'],
     ['get', '/api/payments/providers/provider/methods'],
     ['post', '/api/payments/appointments/appointment/order'],

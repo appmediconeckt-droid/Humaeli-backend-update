@@ -13,6 +13,7 @@ export const Clinic = model('Clinic', 'clinics', {
   doctor_id: ref(), clinic_name: requiredText, phone_number: requiredText,
   location: requiredText, clinic_photo: String,
   fee: { type: Number, min: 0, max: 9999999.99, default: null },
+  videoConsultationAdditionalFee: { type: Number, min: 0, max: 9999999.99, default: 0 },
 });
 export const Availability = model('Availability', 'date_ranges', {
   doctor_id: ref(), clinic_id: ref('Clinic'), availability_date: String,

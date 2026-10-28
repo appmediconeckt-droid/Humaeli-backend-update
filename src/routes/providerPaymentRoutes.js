@@ -1,10 +1,17 @@
 import { Router } from 'express';
+import { linkDoctorPayoutBank, requestDoctorSettlement, setupDoctorTestBank } from '../controllers/doctorSettlementController.js';
+import { getDoctorWallet, payAppointmentInternally } from '../controllers/doctorWalletController.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { getOwnPaymentSettings, saveOwnPaymentSettings, getProviderPaymentMethods } from '../controllers/providerPaymentSettingsController.js';
 import { createAppointmentPaymentOrder, verifyAppointmentPayment, reconcileAppointmentPayment } from '../controllers/appointmentPaymentController.js';
 
 const router = Router();
 router.use(authMiddleware);
+router.get('/wallet', getDoctorWallet);
+router.post('/wallet/test-bank', setupDoctorTestBank);
+router.post('/wallet/:paymentId/settlement', requestDoctorSettlement);
+router.put('/providers/:providerId/payout-bank', linkDoctorPayoutBank);
+router.post('/appointments/:appointmentId/internal', payAppointmentInternally);
 router.get('/preferences', getOwnPaymentSettings);
 router.put('/preferences', saveOwnPaymentSettings);
 router.get('/providers/:providerId/methods', getProviderPaymentMethods);

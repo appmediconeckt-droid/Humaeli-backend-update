@@ -1,4 +1,5 @@
 import User from '../models/userModel.js';
+import { paymentMode } from '../services/paymentEnvironment.js';
 import ProviderPaymentSettings from '../models/providerPaymentSettingsModel.js';
 import { actorId, fail, handle } from '../utils/clinicAccess.js';
 import { expandPaymentMethods, providerRoles, publicPaymentSettings, validateProviderPaymentSettings } from '../services/providerPaymentSettingsService.js';
@@ -12,11 +13,13 @@ export const getOwnPaymentSettings = handle(async (req, res) => {
   const provider = await ownProvider(req);
   const saved = await ProviderPaymentSettings.findOne({ providerId: provider._id }).lean();
   const { currency, unavailableMethods } = publicPaymentSettings(provider, saved);
+  res.set?.('Cache-Control', 'no-store');
   res.json({ success: true, methods: expandPaymentMethods(saved?.methods || provider.acceptedPaymentMethods || ['cash']), currency, unavailableMethods, bankAccount: saved?.bankAccount || {}, upiId: saved?.upiId || '', upiApp: saved?.upiApp || '' });
 });
 export const saveOwnPaymentSettings = handle(async (req, res) => {
   const provider = await ownProvider(req);
-  const settings = validateProviderPaymentSettings(req.body);
+  const existing = await ProviderPaymentSettings.findOne({ providerId: provider._id }).lean();
+  const settings = validateProviderPaymentSettings(req.body, existing || {});
   await ProviderPaymentSettings.findOneAndUpdate({ providerId: provider._id }, { $set: settings }, { upsert: true, returnDocument: 'after' });
   await User.updateOne({ _id: provider._id }, { $set: { acceptedPaymentMethods: settings.methods } });
   global.io?.emit?.('provider-payment-settings-updated', { providerId: String(provider._id) });
@@ -28,5 +31,5 @@ export const getProviderPaymentMethods = handle(async (req, res) => {
   if (!provider || !providerRoles.includes(provider.role)) throw fail(404, 'Provider not found.');
   const saved = await ProviderPaymentSettings.findOne({ providerId: provider._id }).lean();
   res.set?.('Cache-Control', 'no-store');
-  res.json({ success: true, ...publicPaymentSettings(provider, saved) });
+  res.json({ success: true, mode: paymentMode(), ...publicPaymentSettings(provider, saved) });
 });

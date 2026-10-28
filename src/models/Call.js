@@ -28,7 +28,7 @@ const callSchema = new mongoose.Schema(
     },
     initiatorType: {
       type: String,
-      enum: ["user", "counsellor", "counselor"],
+      enum: ["user", "doctor", "counsellor", "counselor"],
       default: "user",
     },
     receiverId: {
@@ -39,7 +39,7 @@ const callSchema = new mongoose.Schema(
     },
     receiverType: {
       type: String,
-      enum: ["user", "counsellor", "counselor"],
+      enum: ["user", "doctor", "counsellor", "counselor"],
       default: "counsellor",
     },
     callType: {
