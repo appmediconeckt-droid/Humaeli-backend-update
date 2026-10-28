@@ -1526,7 +1526,12 @@ export const videoCallController = {
         normalizeParticipantType(call.receiver.type) === "user";
       let billing = null;
       let billingError = null;
-      if (!wasPendingRequest && (initiatorIsUser || receiverIsUser)) {
+      // Doctor consultations are covered by their appointment fee. Only a
+      // user/counsellor pair may incur an additional usage-based wallet debit.
+      const isCounselorCall =
+        (initiatorIsUser && normalizeParticipantType(call.receiver.type) === "counsellor") ||
+        (receiverIsUser && normalizeParticipantType(call.initiator.type) === "counsellor");
+      if (!wasPendingRequest && isCounselorCall) {
         try {
           billing = await chargeCallByDuration({
             callId,

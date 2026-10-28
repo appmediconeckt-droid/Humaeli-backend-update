@@ -574,6 +574,14 @@ export const chargeCallByDuration = async ({
   durationSeconds,
 }) => {
   if (!isPaidSessionsEnabled()) return null;
+  // Do not trust a caller-supplied "counselorId": legacy call clients may
+  // label doctors as counsellors. Check the stored account before any debit,
+  // transaction lookup, counselor earning, or payment notification.
+  const counselor = await User.findById(counselorId).select("fullName role accountType");
+  const providerRole = String(counselor?.role || "").trim().toLowerCase();
+  if (counselor?.accountType === "doctor" || !["counsellor", "counselor"].includes(providerRole)) {
+    return null;
+  }
   const callType = sessionType === "voice" ? "voice" : "video";
   const rate = getSessionAmount(callType);
   const rateDurationMinutes = getPaidSessionConfig().durationMinutes;
@@ -597,10 +605,7 @@ export const chargeCallByDuration = async ({
     return { transaction: null, amount: 0, walletBalance: user?.walletBalance || 0 };
   }
 
-  const [user, counselor] = await Promise.all([
-    User.findById(userId),
-    User.findById(counselorId).select("fullName"),
-  ]);
+  const user = await User.findById(userId);
   if (!user) {
     const error = new Error("User not found");
     error.statusCode = 404;

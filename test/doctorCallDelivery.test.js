@@ -5,6 +5,8 @@ import User from '../src/models/userModel.js';
 import Call from '../src/models/Call.js';
 import Notification from '../src/models/Notification.js';
 import NotificationToken from '../src/models/NotificationToken.js';
+import Transaction from '../src/models/transactionModel.js';
+import CounselorEarning from '../src/models/CounselorEarning.js';
 
 // Socket delivery and notifications are captured locally; no real patient is called.
 describe('Doctor appointment call delivery', () => {
@@ -31,6 +33,79 @@ describe('Doctor appointment call delivery', () => {
     sinon.stub(User, 'findById').returns({ select() { return this; }, lean: async () => ({}) });
   });
   afterEach(() => { sinon.restore(); global.io = oldIo; global.socketHandler = oldHandler; });
+  for (const callType of ['video', 'voice', 'audio']) {
+    for (const endedByPatient of [false, true]) {
+      it(`${callType}: ends a doctor appointment without wallet billing when ${endedByPatient ? 'patient' : 'doctor'} hangs up`, async () => {
+        const clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+        const transactionLookup = sinon.stub(Transaction, 'findOne').rejects(new Error('Doctor calls must not query wallet transactions'));
+        const debit = sinon.stub(Transaction, 'create').rejects(new Error('Doctor calls must not debit the wallet'));
+        const earning = sinon.stub(CounselorEarning, 'findOneAndUpdate').rejects(new Error('Doctor calls must not create counselor earnings'));
+        const initiated = response();
+        await videoCallController.initiateCall({ user: { _id: doctor, role: 'doctor' }, body: { receiverId: patient, receiverType: 'user', callType } }, initiated);
+        expect(initiated.code).to.equal(201);
+        const callId = initiated.body.callId;
+        const accepted = response();
+        await videoCallController.acceptCall({ user: { _id: patient, role: 'user' }, params: { callId }, body: { acceptorType: 'user' } }, accepted);
+        expect(accepted.body.status).to.equal('active');
+        clock.setSystemTime(Date.now() + 120000);
+        const ended = response();
+        await videoCallController.endCall({ user: { _id: endedByPatient ? patient : doctor }, params: { callId }, body: {} }, ended);
+        expect(ended.code).to.equal(200);
+        expect(ended.body.callSummary).to.include({ duration: 120, billedAmount: 0, billingError: null });
+        expect(transactionLookup.called).to.equal(false);
+        expect(debit.called).to.equal(false);
+        expect(earning.called).to.equal(false);
+        expect(Call.findOneAndUpdate.lastCall.args[1]).to.include({ paymentTransactionId: null, paymentAmount: 0 });
+        const repeated = response();
+        await videoCallController.endCall({ user: { _id: patient }, params: { callId }, body: {} }, repeated);
+        expect(repeated.body.message).to.equal('Call already ended');
+        expect(debit.called).to.equal(false);
+      });
+    }
+  }
+  for (const initiatedByUser of [true, false]) {
+    it(`still deducts wallet usage for counselor video calls initiated by the ${initiatedByUser ? 'user' : 'counselor'}`, async () => {
+      const settingKeys = ['PAID_COUNSELOR_SESSIONS_ENABLED', 'COUNSELOR_VIDEO_FEE', 'COUNSELOR_SESSION_DURATION_MINUTES', 'PLATFORM_COMMISSION_PERCENT'];
+      const savedSettings = settingKeys.map(key => process.env[key]);
+      Object.assign(process.env, { PAID_COUNSELOR_SESSIONS_ENABLED: 'true', COUNSELOR_VIDEO_FEE: '300', COUNSELOR_SESSION_DURATION_MINUTES: '30', PLATFORM_COMMISSION_PERCENT: '20' });
+      try {
+        const clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+        const wallet = { walletBalance: 100, role: 'user', save: sinon.stub().resolves() };
+        const provider = { role: 'counsellor', fullName: 'Counselor' };
+        User.findById.callsFake(id => {
+          const record = String(id) === doctor ? provider : wallet;
+          const query = Promise.resolve(record);
+          query.select = () => query;
+          query.lean = async () => record;
+          return query;
+        });
+        videoCallController.getUserDetails.callsFake(async id => ({ fullName: id === doctor ? 'Counselor' : 'Patient', type: id === doctor ? 'counsellor' : 'user', isActive: true }));
+        sinon.stub(User, 'findByIdAndUpdate').resolves({});
+        sinon.stub(Transaction, 'findOne').resolves(null);
+        const debit = sinon.stub(Transaction, 'create').callsFake(async data => ({ _id: 'payment', ...data }));
+        sinon.stub(CounselorEarning, 'findOneAndUpdate').resolves({});
+        const initiator = initiatedByUser ? patient : doctor;
+        const receiver = initiatedByUser ? doctor : patient;
+        const receiverType = initiatedByUser ? 'counsellor' : 'user';
+        const initiated = response();
+        await videoCallController.initiateCall({ user: { _id: initiator, role: initiatedByUser ? 'user' : 'counsellor' }, body: { receiverId: receiver, receiverType, callType: 'video' } }, initiated);
+        expect(initiated.code).to.equal(201);
+        const callId = initiated.body.callId;
+        const accepted = response();
+        await videoCallController.acceptCall({ user: { _id: receiver }, params: { callId }, body: { acceptorType: receiverType } }, accepted);
+        expect(accepted.body.status).to.equal('active');
+        clock.setSystemTime(Date.now() + 180000);
+        const ended = response();
+        await videoCallController.endCall({ user: { _id: patient }, params: { callId }, body: {} }, ended);
+        expect(ended.body.callSummary).to.include({ billedAmount: 30, walletBalance: 70, billingError: null });
+        expect(debit.calledOnce).to.equal(true);
+        expect(debit.firstCall.args[0]).to.include({ userId: patient, counselorId: doctor, amount: 30 });
+        expect(Call.findOneAndUpdate.lastCall.args[1]).to.include({ paymentAmount: 30, paymentStatus: 'paid' });
+      } finally {
+        settingKeys.forEach((key, index) => { if (savedSettings[index] === undefined) delete process.env[key]; else process.env[key] = savedSettings[index]; });
+      }
+    });
+  }
   it('delivers a video incoming event to the patient and exposes the pending request', async () => {
     const res = response();
     await videoCallController.initiateCall({ user: { _id: doctor, role: 'doctor' }, body: { receiverId: patient, receiverType: 'user', callType: 'video' } }, res);
