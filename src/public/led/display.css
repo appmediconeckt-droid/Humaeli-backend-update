@@ -42,3 +42,5 @@
   #updated{width:100%;overflow-wrap:anywhere}
 }
 @media(max-width:360px){.counts{grid-template-columns:1fr}.count{border-right:0;border-bottom:1px solid #236087;padding:10px}.count:last-child{border:0}}
+.pending-patients{margin:18px 0;padding:16px 20px;border:1px solid #e9c884;border-radius:12px;background:#fff8e8;color:#77510b}.pending-patients h3{margin:0 0 8px;font-size:18px}.pending-tokens{font-size:30px;font-weight:700;overflow-wrap:anywhere}.pending-patients p{margin:8px 0 0;font-size:15px;line-height:1.5}
+.doctor.has-pending{grid-template-rows:auto auto auto minmax(70px,1fr) auto auto auto 2vh auto}.has-pending .pending-patients{grid-column:1;grid-row:7;margin:10px 0 0;padding:12px 16px;text-align:left;background:#3a2b15;border-color:#b3893a;color:#ffe2a3}.has-pending .pending-patients h3{font-size:16px}.has-pending .pending-patients p{font-size:12px}.has-pending .counts{grid-row:9}@media(max-width:900px),(max-aspect-ratio:1/1){.doctor.has-pending,.single .doctor.has-pending{grid-template-rows:auto auto auto 180px auto auto auto 16px auto auto}.has-pending .doctor-info{grid-row:10}}

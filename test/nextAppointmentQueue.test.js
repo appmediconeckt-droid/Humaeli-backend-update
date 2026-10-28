@@ -17,7 +17,8 @@ describe("Doctor Next appointment queue", () => {
     expect(res.statusCode).to.equal(200);
     expect(record.save.calledOnce).to.equal(true);
     expect(res.body.appointment).to.include({ status: "pending", queue_status: "skipped" });
-    expect(record.consultation_started_at).to.equal(undefined);
+    expect(record.consultation_started_at == null).to.equal(true);
+    expect(record.consultation_timing.availability).to.include({ status: 'unavailable', returnedAt: null });
   });
   it("rejects moving a started online consultation to Next", async () => {
     const record = { counselor: "doctor-1", status: "confirmed", consultation_started_at: new Date(), save: sinon.spy() };
@@ -41,6 +42,7 @@ describe("Doctor Next appointment queue", () => {
     const res = response();
     await updateWalkinAppointment({ user: { _id: "doctor-1" }, params: { id: "walkin-1" }, body: { appointment_status: "skipped" } }, res);
     expect(res.statusCode).to.equal(200);
-    expect(update.firstCall.args[1]).to.deep.equal({ $set: { appointment_status: "skipped" } });
+    expect(update.firstCall.args[1].$set.appointment_status).to.equal('skipped');
+    expect(update.firstCall.args[1].$set.consultation_timing.availability).to.include({ status: 'unavailable', returnedAt: null });
   });
 });

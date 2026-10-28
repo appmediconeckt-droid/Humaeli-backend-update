@@ -30,6 +30,7 @@ router.get('/walkin/:doctorClinicId/queue', handle(async (req, res) => {
     doctor: { id: link.doctor_id, name: doctor.fullName }, roomId: link.roomId || null, queueDate,
     current: data.current ? { token: data.current.tokenNumber, status: data.current.status } : null,
     nextTokens: data.waiting.slice(0, 2).map(entry => entry.tokenNumber),
+    pendingTokens: (data.pending || []).map(entry => entry.tokenNumber),
     waitingCount: data.waitingCount, totalPatients: data.totalPatients, completedCount: data.completedCount, ...timing });
 }));
 router.patch('/walkin/:doctorClinicId/room', protect, handle(async (req, res) => {

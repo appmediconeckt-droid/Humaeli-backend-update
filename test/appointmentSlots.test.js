@@ -32,17 +32,13 @@ describe("Availability-based appointment tokens", () => {
   const reserve = (time, options = {}) => withAppointmentSlot({ doctorId: "doctor-1", date, time, ...options }, async (slot) => slot);
 
   for (const status of ["pending", "confirmed", "in-progress", "completed"]) {
-    it(`blocks another slot for the same patient and doctor after a ${status} booking`, async () => {
+    it(`temporarily allows another slot for the same patient and doctor after a ${status} booking`, async () => {
       slotRepository.online.resolves([{ patient: "patient-1", appointment_time: "10:00:00", status }]);
-      const save = sandbox.spy();
-      try {
-        await withAppointmentSlot({ doctorId: "doctor-1", date, time: "10:15", patientId: "patient-1" }, save);
-        throw new Error("Should reject");
-      } catch (error) {
-        expect(error.status).to.equal(409);
-        expect(error.code).to.equal("DUPLICATE_APPOINTMENT");
-      }
-      expect(save.called).to.equal(false);
+      const save = sandbox.stub().callsFake(async slot => slot);
+      const result = await withAppointmentSlot({ doctorId: "doctor-1", date, time: "10:15", patientId: "patient-1" }, save);
+      expect(result.time).to.equal('10:15:00');
+      expect(result.token).to.equal(2);
+      expect(save.calledOnce).to.equal(true);
       expect(connection.release.calledOnce).to.equal(true);
     });
   }
@@ -59,10 +55,17 @@ describe("Availability-based appointment tokens", () => {
     expect((await reserve("10:15", { patientId: "patient-1" })).token).to.equal(2);
   });
 
-  it("blocks a second online booking when the patient already has a linked walk-in", async () => {
+  it("temporarily allows a second slot when the patient already has a linked walk-in", async () => {
     slotRepository.walkins.resolves([{ patient_id: "patient-1", appointment_time: "10:00:00", appointment_status: "booked" }]);
-    try { await reserve("10:15", { patientId: "patient-1" }); throw new Error("Should reject"); }
-    catch (error) { expect(error.code).to.equal("DUPLICATE_APPOINTMENT"); }
+    expect((await reserve('10:15', { patientId: 'patient-1' })).time).to.equal('10:15:00');
+  });
+  it('still rejects the same patient booking an occupied slot while the daily limit is disabled', async () => {
+    slotRepository.online.resolves([{ patient: 'patient-1', appointment_time: '10:00:00', status: 'pending' }]);
+    const save = sandbox.spy();
+    try { await withAppointmentSlot({ doctorId: 'doctor-1', date, time: '10:00', patientId: 'patient-1' }, save); throw new Error('Should reject'); }
+    catch (error) { expect(error.status).to.equal(409); expect(error.message).to.include('slot is already booked'); }
+    expect(save.called).to.equal(false);
+    expect(connection.release.calledOnce).to.equal(true);
   });
 
   it("blocks new bookings only at the unavailable clinic and keeps other tokens stable", async () => {

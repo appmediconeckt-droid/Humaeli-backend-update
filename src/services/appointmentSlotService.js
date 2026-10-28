@@ -4,6 +4,7 @@ import UnavailableDate from "../models/unavailableDateModel.js";
 import Appointment from "../models/appointmentModel.js";
 import WalkinAppointment from "../models/walkinAppointmentModel.js";
 import { getPool } from "../config/mysql.js";
+import { ENFORCE_DAILY_PATIENT_LIMIT } from './appointmentBookingPolicy.js';
 
 export const slotError = (message, status = 422) => Object.assign(new Error(message), { status });
 export const timeMinutes = (value) => {
@@ -94,7 +95,7 @@ export const withAppointmentSlot = async ({ doctorId, date, time, clinicId, pati
     const [online, walkins] = await Promise.all([slotRepository.online(doctorId, date), slotRepository.walkins(doctorId, date)]);
     // This check shares the doctor/day lock with slot allocation and saving.
     // Completed visits still count; only cancellation/rejection permits rebooking.
-    if (patientId && [...online, ...walkins].some(record => {
+    if (ENFORCE_DAILY_PATIENT_LIMIT && patientId && [...online, ...walkins].some(record => {
       const patient = record.patient || record.patient_id;
       return patient && String(patient._id || patient) === String(patientId) &&
         !["cancelled", "canceled", "rejected", "reject"].includes(String(record.appointment_status || record.status || "").toLowerCase());

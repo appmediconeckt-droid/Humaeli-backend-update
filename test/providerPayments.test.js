@@ -103,6 +103,13 @@ describe('Provider payment settings', () => {
     expect(visible.methods).to.include('credit_card').and.include('debit_card').and.include('upi');
     expect(publicPaymentSettings({ acceptedPaymentMethods: ['online', 'upi', 'cash'] }, null).methods).to.deep.equal(['cash', 'wallet']);
   });
+  it('keeps Wallet available for live INR appointments even when every optional payment method is disabled', () => {
+    const visible = publicPaymentSettings({ consultationCurrency: 'INR' }, { methods: [] });
+    expect(visible.methods).to.deep.equal(['wallet']);
+    expect(visible.configuredMethods).to.deep.equal(['wallet']);
+    expect(visible.unavailableMethods).not.to.have.property('wallet');
+    expect(publicPaymentSettings({ consultationCurrency: 'EUR' }, { methods: [] }).configuredMethods).not.to.include('wallet');
+  });
   it('does not allow patients to read private provider bank details', async () => {
     sinon.stub(User, 'findById').resolves({ role: 'user' });
     const read = sinon.spy(ProviderPaymentSettings, 'findOne');

@@ -42,6 +42,10 @@ describe('LED browser page', () => {
     await new Promise(resolve => setImmediate(resolve));
     const flatten = node => [node.textContent, ...node.children.map(flatten)].join(' ');
     assert.match(flatten(elements.doctors), /AM-001/); assert.match(flatten(elements.doctors), /AM-002/);
+    payload = { ...payload, pendingTokens: ['AM-009'] };
+    await scheduled.find(task => task.delay === 3000).fn();
+    assert.match(flatten(elements.doctors), /Pending — patient unavailable/);
+    assert.match(flatten(elements.doctors), /AM-009/);
     assert.match(flatten(elements.doctors), /Room 101/);
     const counts = elements.doctors.children[0].children.find(node => node.className === 'counts');
     assert.equal(counts.children[3].children[1].children[0].className, 'wait-status');

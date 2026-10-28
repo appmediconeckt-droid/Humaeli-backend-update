@@ -13,14 +13,14 @@
     el('title').textContent = 'Clinic Queue';
     let doctors;
     if (data.displayType === 'doctor') doctors = [{ doctorId: data.doctor?.id || displayId, doctorName: data.doctor?.name, roomId: data.roomId,
-      current: data.current, nextTokens: data.nextTokens, waitingCount: data.waitingCount,
+      current: data.current, nextTokens: data.nextTokens, pendingTokens: data.pendingTokens, waitingCount: data.waitingCount,
       totalPatients: data.totalPatients, completedCount: data.completedCount,
       doctorStatus: data.doctorStatus, estimatedWaitMinutes: data.estimatedWaitMinutes,
       estimatedWaitLabel: data.estimatedWaitLabel, breakInfo: data.breakInfo }];
     else doctors = data.doctors || (data.departments || []).flatMap(d => d.doctors.map(doctor => ({ ...doctor, departmentName: d.departmentName })));
     el('doctors').classList.toggle('single', doctors.length === 1);
     el('doctors').replaceChildren(...doctors.map(doctor => {
-      const card = textNode('section', 'doctor', '');
+      const card = textNode('section', doctor.pendingTokens?.length ? 'doctor has-pending' : 'doctor', '');
       card.append(textNode('h2', '', doctor.doctorName || 'Doctor'));
       const details = [doctor.departmentName || data.department?.name, doctor.roomId ? `Room ${doctor.roomId}` : ''].filter(Boolean).join(' · ');
       const current = textNode('div', 'current', '');
@@ -28,6 +28,13 @@
       card.append(textNode('p', 'details', details), textNode('p', 'label', 'Now serving'),
         current, textNode('p', 'label next-label', 'Next tokens'),
         textNode('div', 'next', (doctor.nextTokens || (doctor.nextToken ? [doctor.nextToken] : [])).join('  ·  ') || '—'));
+      if (doctor.pendingTokens?.length) {
+        const pending = textNode('section', 'pending-patients', '');
+        pending.append(textNode('h3', '', 'Pending — patient unavailable'),
+          textNode('div', 'pending-tokens', doctor.pendingTokens.join('  ·  ')),
+          textNode('p', '', 'Please report to reception when you return. Returned patients will be prioritised after the current consultation.'));
+        card.append(pending);
+      }
       const counts = textNode('div', 'counts', '');
       for (const [label, value, icon] of [['Waiting', doctor.waitingCount, '♟'], ['Completed', doctor.completedCount, '✓'], ['Total today', doctor.totalPatients, '▥'], ['Estimated wait for next token', doctor.estimatedWaitLabel || (doctor.estimatedWaitMinutes == null ? 'Timing unavailable' : `${doctor.estimatedWaitMinutes} min`), '◷']]) {
         const count = textNode('div', 'count', '');

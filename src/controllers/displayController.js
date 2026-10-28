@@ -139,6 +139,7 @@ export const getDisplayQueue = async (req, res) => {
         queueDate,
         current: data.current ? { token: data.current.tokenNumber, status: data.current.status } : null,
         nextTokens: data.waiting.slice(0, 2).map(e => e.tokenNumber),
+        pendingTokens: (data.pending || data.allEntries?.filter(entry => entry.status === 'skipped') || []).map(entry => entry.tokenNumber),
         waitingCount: data.waitingCount,
         totalPatients: data.totalPatients,
         completedCount: data.completedCount,
@@ -167,6 +168,7 @@ export const getDisplayQueue = async (req, res) => {
           roomId: row.roomId,
           current: data.current ? { token: data.current.tokenNumber } : null,
           nextToken: data.waiting[0]?.tokenNumber || null,
+          pendingTokens: (data.allEntries || []).filter(entry => entry.status === 'skipped').map(entry => entry.tokenNumber),
           waitingCount: data.waitingCount,
         };
       }));
@@ -210,6 +212,7 @@ export const getDisplayQueue = async (req, res) => {
           roomId: row.roomId,
           current: data.current ? { token: data.current.tokenNumber } : null,
           nextToken: data.waiting[0]?.tokenNumber || null,
+          pendingTokens: (data.allEntries || []).filter(entry => entry.status === 'skipped').map(entry => entry.tokenNumber),
           waitingCount: data.waitingCount,
         };
       }));

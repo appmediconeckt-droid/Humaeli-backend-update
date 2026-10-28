@@ -42,6 +42,7 @@ export const normalizeQueueAppointment = (record, source = record.source || 'onl
     patientArrivalTime: record.patientArrivalTime || record.checked_in_at || null,
     calledAt: record.calledAt || record.called_at || null,
     status, queueStatus: String(record.queueStatus || record.queue_status || status).toLowerCase(), emergency,
+    availability: record.availability || timing.availability || {},
     timing: {
       ...timing,
       startedAt: timing.startedAt || timing.started_at || record.consultation_started_at || null,
@@ -53,6 +54,8 @@ export const normalizeQueueAppointment = (record, source = record.source || 'onl
 
 export const isActiveQueueAppointment = (item) => !terminal.has(item.status) && !terminal.has(item.queueStatus) && timestamp(item.timing?.endedAt) == null;
 export const isServingQueueAppointment = (item) => isActiveQueueAppointment(item) && (serving.has(item.status) || serving.has(item.queueStatus));
+export const isReturnedQueuePatient = item => item.availability?.status === 'available' && Boolean(item.availability?.returnedAt);
+export const comparePatientReturnPriority = (a, b) => Number(Boolean(b.emergency)) - Number(Boolean(a.emergency)) || Number(isReturnedQueuePatient(b)) - Number(isReturnedQueuePatient(a));
 export const calculateWaitingMinutes = (estimated, now) => estimated == null ? null : Math.max(0, Math.ceil((estimated - now) / MINUTE));
 export const calculateTimingDifference = (start, scheduled) => start == null || scheduled == null ? null : Math.round((start - scheduled) / MINUTE);
 export const getTimingLabel = (difference, started = false) => difference == null ? null :
@@ -99,9 +102,9 @@ export const calculateEstimatedQueue = (records, { doctorId, date, clinicId = ''
     return { start, end: timestamp(record.ended_at) ?? (start == null ? null : start + (Number(record.planned_minutes) || 15) * MINUTE) };
   }));
   const activeBreak = breakIntervals.find(({ start, end }) => start <= now && end > now);
-  const queue = scoped.filter(isActiveQueueAppointment).sort((a, b) =>
+  const queue = scoped.filter(item => isActiveQueueAppointment(item) && (item.availability?.status !== 'unavailable' || item.timing?.startedAt)).sort((a, b) =>
     Number(Boolean(b.timing?.startedAt)) - Number(Boolean(a.timing?.startedAt)) ||
-    Number(isServingQueueAppointment(b)) - Number(isServingQueueAppointment(a)) || Number(b.emergency) - Number(a.emergency) ||
+    Number(isServingQueueAppointment(b)) - Number(isServingQueueAppointment(a)) || comparePatientReturnPriority(a, b) ||
     (timeMinutes(a.time) ?? 1440) - (timeMinutes(b.time) ?? 1440) || (a.token ?? Infinity) - (b.token ?? Infinity) || a.id.localeCompare(b.id) || a.source.localeCompare(b.source));
   const current = queue.find(isServingQueueAppointment);
   const manualPaused = current?.timing?.state === 'paused';

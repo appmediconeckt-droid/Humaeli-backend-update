@@ -225,6 +225,8 @@ export const updateWalkinAppointment = async (req, res) => {
       if (!["pending", "booked", "confirmed", "accepted", "skipped"].includes(appointment.appointment_status) || appointment.consultation_timing?.startedAt) {
         return res.status(409).json({ message: "Only an unstarted appointment can be moved to Next" });
       }
+      updates.consultation_timing = { ...(appointment.consultation_timing || {}),
+        availability: { status: 'unavailable', returnedAt: null, updatedAt: new Date().toISOString(), updatedBy: String(req.userId || req.user?._id), updatedRole: 'doctor' } };
     }
     if (req.body.consultation_action || ["in-progress", "completed", "cancelled", "canceled"].includes(requestedStatus)) {
       if (String(req.userId || req.user?._id || "") !== String(appointment.doctor_id)) {

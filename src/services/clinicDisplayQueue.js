@@ -3,6 +3,7 @@ import { WalkinAppointment } from '../models/clinicModels.js';
 import { query } from '../config/mysql.js';
 import { timeMinutes } from './appointmentSlotService.js';
 import { notifyNextQueueTokens } from './queueTurnNotificationService.js';
+import { normalizeQueueAppointment, isReturnedQueuePatient } from './queueTimingService.js';
 export const clinicDisplayQueueRepository = { query };
 
 // Read the dashboard's appointment source as well as check-ins. Do not create
@@ -11,16 +12,17 @@ export async function clinicDisplayQueue(link, date) {
   const [queue] = await clinicDisplayQueueRepository.query('SELECT id,appointmentId,tokenNumber,status,queuePosition FROM queue_entries WHERE facilityId=? AND doctorId=? AND queueDate=? ORDER BY queuePosition', [link.facility_id, link.doctor_id, date]);
   const entries = new Map(queue.map(row => [String(row.appointmentId || `queue:${row.id}`), { ...row, priority: 'normal' }]));
   const scheduled = link.clinic_id ? await Appointment.find({ counselor: link.doctor_id, clinic_id: link.clinic_id, appointment_date: date })
-    .select('patient token_number queue_status status priority appointment_time').lean() : [];
+    .select('patient token_number queue_status status priority appointment_time consultation_timing').lean() : [];
   const walkins = await WalkinAppointment.find({ doctor_id: link.doctor_id, appointment_date: date,
     $or: [{ doctor_clinic_id: link.id }, { facility_id: link.facility_id }, ...(link.clinic_id ? [{ clinic_id: link.clinic_id }] : [])] })
-    .select('patient_id token_number appointment_status queue_status queue_entry_id appointment_time').lean();
+    .select('patient_id token_number appointment_status queue_status queue_entry_id appointment_time priority consultation_timing').lean();
   for (const row of [...scheduled, ...walkins]) {
     const key = String(row._id), previous = entries.get(key);
     const fallbackPosition = ((timeMinutes(row.appointment_time) ?? 1440) * 10000) + Number(row.token_number ?? 9999);
     const lifecycle = row.status || row.appointment_status;
     let status = ['canceled', 'cancelled', 'rejected'].includes(lifecycle) ? 'cancelled'
       : lifecycle === 'completed' ? 'completed'
+      : lifecycle === 'skipped' ? 'skipped'
       : ['in-progress', 'in_progress', 'in_consultation'].includes(lifecycle) ? 'in_consultation'
       : (row.queue_status && row.queue_status !== 'booked' ? row.queue_status : previous?.status) || 'waiting';
     if (['booked', 'pending', 'confirmed'].includes(status)) status = 'waiting';
@@ -28,15 +30,18 @@ export async function clinicDisplayQueue(link, date) {
     if (status === 'canceled') status = 'cancelled';
     entries.set(key, { tokenNumber: previous?.tokenNumber ?? row.token_number ?? null,
       status, priority: row.priority || 'normal', queuePosition: previous?.queuePosition ?? fallbackPosition,
+      availability: normalizeQueueAppointment(row).availability,
       appointmentId: row._id, patientId: row.patient || row.patient_id || previous?.patientId,
       source: row.patient ? 'online' : 'walkin' });
   }
   const all = [...entries.values()].filter(row => row.status !== 'cancelled');
   const rank = row => row.priority === 'emergency' ? 0 : row.priority === 'urgent' ? 1 : 2;
-  const current = all.find(row => row.status === 'in_consultation') || all.find(row => row.status === 'called') || null;
-  const waiting = all.filter(row => row !== current && ['waiting', 'called'].includes(row.status))
-    .sort((a,b) => Number(b.status === 'called') - Number(a.status === 'called') || rank(a)-rank(b) || a.queuePosition-b.queuePosition);
+  const current = all.find(row => row.status === 'in_consultation') || all.find(row => row.status === 'called' && row.availability?.status !== 'unavailable') || null;
+  const pending = all.filter(row => ['skipped', 'no_show'].includes(row.status) || row.availability?.status === 'unavailable');
+  const waiting = all.filter(row => row !== current && ['waiting', 'called'].includes(row.status) && row.availability?.status !== 'unavailable')
+    .sort((a,b) => Number(b.priority === 'emergency') - Number(a.priority === 'emergency') || Number(isReturnedQueuePatient(b)) - Number(isReturnedQueuePatient(a)) || Number(b.status === 'called') - Number(a.status === 'called') || rank(a)-rank(b) || a.queuePosition-b.queuePosition);
   return { current,
+    pending: pending.filter(row => row.tokenNumber !== null),
     waiting: waiting.filter(row => row.tokenNumber !== null), waitingCount: waiting.length,
     completedCount: all.filter(row => row.status === 'completed').length, totalPatients: all.length };
 }

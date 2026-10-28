@@ -40,6 +40,8 @@ describe('Razorpay test and live isolation', () => {
     expect(res.code).to.equal(409);
     const choices = publicPaymentSettings({ consultationCurrency: 'INR', acceptedPaymentMethods: ['credit_card', 'upi'] }, null);
     expect(choices.methods).to.deep.equal(['credit_card', 'upi']);
+    expect(choices.configuredMethods).to.include('wallet');
+    expect(choices.unavailableMethods.wallet).to.include('test bookings');
   });
   it('excludes old dummy and live balances from test earnings, then excludes tests from live earnings', async () => {
     const row = mode => ({ _id: mode, mode, amount: 50000, platformFee: 10000, appointmentId: { _id: 'appointment', status: 'completed' }, method: 'upi' });

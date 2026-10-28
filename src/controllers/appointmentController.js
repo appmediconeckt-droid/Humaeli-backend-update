@@ -373,6 +373,7 @@ import { syncAppointmentFollowUp } from '../services/appointmentFollowUpService.
 import { finishAppointmentCancellation } from '../services/appointmentCancellationService.js';
 import { enrichAppointmentGroups } from '../services/appointmentDelayService.js';
 import { attachAppointmentDoctorRatings } from '../services/doctorRatingService.js';
+import { normalizeQueueAppointment, isReturnedQueuePatient } from '../services/queueTimingService.js';
 import { validateDoctorAppointmentMode } from '../services/doctorAppointmentModes.js';
 // Keep the existing scheduler entry point; slot/session end never expires bookings.
 export const markExpiredAppointmentsNoShow = checkAndAutoCancelLateAppointments;
@@ -1118,6 +1119,10 @@ export const updateDoctorAppointment = async (req, res) => {
 
     const wasStarted = Boolean(appointment.consultation_timing?.startedAt || appointment.consultation_started_at);
     const wasEnded = Boolean(appointment.consultation_timing?.endedAt || appointment.consultation_ended_at);
+    if (requestedQueueStatus === 'skipped') {
+      appointment.consultation_timing = { ...normalizeQueueAppointment(appointment).timing,
+        availability: { status: 'unavailable', returnedAt: null, updatedAt: new Date().toISOString(), updatedBy: String(req.user._id), updatedRole: 'doctor' } };
+    }
     const timing = await getConsultationTiming(appointment, req.body);
     if (timing?.startedAt && !wasStarted) {
       const otherRunning = await findOtherActiveConsultation(appointment);
@@ -1348,6 +1353,10 @@ const queuePriority = (appointment) =>
 
 const sortQueue = (appointments = []) =>
   [...appointments].sort((a, b) => {
+    const emergency = Number(b.priority === 'emergency') - Number(a.priority === 'emergency');
+    if (emergency) return emergency;
+    const returned = Number(isReturnedQueuePatient(normalizeQueueAppointment(b))) - Number(isReturnedQueuePatient(normalizeQueueAppointment(a)));
+    if (returned) return returned;
     const priorityDifference = queuePriority(a) - queuePriority(b);
     if (priorityDifference !== 0) return priorityDifference;
 
@@ -1626,7 +1635,7 @@ export const getDoctorQueue = handle(async (req, res) => {
 
   const waitingQueue = sortQueue(
     rows.filter((item) =>
-      WAITING_QUEUE_STATUSES.has(item.queue_status || "booked"),
+      WAITING_QUEUE_STATUSES.has(item.queue_status || "booked") && normalizeQueueAppointment(item).availability?.status !== 'unavailable',
     ),
   );
 

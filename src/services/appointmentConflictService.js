@@ -4,6 +4,7 @@ import Appointment from '../models/appointmentModel.js';
 import { WalkinAppointment } from '../models/clinicModels.js';
 import User from '../models/userModel.js';
 import { dateOnly, fail } from '../utils/clinicAccess.js';
+import { ENFORCE_DAILY_PATIENT_LIMIT } from './appointmentBookingPolicy.js';
 
 // Legacy local Indian numbers and +91 formatting identify the same intake phone.
 export const normalizeBookingPhone = value => {
@@ -67,7 +68,7 @@ export async function withAppointmentBooking(details, save) {
     const [rows] = await connection.execute('SELECT GET_LOCK(?, 15) AS acquired', [key]);
     acquired = Number(rows[0].acquired) === 1;
     if (!acquired) throw fail(503, 'Booking is busy; please retry');
-    if (await hasAppointmentConflict(details)) throw duplicate();
+    if (ENFORCE_DAILY_PATIENT_LIMIT && await hasAppointmentConflict(details)) throw duplicate();
     return await save();
   } finally {
     try { if (acquired) await connection.execute('SELECT RELEASE_LOCK(?)', [key]); }

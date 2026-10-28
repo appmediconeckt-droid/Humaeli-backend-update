@@ -1,7 +1,7 @@
 import { emitAppointmentUpdated } from "./portalRealtimeService.js";
 import { buildDaySlots, indiaDateTime, slotRepository, timeMinutes } from "./appointmentSlotService.js";
 import { notifyNextQueueTokens } from './queueTurnNotificationService.js';
-import { normalizeQueueAppointment } from "./queueTimingService.js";
+import { normalizeQueueAppointment, isReturnedQueuePatient, isActiveQueueAppointment } from "./queueTimingService.js";
 
 export const consultationTransition = (previous, action, duration, now = new Date()) => {
   const timing = structuredClone(previous || {});
@@ -76,6 +76,7 @@ export const getConsultationTiming = async (appointment, body) => {
   const previous = normalizeQueueAppointment(appointment).timing;
   let duration = previous.durationMinutes;
   if (action === "start" && !previous.startedAt) {
+    if (previous.availability?.status === 'unavailable') throw Object.assign(new Error('Reception has marked this patient unavailable. Mark the patient available before starting consultation.'), { status: 409 });
     duration = await getAppointmentSlotDuration(appointment);
   }
   return consultationTransition(previous, action, duration);
@@ -94,16 +95,26 @@ export const findOtherActiveConsultation = async (appointment) => {
   ]);
   const online = onlineResult.status === "fulfilled" ? onlineResult.value : [];
   const walkins = walkinResult.status === "fulfilled" ? walkinResult.value : [];
-  return [
+  const candidates = [
     ...online.map((record) => ({ record, source: "online" })),
     ...walkins.map((record) => ({ record, source: "walkin" })),
-  ].find(({ record }) => {
+  ];
+  const running = candidates.find(({ record }) => {
     const id = String(record.id || record._id || "");
     if (id === ownId) return false;
     const status = String(record.appointment_status || record.status || "").toLowerCase();
     const queueStatus = String(record.queue_status || "").toLowerCase();
     return activeConsultationStatuses.has(status) || activeConsultationStatuses.has(queueStatus);
   }) || null;
+  if (running) return running;
+  const own = normalizeQueueAppointment(appointment);
+  const returned = candidates.map(({ record, source }) => normalizeQueueAppointment(record, source))
+    .filter(item => item.clinicId === own.clinicId && isActiveQueueAppointment(item) && isReturnedQueuePatient(item))
+    .sort((a, b) => (timeMinutes(a.time) ?? 1440) - (timeMinutes(b.time) ?? 1440) || (a.token ?? Infinity) - (b.token ?? Infinity));
+  if (!own.emergency && returned.length && returned[0].id !== ownId) {
+    throw Object.assign(new Error(`Returned patient token ${returned[0].token ?? ''} must be seen before the next patient.`), { status: 409 });
+  }
+  return null;
 };
 
 // Timing updates contain no patient details and go only to affected users.
@@ -138,6 +149,7 @@ const normalizeQueueRecord = (record, source) => {
     queueStatus: String(record.queue_status || status).toLowerCase(),
     emergency: String(record.priority || "").toLowerCase() === "emergency",
     urgent: String(record.priority || '').toLowerCase() === 'urgent',
+    availability: normalizeQueueAppointment(record, source).availability,
     clinicId: String(record.clinic_id?._id || record.clinic_id?.id || record.clinic_id || ''),
   };
 };
@@ -160,10 +172,11 @@ export const notifyUpcomingQueuePatients = async (appointment, { limit = 2 } = {
       ...online.map((record) => normalizeQueueRecord(record, "online")),
       ...walkins.map((record) => normalizeQueueRecord(record, "walkin")),
     ].filter((item) => item.doctorId === String(doctorId) && item.date === date &&
-      item.clinicId === clinicId && isActiveQueueRecord(item))
+      item.clinicId === clinicId && isActiveQueueRecord(item) && item.availability?.status !== 'unavailable')
       .sort((a, b) => Number(isServingQueueRecord(b)) - Number(isServingQueueRecord(a))
         || Number(b.queueStatus === 'called') - Number(a.queueStatus === 'called')
         || Number(b.emergency) - Number(a.emergency)
+        || Number(isReturnedQueuePatient(b)) - Number(isReturnedQueuePatient(a))
         || Number(b.urgent) - Number(a.urgent)
         || (timeMinutes(a.time) ?? 1440) - (timeMinutes(b.time) ?? 1440)
         || (a.token ?? Infinity) - (b.token ?? Infinity)
