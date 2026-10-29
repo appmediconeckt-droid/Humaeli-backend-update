@@ -8,6 +8,7 @@ import { withAppointmentSlot, indiaDateTime, timeMinutes } from '../services/app
 import { notifyUpcomingQueuePatients, getConsultationTiming, findOtherActiveConsultation, emitQueueUpdated } from '../services/consultationTimingService.js';
 import { handle, doctorScope, pick, fail, jsonRecord, bool, dateOnly } from '../utils/clinicAccess.js';
 import { syncAppointmentFollowUp } from '../services/appointmentFollowUpService.js';
+import { emitAppointmentUpdated } from '../services/portalRealtimeService.js';
 const scope = req => doctorScope(req, req.query?.doctor_id || req.body?.doctor_id);
 export const createWalkinAppointment = handle(async (req, res) => {
   const b = req.body || {};
@@ -43,6 +44,7 @@ export const createWalkinAppointment = handle(async (req, res) => {
 const enrich = async row => ({ ...jsonRecord(row), ...await getActiveBreakDelayForAppointment(row.doctor_id,
   new Date(row.appointment_date + 'T' + row.appointment_time + '+05:30')) });
 export const getWalkinAppointments = handle(async (req, res) => {
+  res.setHeader?.('Cache-Control', 'no-store');
   const doctor_id = await scope(req);
   const rows = await WalkinAppointment.find({ doctor_id, ...(req.query.date ? { appointment_date: dateOnly(req.query.date) } : {}) })
     .sort({ appointment_date: 1, appointment_time: 1, token_number: 1, createdAt: -1 })
@@ -105,5 +107,6 @@ export const deleteWalkinAppointment = handle(async (req, res) => {
   if (await FollowUp.exists({ walkin_id: req.params.id })) throw fail(409, 'Remove the linked follow-up before deleting');
   const row = await WalkinAppointment.findOneAndDelete(filter);
   if (!row) throw fail(404, 'Walk-in appointment not found');
+  emitAppointmentUpdated(row);
   res.json({ success: true, message: 'Walk-in appointment deleted' });
 });

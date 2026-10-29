@@ -7,6 +7,7 @@ import AppointmentPayment from '../models/appointmentPaymentModel.js';
 import { fail } from '../utils/clinicAccess.js';
 import { paymentMode, requireGatewayEnvironment, requireRecordEnvironment } from './paymentEnvironment.js';
 import { confirmPaidAppointment } from './appointmentPaymentBookingService.js';
+import { reclaimReleasedPaymentSlot } from './appointmentDraftSlotService.js';
 
 dotenv.config();
 export const appointmentGateway = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID || 'not-configured', key_secret: process.env.RAZORPAY_KEY_SECRET || 'not-configured' });
@@ -48,6 +49,7 @@ export async function validateCapturedAppointmentPayment(record, payment) {
 export async function completeAppointmentPayment(record, payment) {
   requireRecordEnvironment(record);
   await validateCapturedAppointmentPayment(record, payment);
+  await reclaimReleasedPaymentSlot(record);
   if (record.status === 'paid' && record.paymentId !== payment.id) throw fail(409, 'This appointment has already been paid.');
   await AppointmentPayment.updateOne({ _id: record._id }, { $set: { status: 'paid', paymentId: payment.id } });
   await confirmPaidAppointment({ ...(record.toObject?.() || record), paymentId: payment.id });

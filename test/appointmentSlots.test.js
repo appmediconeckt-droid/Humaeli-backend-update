@@ -158,6 +158,10 @@ describe("Availability-based appointment tokens", () => {
     slotRepository.online.resolves([{ appointment_time: "10:15:00", status: "cancelled" }]);
     expect((await reserve("10:15")).token).to.equal(2);
   });
+  it('reuses the same time after an unpaid checkout releases its slot', async () => {
+    slotRepository.online.resolves([{ appointment_time: '10:15:00', status: 'awaiting_payment', queue_status: 'canceled' }]);
+    expect((await reserve('10:15')).token).to.equal(2);
+  });
   it("an unscheduled emergency request does not occupy a regular slot at its request timestamp", async () => {
     slotRepository.online.resolves([{ priority: "emergency", appointment_time: null, date: `${date}T10:15:00+05:30`, status: "pending" }]);
     expect((await reserve("10:15")).token).to.equal(2);

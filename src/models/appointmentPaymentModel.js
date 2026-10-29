@@ -6,6 +6,7 @@ const schema = new mongoose.Schema({
   providerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   orderId: { type: String, unique: true, sparse: true },
   paymentId: { type: String },
+  slotReleased: { type: Boolean, default: false },
   method: { type: String, enum: ['credit_card', 'debit_card', 'upi', 'wallet'], required: true },
   mode: { type: String, enum: ['real', 'test', 'demo'], default: 'real' },
   gatewayKeyId: String,

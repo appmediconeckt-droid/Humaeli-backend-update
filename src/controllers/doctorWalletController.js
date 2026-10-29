@@ -14,6 +14,7 @@ import { payoutsConfigured, bankFingerprint } from '../services/doctorSettlement
 import ProviderPaymentSettings from '../models/providerPaymentSettingsModel.js';
 import { commissionSnapshot } from '../services/appointmentCommissionService.js';
 import { confirmPaidAppointment } from '../services/appointmentPaymentBookingService.js';
+import { reclaimReleasedPaymentSlot } from '../services/appointmentDraftSlotService.js';
 export { commissionSnapshot } from '../services/appointmentCommissionService.js';
 
 
@@ -42,6 +43,7 @@ export const payAppointmentInternally = handle(async (req, res) => {
       record = await AppointmentPayment.create({ appointmentId: appointment._id, userId: actorId(req), providerId: provider._id, method, mode: 'real', amount, ...commissionSnapshot(amount), paymentId: `wallet_${crypto.randomUUID()}` });
     }
     if (record.status !== 'paid') {
+      await reclaimReleasedPaymentSlot(record);
       const debit = await User.updateOne({ _id: actorId(req), walletBalance: { $gte: record.amount / 100 }, appointmentWalletDebitIds: { $ne: String(record._id) } }, { $inc: { walletBalance: -record.amount / 100 }, $addToSet: { appointmentWalletDebitIds: String(record._id) } });
       if (!debit.modifiedCount && !await User.exists({ _id: actorId(req), appointmentWalletDebitIds: String(record._id) })) throw fail(409, 'Insufficient wallet balance. Please add money and retry.');
     }

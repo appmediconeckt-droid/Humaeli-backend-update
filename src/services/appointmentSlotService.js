@@ -103,6 +103,7 @@ export const withAppointmentSlot = async ({ doctorId, date, time, clinicId, pati
       throw Object.assign(slotError("You already have an appointment with this doctor on this date. Cancel it before booking another slot.", 409), { code: "DUPLICATE_APPOINTMENT" });
     }
     const occupied = new Set([...online, ...walkins.filter((record) => !excludeWalkinId || String(record.id || record._id) !== String(excludeWalkinId))].filter((record) => {
+      if (record.status === 'awaiting_payment' && record.queue_status === 'canceled') return false;
       if (String(record.priority || "").toLowerCase() === "emergency" && !record.appointment_time) return false;
       return !["cancelled", "canceled", "rejected", "reject"].includes(String(record.appointment_status || record.status || "").toLowerCase());
     }).map((record) => timeMinutes(record.appointment_time || (record.date ? indiaDateTime(record.date).time : ""))));

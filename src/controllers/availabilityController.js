@@ -44,13 +44,13 @@ const bookedSlotsFor = async (doctorId, clinicId) => {
   }
 
   const [online, walkins] = await Promise.all([
-    Appointment.collection.find(onlineFilter).project({ appointment_date: 1, appointment_time: 1, clinic_id: 1, status: 1, priority: 1 }).toArray(),
+    Appointment.collection.find(onlineFilter).project({ appointment_date: 1, appointment_time: 1, clinic_id: 1, status: 1, queue_status: 1, priority: 1 }).toArray(),
     WalkinAppointment.find(walkinFilter).select('appointment_date appointment_time clinic_id appointment_status priority').lean(),
   ]);
 
   return [
     ...online
-      .filter(row => activeStatus(row.status) && !(String(row.priority || '').toLowerCase() === 'emergency' && !row.appointment_time))
+      .filter(row => activeStatus(row.status) && !(row.status === 'awaiting_payment' && row.queue_status === 'canceled') && !(String(row.priority || '').toLowerCase() === 'emergency' && !row.appointment_time))
       .map(row => ({ date: String(row.appointment_date || '').slice(0, 10), time: String(row.appointment_time || '').slice(0, 5), clinic_id: row.clinic_id ? String(row.clinic_id) : '', source: 'appointment' })),
     ...walkins
       .filter(row => activeStatus(row.appointment_status))

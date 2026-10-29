@@ -646,6 +646,7 @@ export const book = async (req, res) => {
 
 export const getAppointments = async (req, res) => {
   try {
+    res.setHeader?.('Cache-Control', 'no-store');
     const userId = req.user._id;
     const { filter, date } = req.query;
     const role = String(req.user.role || "").toLowerCase();

@@ -3,7 +3,7 @@ import { linkDoctorPayoutBank, requestDoctorSettlement, setupDoctorTestBank } fr
 import { getDoctorWallet, payAppointmentInternally } from '../controllers/doctorWalletController.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { getOwnPaymentSettings, saveOwnPaymentSettings, getProviderPaymentMethods } from '../controllers/providerPaymentSettingsController.js';
-import { createAppointmentPaymentOrder, verifyAppointmentPayment, reconcileAppointmentPayment } from '../controllers/appointmentPaymentController.js';
+import { createAppointmentPaymentOrder, verifyAppointmentPayment, reconcileAppointmentPayment, releaseUnpaidAppointmentSlot } from '../controllers/appointmentPaymentController.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -18,4 +18,5 @@ router.get('/providers/:providerId/methods', getProviderPaymentMethods);
 router.post('/appointments/:appointmentId/order', createAppointmentPaymentOrder);
 router.post('/appointments/:appointmentId/verify', verifyAppointmentPayment);
 router.post('/appointments/:appointmentId/reconcile', reconcileAppointmentPayment);
+router.post('/appointments/:appointmentId/release', releaseUnpaidAppointmentSlot);
 export default router;
