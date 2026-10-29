@@ -34,14 +34,11 @@ describe('Razorpay test and live isolation', () => {
     expect(res.code).to.equal(403);
     expect(res.body.message).to.include('removed');
   });
-  it('does not spend existing wallet money on test appointments', async () => {
-    const res = response();
-    await payAppointmentInternally({ user: { role: 'user' }, body: { method: 'wallet' } }, res);
-    expect(res.code).to.equal(409);
+  it('allows internal Wallet payments independently of Razorpay test mode', () => {
     const choices = publicPaymentSettings({ consultationCurrency: 'INR', acceptedPaymentMethods: ['credit_card', 'upi'] }, null);
-    expect(choices.methods).to.deep.equal(['credit_card', 'upi']);
+    expect(choices.methods).to.deep.equal(['credit_card', 'upi', 'wallet']);
     expect(choices.configuredMethods).to.include('wallet');
-    expect(choices.unavailableMethods.wallet).to.include('test bookings');
+    expect(choices.unavailableMethods).not.to.have.property('wallet');
   });
   it('excludes old dummy and live balances from test earnings, then excludes tests from live earnings', async () => {
     const row = mode => ({ _id: mode, mode, amount: 50000, platformFee: 10000, appointmentId: { _id: 'appointment', status: 'completed' }, method: 'upi' });

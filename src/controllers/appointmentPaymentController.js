@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { appointmentAdditionalFee } from '../services/appointmentFees.js';
 import { reclaimReleasedPaymentSlot } from '../services/appointmentDraftSlotService.js';
+import { requireGatewayUpi } from '../services/gatewayPaymentMethodsService.js';
 import { emitAppointmentUpdated } from '../services/portalRealtimeService.js';
 import { paymentMode, paymentRecordMode, requireRecordEnvironment } from '../services/paymentEnvironment.js';
 import { commissionSnapshot } from '../services/appointmentCommissionService.js';
@@ -38,6 +39,7 @@ export const createAppointmentPaymentOrder = handle(async (req, res) => {
       if (captured) return completeAppointmentPayment(existing, captured);
       if (payments?.items?.some((item) => item.status === 'authorized')) throw fail(409, 'Payment capture is pending. Please check again shortly.');
       if (existing.method !== req.body.method) throw fail(409, 'Retry using the payment method selected for this reserved appointment.');
+      if (existing.method === 'upi') await requireGatewayUpi();
       await reclaimReleasedPaymentSlot(existing);
       return orderResponse(existing);
     }
@@ -56,6 +58,7 @@ export const createAppointmentPaymentOrder = handle(async (req, res) => {
     const surcharge = appointmentAdditionalFee(appointment.consultation_mode, clinic, provider);
     const amount = Math.round((fee + surcharge) * 100);
     if (!Number.isSafeInteger(amount) || amount < 100) throw fail(400, 'This provider has no valid online consultation fee configured.');
+    if (method === 'upi') await requireGatewayUpi();
     if (appointment.queue_status === 'canceled' && appointment.status === 'awaiting_payment') {
       await reclaimReleasedPaymentSlot({ appointmentId: appointment._id, userId: actorId(req), slotReleased: true });
     }
@@ -113,7 +116,7 @@ export const releaseUnpaidAppointmentSlot = handle(async (req, res) => {
             String(order.notes?.appointmentId) !== String(appointment._id)) {
           throw fail(409, 'The original payment order could not be verified.');
         }
-      } else requireRecordEnvironment(record);
+      } else if (record.method !== 'wallet' || record.mode !== 'real') requireRecordEnvironment(record);
       if (record.status === 'paid') return { released: false, pending: true };
       if (record.method === 'wallet' && await User.exists({ _id: actorId(req), appointmentWalletDebitIds: String(record._id) })) return { released: false, pending: true };
       if (record.orderId) {

@@ -37,9 +37,7 @@ export function publicPaymentSettings(provider, settings) {
   // Legacy card settings did not save a receiving bank account on the server.
   const unavailableMethods = {};
   for (const method of methods) {
-    if (method === 'wallet' && paymentMode() === 'test') {
-      unavailableMethods.wallet = 'Wallet payments are not available for test bookings. Wallet is available for live INR appointments.';
-    } else if (['credit_card', 'debit_card', 'upi'].includes(method) && currency !== 'INR') {
+    if (['credit_card', 'debit_card', 'upi'].includes(method) && currency !== 'INR') {
       unavailableMethods[method] = `Online payment is unavailable for ${currency}. This checkout currently supports INR only.`;
     } else if (paymentMode() === 'live' && ['credit_card', 'debit_card'].includes(method) && !settings?.bankAccount?.accountNumber) {
       unavailableMethods[method] = 'The provider needs to complete card payment setup.';

@@ -9,6 +9,7 @@ import ProviderPaymentSettings from '../src/models/providerPaymentSettingsModel.
 import { validateProviderPaymentSettings, publicPaymentSettings, expandPaymentMethods } from '../src/services/providerPaymentSettingsService.js';
 import { getOwnPaymentSettings, saveOwnPaymentSettings, getProviderPaymentMethods } from '../src/controllers/providerPaymentSettingsController.js';
 import { paymentCheckoutDisplay } from '../../chatbot-frontend/src/utils/paymentCheckoutConfig.js';
+import { clearGatewayMethodsCache, gatewayMethodsRepository } from '../src/services/gatewayPaymentMethodsService.js';
 import { createAppointmentPaymentOrder, verifyAppointmentPayment } from '../src/controllers/appointmentPaymentController.js';
 import { appointmentGateway, appointmentPaymentRepository, completeAppointmentPayment, validateCapturedAppointmentPayment } from '../src/services/appointmentPaymentService.js';
 
@@ -134,6 +135,8 @@ describe('Provider payment settings', () => {
     expect(visible.unavailableMethods.upi).to.include('setup');
   });
   it('returns payment choices without bank details to the patient', async () => {
+    clearGatewayMethodsCache();
+    sinon.stub(gatewayMethodsRepository, 'fetch').resolves({ entity: 'methods', upi: true });
     sinon.stub(User, 'findOne').resolves({ _id: 'provider', role: 'doctor', consultationFee: 500, consultationCurrency: 'INR' });
     sinon.stub(ProviderPaymentSettings, 'findOne').returns({ lean: async () => settings });
     const res = response();

@@ -1,5 +1,6 @@
 import User from '../models/userModel.js';
 import { paymentMode } from '../services/paymentEnvironment.js';
+import { withGatewayUpiAvailability } from '../services/gatewayPaymentMethodsService.js';
 import ProviderPaymentSettings from '../models/providerPaymentSettingsModel.js';
 import { actorId, fail, handle } from '../utils/clinicAccess.js';
 import { expandPaymentMethods, providerRoles, publicPaymentSettings, validateProviderPaymentSettings } from '../services/providerPaymentSettingsService.js';
@@ -31,5 +32,5 @@ export const getProviderPaymentMethods = handle(async (req, res) => {
   if (!provider || !providerRoles.includes(provider.role)) throw fail(404, 'Provider not found.');
   const saved = await ProviderPaymentSettings.findOne({ providerId: provider._id }).lean();
   res.set?.('Cache-Control', 'no-store');
-  res.json({ success: true, mode: paymentMode(), ...publicPaymentSettings(provider, saved) });
+  res.json({ success: true, mode: paymentMode(), ...await withGatewayUpiAvailability(publicPaymentSettings(provider, saved)) });
 });

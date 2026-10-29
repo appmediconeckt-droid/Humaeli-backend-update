@@ -22,7 +22,6 @@ export { commissionSnapshot } from '../services/appointmentCommissionService.js'
 export const payAppointmentInternally = handle(async (req, res) => {
   if (req.user.role !== 'user') throw fail(403, 'Only patients can pay for appointments.');
   if (req.body?.mode === 'demo') throw fail(403, 'Dummy payments have been removed. Use Razorpay Checkout in test mode.');
-  if (paymentMode() === 'test') throw fail(409, 'Use Razorpay test card or UPI checkout. Existing wallet balances cannot fund test appointments.');
   const method = 'wallet';
   const result = await withAppointmentPaymentLock(req.params.appointmentId, async () => {
     const appointment = await Appointment.findOne({ _id: req.params.appointmentId, patient: actorId(req) }, null, { includePaymentDrafts: true });
@@ -86,5 +85,5 @@ export const getDoctorWallet = handle(async (req, res) => {
   const fields = payoutBankFields();
   const settings = await ProviderPaymentSettings.findOne({ providerId: actorId(req) }).select(`+${fields.id} +${fields.fingerprint} +${fields.key}`);
   const bankReady = Boolean(settings?.[fields.id] && settings[fields.fingerprint] === bankFingerprint(settings.bankAccount) && settings[fields.key] === process.env.RAZORPAYX_KEY_ID);
-  res.json({ success: true, mode: paymentMode(), platformFeePercent: 20, settlement: { enabled: payoutsConfigured(), bankReady, bankSaved: Boolean(settings?.bankAccount?.accountNumber) }, ...summarizeEarnings(records.filter(row => row.mode === paymentRecordMode())) });
+  res.json({ success: true, mode: paymentMode(), platformFeePercent: 20, settlement: { enabled: payoutsConfigured(), bankReady, bankSaved: Boolean(settings?.bankAccount?.accountNumber) }, ...summarizeEarnings(records.filter(row => row.mode === paymentRecordMode() || (row.method === 'wallet' && row.mode === 'real'))) });
 });

@@ -77,10 +77,10 @@ export async function recoverPatientPaymentDrafts(userId) {
   if (!drafts.length) return;
   const records = await AppointmentPayment.find({ userId, appointmentId: { $in: drafts.map(draft => draft._id) } }).lean();
   await Promise.allSettled(records.map(async record => {
-    requireRecordEnvironment(record);
     if (record.method === 'wallet') {
-      if (record.status === 'paid') await confirmPaidAppointment(record);
+      if (record.mode === 'real' && record.status === 'paid') await confirmPaidAppointment(record);
     } else if (record.orderId) {
+      requireRecordEnvironment(record);
       requireAppointmentGateway();
       await recoverAppointmentPayment(record.orderId);
     }
