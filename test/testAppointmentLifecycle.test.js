@@ -26,7 +26,11 @@ describe('Razorpay test appointment lifecycle (isolated provider APIs and persis
       sinon.stub(Clinic, 'findById').callsFake(() => ({ _id: 'clinic', doctor_id: 'doctor', fee: 500, videoConsultationAdditionalFee: 125, select() { return { lean: async () => ({ clinic_name: 'Test Clinic' }) }; } }));
       sinon.stub(Appointment, 'findOne').resolves(appointment);
       sinon.stub(Appointment, 'findById').resolves(appointment);
-      sinon.stub(Appointment, 'updateOne').callsFake(async (_filter, update) => { Object.assign(appointment, update.$set); });
+      sinon.stub(Appointment, 'updateOne').callsFake(async (filter, update) => {
+        if (typeof filter.status === 'string' && filter.status !== appointment.status) return { matchedCount: 0, modifiedCount: 0 };
+        Object.assign(appointment, update.$set);
+        return { matchedCount: 1, modifiedCount: 0 };
+      });
       sinon.stub(User, 'findById').resolves({ _id: 'doctor', role: 'doctor', isActive: true, consultationFee: 500, consultationCurrency: 'INR' });
       sinon.stub(Settings, 'findOne').returns({ lean: async () => settings, select: async () => settings });
       sinon.stub(Payment, 'findOne').callsFake(filter => filter.providerId ? { select: async () => record } : Promise.resolve(record));

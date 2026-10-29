@@ -22,9 +22,10 @@ export const updatePatientAvailability = handle(async (req, res) => {
   if (['completed', 'complete', 'done', 'canceled', 'cancelled', 'rejected', 'no_show', 'no-show'].includes(normalized.status) || normalized.timing.endedAt) throw fail(409, 'Availability cannot be changed for a closed appointment');
   if ((!skipped && !isActiveQueueAppointment(normalized)) || (isServingQueueAppointment(normalized) && normalized.queueStatus !== 'called') || normalized.timing.startedAt) throw fail(409, 'Availability can only be changed before consultation starts');
   if (normalized.date !== todayIST()) throw fail(409, "Availability can only be updated for today's appointments");
+  const returned = availability === 'available' && (skipped || normalized.availability.status === 'unavailable');
   const now = new Date().toISOString();
   const state = { status: availability, updatedAt: now, updatedBy: actorId(req), updatedRole: req.clinicAccessUser.role,
-    returnedAt: availability === 'available' ? (skipped ? now : normalized.availability.returnedAt || null) : null };
+    returnedAt: availability === 'available' ? (returned ? now : normalized.availability.returnedAt || null) : null };
   let timing = row.consultation_timing || {};
   if (typeof timing === 'string') { try { timing = JSON.parse(timing); } catch { timing = {}; } }
   const changes = { consultation_timing: { ...timing, availability: state } };
@@ -44,7 +45,7 @@ export const updatePatientAvailability = handle(async (req, res) => {
   emitAppointmentUpdated(row);
   if (global.io) global.io.to(`user_${doctorId}`).emit('queueUpdated', { doctorId, date: normalized.date });
   await notifyUpcomingQueuePatients(row);
-  res.json({ success: true, availability: state, message: skipped && availability === 'available' ? 'Patient returned and will be seen next after the current consultation' : 'Patient availability updated' });
+  res.json({ success: true, availability: state, message: state.returnedAt && availability === 'available' ? 'Patient returned and will be seen next after the current consultation' : 'Patient availability updated' });
 });
 import { getDisplayTiming } from '../services/displayTimingService.js';
 import { actorId } from '../utils/clinicAccess.js';

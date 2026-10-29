@@ -4,9 +4,9 @@ import dotenv from 'dotenv';
 import { getPool } from '../config/mysql.js';
 import Appointment from '../models/appointmentModel.js';
 import AppointmentPayment from '../models/appointmentPaymentModel.js';
-import { emitAppointmentUpdated } from './portalRealtimeService.js';
 import { fail } from '../utils/clinicAccess.js';
 import { paymentMode, requireGatewayEnvironment, requireRecordEnvironment } from './paymentEnvironment.js';
+import { confirmPaidAppointment } from './appointmentPaymentBookingService.js';
 
 dotenv.config();
 export const appointmentGateway = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID || 'not-configured', key_secret: process.env.RAZORPAY_KEY_SECRET || 'not-configured' });
@@ -50,10 +50,7 @@ export async function completeAppointmentPayment(record, payment) {
   await validateCapturedAppointmentPayment(record, payment);
   if (record.status === 'paid' && record.paymentId !== payment.id) throw fail(409, 'This appointment has already been paid.');
   await AppointmentPayment.updateOne({ _id: record._id }, { $set: { status: 'paid', paymentId: payment.id } });
-  await Appointment.updateOne({ _id: record.appointmentId, patient: record.userId }, { $set: {
-    payment_status: 'paid', payment_amount: record.amount / 100, payment_reference: payment.id, payment_method: record.method,
-  } });
-  emitAppointmentUpdated({ patient: record.userId, counselor: record.providerId });
+  await confirmPaidAppointment({ ...(record.toObject?.() || record), paymentId: payment.id });
   return { success: true, paid: true, paymentId: payment.id, amount: record.amount / 100, currency: record.currency, mode: paymentMode() };
 }
 
@@ -68,4 +65,22 @@ export async function recoverAppointmentPayment(orderId) {
     if (!payment) return { success: false, pending: true };
     return completeAppointmentPayment(fresh, payment);
   });
+}
+
+// Recover a lost browser callback/webhook before loading the patient's list.
+// Only captured payments can promote a draft; failed attempts stay hidden.
+export async function recoverPatientPaymentDrafts(userId) {
+  const drafts = await Appointment.find({ patient: userId, status: 'awaiting_payment' }, null, { includePaymentDrafts: true })
+    .select('_id').sort({ createdAt: -1 }).limit(5).lean();
+  if (!drafts.length) return;
+  const records = await AppointmentPayment.find({ userId, appointmentId: { $in: drafts.map(draft => draft._id) } }).lean();
+  await Promise.allSettled(records.map(async record => {
+    requireRecordEnvironment(record);
+    if (record.method === 'wallet') {
+      if (record.status === 'paid') await confirmPaidAppointment(record);
+    } else if (record.orderId) {
+      requireAppointmentGateway();
+      await recoverAppointmentPayment(record.orderId);
+    }
+  }));
 }

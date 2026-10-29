@@ -116,6 +116,7 @@ const appointmentSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: [
+        "awaiting_payment",
         "pending",
         "confirmed",
         "canceled",
@@ -129,6 +130,7 @@ const appointmentSchema = new mongoose.Schema(
     queue_status: {
       type: String,
       enum: [
+        "awaiting_payment",
         "booked",
         "waiting",
         "called",
@@ -190,6 +192,19 @@ appointmentSchema.index({
 appointmentSchema.index({
   patient: 1,
   appointment_date: 1,
+});
+
+// Payment drafts are not appointments visible to lists, queues, dashboards or
+// clinical actions. Only payment processing and slot allocation opt into them.
+appointmentSchema.pre(/^(find|countDocuments)/, function () {
+  if (!this.getOptions().includePaymentDrafts) {
+    this.and([{ status: { $ne: 'awaiting_payment' } }]);
+  }
+});
+appointmentSchema.pre('aggregate', function () {
+  if (!this.options.includePaymentDrafts) {
+    this.pipeline().unshift({ $match: { status: { $ne: 'awaiting_payment' } } });
+  }
 });
 
 export default mongoose.model("Appointment", appointmentSchema);

@@ -38,6 +38,22 @@ describe('Receptionist patient availability and returned queue priority', () => 
       expect(changes.consultation_timing.availability).to.include({ status: 'unavailable', returnedAt: null, updatedBy: 'staff' });
       expect(changes).not.to.have.any.keys('token_number', 'appointment_time', 'queue_status');
     });
+    it(`prioritises a returned ${source} patient before the doctor has skipped them`, async () => {
+      const Model = source === 'walkin' ? Walkin : Appointment;
+      const row = record({ consultation_timing: { durationMinutes: 15, availability: { status: 'unavailable' } }, ...(source === 'walkin' ? { status: undefined, appointment_status: 'booked' } : {}) });
+      sinon.stub(Model, 'findOne').resolves(row);
+      const update = sinon.stub(Model, 'updateOne').resolves({ matchedCount: 1 });
+      await updatePatientAvailability(request(source, 'available'), res);
+      expect(res.status.called).to.equal(false);
+      const changes = update.firstCall.args[1].$set;
+      expect(changes.consultation_timing.availability).to.include({ status: 'available', updatedRole: 'receptionist' });
+      expect(changes.consultation_timing.availability.returnedAt).to.be.a('string');
+      expect(changes.consultation_timing.durationMinutes).to.equal(15);
+      expect(changes).not.to.have.any.keys('token_number', 'appointment_time', 'queue_status');
+      expect(res.json.firstCall.args[0].message).to.include('seen next after the current consultation');
+      const normalised = normalizeQueueAppointment({ ...row, ...changes }, source);
+      expect(calculateEstimatedQueue([normalizeQueueAppointment(record({ _id: 'regular', token_number: 2 })), normalised], { doctorId: doctor, date: todayIST(), clinicId: clinic }).queue[0].token).to.equal(1);
+    });
     it(`returns a skipped ${source} patient to waiting with priority and preserves existing timing metadata`, async () => {
       const Model = source === 'walkin' ? Walkin : Appointment;
       const row = record({ queue_status: 'skipped', consultation_timing: { pauses: [], durationMinutes: 15 }, ...(source === 'walkin' ? { status: undefined, appointment_status: 'skipped' } : {}) });
@@ -112,6 +128,19 @@ describe('Receptionist patient availability and returned queue priority', () => 
       record({ _id: 'emergency', priority: 'emergency', token_number: 4 }), record({ _id: 'current', queue_status: 'in_progress', token_number: 1 })];
     const data = calculateEstimatedQueue(rows.map(row => normalizeQueueAppointment(row)), { doctorId: doctor, date: todayIST(), clinicId: clinic });
     expect(data.queue.map(item => item.token)).to.deep.equal([1, 4, 3, 2]);
+  });
+  it('LED keeps the running checkup current and puts a returned arrival before normal waiting tokens', async () => {
+    sinon.stub(clinicDisplayQueueRepository, 'query').resolves([[]]);
+    sinon.stub(Appointment, 'find').returns({ select() { return this; }, lean: async () => [
+      record({ _id: 'current', status: 'in-progress', queue_status: 'in_progress', token_number: 5 }),
+      record({ _id: 'regular', token_number: 2 }),
+      record({ _id: 'returned', token_number: 3, appointment_time: '11:00', consultation_timing: returnedTiming }),
+    ] });
+    sinon.stub(DisplayWalkin, 'find').returns({ select() { return this; }, lean: async () => [] });
+    const queue = await clinicDisplayQueue({ id: 'link', clinic_id: clinic, doctor_id: doctor, facility_id: 'facility' }, todayIST());
+    expect(queue.current.tokenNumber).to.equal(5);
+    expect(queue.waiting.map(row => row.tokenNumber)).to.deep.equal([3, 2]);
+    expect(queue.pending).to.deep.equal([]);
   });
   it('keeps skipped online and walk-in tokens visible as pending and puts returned patients ahead of normal tokens', async () => {
     sinon.stub(clinicDisplayQueueRepository, 'query').resolves([[]]);

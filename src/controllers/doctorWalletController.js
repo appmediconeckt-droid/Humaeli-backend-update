@@ -8,11 +8,12 @@ import Transaction from '../models/transactionModel.js';
 import { Clinic } from '../models/clinicModels.js';
 import { actorId, handle, fail } from '../utils/clinicAccess.js';
 import { withAppointmentPaymentLock } from '../services/appointmentPaymentService.js';
-import { emitAppointmentUpdated, emitResourceUpdated } from '../services/portalRealtimeService.js';
+import { emitResourceUpdated } from '../services/portalRealtimeService.js';
 import { feeCurrency } from '../utils/consultationCurrency.js';
 import { payoutsConfigured, bankFingerprint } from '../services/doctorSettlementService.js';
 import ProviderPaymentSettings from '../models/providerPaymentSettingsModel.js';
 import { commissionSnapshot } from '../services/appointmentCommissionService.js';
+import { confirmPaidAppointment } from '../services/appointmentPaymentBookingService.js';
 export { commissionSnapshot } from '../services/appointmentCommissionService.js';
 
 
@@ -23,13 +24,13 @@ export const payAppointmentInternally = handle(async (req, res) => {
   if (paymentMode() === 'test') throw fail(409, 'Use Razorpay test card or UPI checkout. Existing wallet balances cannot fund test appointments.');
   const method = 'wallet';
   const result = await withAppointmentPaymentLock(req.params.appointmentId, async () => {
-    const appointment = await Appointment.findOne({ _id: req.params.appointmentId, patient: actorId(req) });
+    const appointment = await Appointment.findOne({ _id: req.params.appointmentId, patient: actorId(req) }, null, { includePaymentDrafts: true });
     if (!appointment) throw fail(404, 'Appointment not found.');
     let record = await AppointmentPayment.findOne({ appointmentId: appointment._id });
     if (record && (record.mode !== 'real' || record.method !== method)) throw fail(409, 'A payment already exists using another method.');
     if (record?.orderId) throw fail(409, 'An online payment order already exists.');
     if (!record) {
-      if (appointment.payment_status === 'paid' || !['pending', 'confirmed'].includes(appointment.status)) throw fail(409, 'This appointment cannot be paid.');
+      if (appointment.payment_status === 'paid' || !['awaiting_payment', 'pending', 'confirmed'].includes(appointment.status)) throw fail(409, 'This appointment cannot be paid.');
       const provider = await User.findById(appointment.counselor);
       if (!provider?.isActive) throw fail(404, 'Provider is unavailable.');
       if ((feeCurrency(provider) || 'INR') !== 'INR') throw fail(400, 'Wallet payments currently support INR only.');
@@ -50,8 +51,7 @@ export const payAppointmentInternally = handle(async (req, res) => {
       description: 'Appointment payment', metadata: { appointmentId: String(appointment._id) },
     } }, { upsert: true });
     await AppointmentPayment.updateOne({ _id: record._id }, { $set: { status: 'paid' } });
-    await Appointment.updateOne({ _id: appointment._id }, { $set: { payment_status: 'paid', payment_method: method, payment_amount: record.amount / 100, payment_reference: record.paymentId } });
-    emitAppointmentUpdated({ patient: actorId(req), counselor: record.providerId });
+    await confirmPaidAppointment({ ...(record.toObject?.() || record), appointmentId: appointment._id, userId: actorId(req) });
     emitResourceUpdated('wallet', [actorId(req), String(record.providerId)]);
     return { success: true, paid: true, mode: 'live', paymentId: record.paymentId, amount: record.amount / 100 };
   });

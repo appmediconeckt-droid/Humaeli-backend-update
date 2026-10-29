@@ -50,7 +50,7 @@ describe('Provider payment settings', () => {
       expect(config.blocks.chosen.instruments).to.deep.equal([{ method: 'card', types: [type] }]);
       expect(config.preferences.show_default_blocks).to.equal(false);
     }
-    expect(paymentCheckoutDisplay('upi').display.blocks.chosen.instruments).to.deep.equal([{ method: 'upi' }]);
+    expect(paymentCheckoutDisplay('upi').display.sequence).to.deep.equal(['upi']);
     expect(() => paymentCheckoutDisplay('bank_transfer')).to.throw();
   });
   it('accepts a UPI-only configuration without bank details', () => {

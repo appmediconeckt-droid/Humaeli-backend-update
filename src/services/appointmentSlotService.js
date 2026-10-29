@@ -64,7 +64,7 @@ export const slotRepository = {
   online: (doctorId, date) => Appointment.find({ counselor: doctorId, $or: [
     { appointment_date: date },
     { date: { $gte: new Date(`${date}T00:00:00+05:30`), $lt: new Date(new Date(`${date}T00:00:00+05:30`).getTime() + 86400000) } },
-  ] }),
+  ] }, null, { includePaymentDrafts: true }),
   walkins: (doctorId, date) => WalkinAppointment.find({ doctor_id: doctorId, appointment_date: date }),
 };
 

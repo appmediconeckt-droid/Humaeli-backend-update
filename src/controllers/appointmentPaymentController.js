@@ -14,7 +14,7 @@ import { appointmentGateway, completeAppointmentPayment, requireAppointmentGatew
 
 const ownAppointment = async (req) => {
   if (req.user.role !== 'user') throw fail(403, 'Only patients can pay for their appointments.');
-  const appointment = await Appointment.findOne({ _id: req.params.appointmentId, patient: actorId(req) });
+  const appointment = await Appointment.findOne({ _id: req.params.appointmentId, patient: actorId(req) }, null, { includePaymentDrafts: true });
   if (!appointment) throw fail(404, 'Appointment not found.');
   return appointment;
 };

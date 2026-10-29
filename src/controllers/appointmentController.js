@@ -1,4 +1,5 @@
 import { emitAppointmentUpdated } from "../services/portalRealtimeService.js";
+import { recoverPatientPaymentDrafts } from '../services/appointmentPaymentService.js';
 import { filterPatientDirectory } from '../services/patientDirectoryService.js';
 // import Appointment from '../models/appointmentModel.js';
 // import User from '../models/userModel.js';
@@ -570,11 +571,14 @@ export const book = async (req, res) => {
     const paymentMethod = req.body.payment_method || req.body.paymentMethod;
     const methodKey = { Cash: 'cash', Card: 'online', 'Credit Card': 'credit_card', 'Debit Card': 'debit_card', UPI: 'upi', Insurance: 'insurance' }[paymentMethod] || String(paymentMethod || '').toLowerCase();
     const legacyCard = ['credit_card', 'debit_card'].includes(methodKey) && counselor.acceptedPaymentMethods?.includes('online');
+    const requiresPayment = ['credit_card', 'debit_card', 'upi', 'wallet', 'online', 'card'].includes(methodKey);
     if (methodKey !== 'wallet' && Array.isArray(counselor.acceptedPaymentMethods) && !counselor.acceptedPaymentMethods.includes(methodKey) && !legacyCard) {
       return res.status(400).json({ message: 'Select a payment method accepted by this doctor' });
     }
     const createAppointmentRecord = async (slot = {}) => Appointment.create({
-      payment_method: paymentMethod,
+      payment_method: methodKey,
+      payment_status: 'pending',
+      status: requiresPayment ? 'awaiting_payment' : 'pending',
       patient: req.user._id,
       counselor: counselorId,
       date: appointmentDate,
@@ -590,7 +594,7 @@ export const book = async (req, res) => {
       symptoms: req.body.symptoms,
       patient_location: req.body.patient_location || req.body.appointment_location || req.body.location,
       consultation_mode: req.body.consultation_mode,
-      queue_status: "booked",
+      queue_status: requiresPayment ? 'awaiting_payment' : 'booked',
       priority: "normal",
     });
     const isDoctor = String(counselor.role || "").toLowerCase() === "doctor" ||
@@ -604,6 +608,9 @@ export const book = async (req, res) => {
           clinicId: clinic_id,
         }, createAppointmentRecord)
       : await createAppointmentRecord();
+
+    // A payment draft must not announce a booking before payment succeeds.
+    if (requiresPayment) return res.status(201).json(appointment);
 
     emitAppointmentUpdated(appointment);
 
@@ -642,6 +649,10 @@ export const getAppointments = async (req, res) => {
     const userId = req.user._id;
     const { filter, date } = req.query;
     const role = String(req.user.role || "").toLowerCase();
+    if (role === 'user') {
+      try { await recoverPatientPaymentDrafts(userId); }
+      catch { /* Payment recovery must not prevent existing appointments loading. */ }
+    }
     const isProvider = ["doctor", "counsellor", "counselor"].includes(role);
     const requestedDoctorId = req.query?.doctor_id || req.body?.doctor_id;
     const scopedDoctorId = isProvider
@@ -994,6 +1005,10 @@ async function filterFor(req) {
   return req.user.role === 'user' ? { patient: actorId(req) } : { counselor: await doctorScope(req, req.query?.doctor_id || req.body?.doctor_id) };
 }
 export const getAppointmentAll = handle(async (req, res) => {
+  if (req.user.role === 'user') {
+    try { await recoverPatientPaymentDrafts(actorId(req)); }
+    catch { /* Keep existing appointments available if recovery is unavailable. */ }
+  }
   const filter = await filterFor(req);
   if (req.query.patient_id) filter.patient = req.user.role === 'user' ? actorId(req) : req.query.patient_id;
   if (req.query.date) filter.appointment_date = dateOnly(req.query.date);
