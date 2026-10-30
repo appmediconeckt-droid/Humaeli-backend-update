@@ -14,6 +14,16 @@ describe("Counsellor profile update certification validation", function () {
     sandbox.restore();
   });
 
+  it('preserves the clinic-recorded blood group when a patient submits a profile change', async () => {
+    sandbox.stub(User, 'findById').resolves({ _id: 'user123', role: 'user', bloodGroup: 'O-' });
+    const update = sandbox.stub(User, 'findByIdAndUpdate').returns({ select: async () => ({ _id: 'user123', role: 'user', fullName: 'Patient', bloodGroup: 'O-' }) });
+    const res = { status: sinon.stub().returnsThis(), json: sinon.spy() };
+    await updateUserById({ params: { userId: 'user123' }, body: { fullName: 'Patient', bloodGroup: 'AB+' }, files: {} }, res);
+    expect(res.status.calledWith(200)).to.equal(true);
+    expect(update.firstCall.args[1].$set).not.to.have.property('bloodGroup');
+    expect(update.firstCall.args[1].$set.fullName).to.equal('Patient');
+  });
+
   it('saves doctor payment methods to the profile', async () => {
     sandbox.stub(User, 'findById').resolves({ _id: 'doctor123', role: 'doctor' });
     const update = sandbox.stub(User, 'findByIdAndUpdate').returns({ select: async () => ({ _id: 'doctor123', role: 'doctor', acceptedPaymentMethods: ['cash', 'upi'] }) });

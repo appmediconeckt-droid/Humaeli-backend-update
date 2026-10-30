@@ -17,6 +17,12 @@ describe('Appointment vitals', () => {
     req = { userId: 'staff', params: { id: 'visit' }, body: { source: 'online', vitals: { blood_pressure: '120/80', pulse: '75', temperature: '37', spo2: '98', respiratory_rate: '16', pain_score: '0' } } };
   });
   afterEach(() => sandbox.restore());
+  it('validates blood group even when it is the only recorded field', () => {
+    expect(validateVitals({ blood_group: ' ab+ ' })).to.include({ blood_group: 'AB+' });
+    for (const blood_group of ['invalid', 'A', {}, 1]) {
+      expect(() => validateVitals({ blood_group, pulse: 75 })).to.throw('Invalid blood group');
+    }
+  });
   it('notifies only the linked patient after readings are saved', async () => {
     sandbox.stub(Appointment, 'findOne').resolves({ _id: 'visit', patient: 'patient-account', appointment_date: '2026-10-15', status: 'confirmed', queue_status: 'waiting' });
     const update = sandbox.stub(Appointment, 'updateOne').resolves({ matchedCount: 1 });
@@ -118,4 +124,22 @@ describe('Appointment vitals', () => {
   it('leaves unmeasured fields absent and retains a measured zero oxygen value', () => {
     expect(validateVitals({ pulse: '', weight: '', spo2: 0 })).to.deep.equal({ spo2: 0, temperature_unit: 'C' });
   });
+  for (const source of ['online', 'walkin']) {
+    it(`syncs ${source} blood group to the linked patient profile`, async () => {
+      req.body.source = source;
+      req.body.vitals = { blood_group: 'O-' };
+      const Model = source === 'walkin' ? WalkinAppointment : Appointment;
+      sandbox.stub(Model, 'findOne').resolves({
+        _id: 'visit', appointment_date: '2026-10-15', status: 'confirmed', appointment_status: 'booked',
+        ...(source === 'walkin' ? { patient_id: 'patient-account' } : { patient: 'patient-account' }),
+      });
+      sandbox.stub(vitalsSchemaRepository, 'query').resolves([[{ Field: 'vitals' }]]);
+      const appointmentUpdate = sandbox.stub(Model, 'updateOne').resolves({ matchedCount: 1 });
+      const profileUpdate = sandbox.stub(User, 'updateOne').resolves({ matchedCount: 1 });
+      await saveAppointmentVitals(req, res);
+      expect(profileUpdate.firstCall.args).to.deep.equal([{ _id: 'patient-account' }, { $set: { bloodGroup: 'O-' } }]);
+      expect(appointmentUpdate.calledBefore(profileUpdate)).to.equal(true);
+      expect(res.json.firstCall.args[0].vitals.blood_group).to.equal('O-');
+    });
+  }
 });

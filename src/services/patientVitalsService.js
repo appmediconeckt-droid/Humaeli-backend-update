@@ -1,6 +1,6 @@
 // Select one complete measurement snapshot; never combine readings from different visits.
 export function latestPatientVitals(online, walkins) {
-  const fields = ['blood_pressure', 'pulse', 'temperature', 'spo2', 'respiratory_rate', 'weight', 'height', 'pain_score'];
+  const fields = ['blood_group', 'blood_pressure', 'pulse', 'temperature', 'spo2', 'respiratory_rate', 'weight', 'height', 'pain_score'];
   const snapshots = [];
   for (const [source, rows] of [['online', online], ['walkin', walkins]]) {
     for (const row of rows) {

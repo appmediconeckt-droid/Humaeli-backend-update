@@ -51,6 +51,7 @@ import { getDisplayTiming } from '../services/displayTimingService.js';
 import { actorId } from '../utils/clinicAccess.js';
 import { validateVitals, ensureWalkinVitalsSchema } from '../services/appointmentVitalsService.js';
 import { appointmentPatientPhone } from '../utils/appointmentPatientPhone.js';
+import { emitResourceUpdated } from '../services/portalRealtimeService.js';
 
 export const saveAppointmentVitals = handle(async (req, res) => {
   const doctorId = await doctorScope(req);
@@ -74,7 +75,12 @@ export const saveAppointmentVitals = handle(async (req, res) => {
     ...(row.queue_status ? { queue_status: row.queue_status } : {}),
   }, { $set: { vitals: recorded } });
   if (!updated.matchedCount) throw fail(409, 'Appointment changed. Refresh and try again.');
-  const patientId = source === 'walkin' ? row.patient_id : row.patient?._id || row.patient;
+  const linkedPatient = source === 'walkin' ? row.patient_id : row.patient;
+  const patientId = linkedPatient?._id || linkedPatient?.id || linkedPatient;
+  if (patientId && recorded.blood_group) {
+    await User.updateOne({ _id: patientId }, { $set: { bloodGroup: recorded.blood_group } });
+    emitResourceUpdated('profile', [patientId]);
+  }
   if (patientId && global.io) {
     global.io.to(`user_${String(patientId)}`).emit('patientVitalsUpdated', { appointmentId: String(row._id || row.id), recordedAt: recorded.recorded_at });
   }

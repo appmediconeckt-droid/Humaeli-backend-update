@@ -11,6 +11,15 @@ const options = extra => ({ doctorId: 'doctor', clinicId: 'clinic', date, now: a
 describe('Doctor display break and delay data', () => {
   afterEach(() => sinon.restore());
 
+  it('shows emergency status only while an emergency consultation is running', () => {
+    const emergency = item('1', '10:00', { emergency: true, status: 'in-progress', queueStatus: 'in_progress', timing: { startedAt: at('10:00'), durationMinutes: 15 } });
+    expect(buildDisplayTiming(options({ records: [emergency, item('2', '10:10')] })).doctorStatus).to.equal('emergency');
+    expect(buildDisplayTiming(options({ records: [{ ...emergency, timing: {} }, item('2', '10:10')] })).doctorStatus).to.equal('emergency');
+    expect(buildDisplayTiming(options({ records: [{ ...emergency, status: 'completed', queueStatus: 'completed', timing: { endedAt: at('10:04') } }] })).doctorStatus).to.equal('waiting');
+    expect(buildDisplayTiming(options({ records: [{ ...emergency, emergency: false }, item('2', '10:10', { emergency: true })] })).doctorStatus).to.equal('consulting');
+    expect(buildDisplayTiming(options({ records: [emergency], breaks: [{ started_at: at('10:00'), planned_minutes: 15, status: 'active' }] })).doctorStatus).to.equal('break');
+  });
+
   it('returns actual break times, reason and a live remaining-minute countdown', () => {
     const breaks = [{ started_at: at('10:00'), planned_minutes: 15, reason: 'Tea break', status: 'active' }];
     const data = buildDisplayTiming(options({ breaks, records: [item('2', '10:10')] }));

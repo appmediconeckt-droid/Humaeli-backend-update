@@ -8,6 +8,9 @@ import WalkinAppointment from '../src/models/walkinAppointmentModel.js';
 describe('Patient profile vitals', () => {
   afterEach(() => sinon.restore());
   const old = { _id: 'old', appointment_date: '2026-10-10', vitals: { blood_pressure: '120/80', weight: 65, recorded_at: '2026-10-10T10:00:00Z', recorded_by: 'private-staff-id' } };
+  it('includes staff-recorded blood group in patient readings', () => {
+    expect(latestPatientVitals([{ ...old, vitals: { blood_group: 'AB-' } }], []).vitals.blood_group).to.equal('AB-');
+  });
   it('keeps previous readings when a new appointment has no measurements', () => {
     expect(latestPatientVitals([old, { _id: 'new', appointment_date: '2026-10-15' }], []).appointmentId).to.equal('old');
   });

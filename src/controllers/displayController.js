@@ -137,7 +137,7 @@ export const getDisplayQueue = async (req, res) => {
         doctor: { id: doctorId, name: doctor.fullName, specialization: doctor.specialization },
         roomId: data.current?.roomId || mappingRows?.[0]?.roomId || null,
         queueDate,
-        current: data.current ? { token: data.current.tokenNumber, status: data.current.status } : null,
+        current: data.current ? { token: data.current.tokenNumber, status: data.current.status, priority: data.current.priority || 'normal' } : null,
         nextTokens: data.waiting.slice(0, 2).map(e => e.tokenNumber),
         pendingTokens: (data.pending || data.allEntries?.filter(entry => entry.status === 'skipped') || []).map(entry => entry.tokenNumber),
         waitingCount: data.waitingCount,

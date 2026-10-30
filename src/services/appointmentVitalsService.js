@@ -24,6 +24,12 @@ export function validateVitals(input) {
     if (!match || +match[1] < 1 || +match[1] > 350 || +match[2] < 1 || +match[2] > 250 || +match[1] <= +match[2]) throw fail(400, 'Enter blood pressure as systolic/diastolic, for example 120/80');
     result.blood_pressure = `${+match[1]}/${+match[2]}`;
   }
+  if (input.blood_group != null && input.blood_group !== '') {
+    if (typeof input.blood_group !== 'string') throw fail(400, 'Invalid blood group');
+    const bloodGroup = input.blood_group.trim().toUpperCase();
+    if (!['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].includes(bloodGroup)) throw fail(400, 'Invalid blood group');
+    result.blood_group = bloodGroup;
+  }
   if (!Object.keys(result).length) throw fail(400, 'Enter at least one measured vital');
   if (input.notes != null) {
     if (typeof input.notes !== 'string' || input.notes.length > 1000) throw fail(400, 'Notes must be at most 1000 characters');

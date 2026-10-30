@@ -5,23 +5,45 @@ import User from '../src/models/userModel.js';
 import Notification from '../src/models/Notification.js';
 import { book } from '../src/controllers/appointmentController.js';
 import { confirmPaidAppointment } from '../src/services/appointmentPaymentBookingService.js';
+import { slotRepository } from '../src/services/appointmentSlotService.js';
 
 describe('Payment is required before appointment booking', () => {
   afterEach(() => sinon.restore());
 
   for (const method of ['upi', 'credit_card', 'debit_card', 'wallet']) {
     it(`creates only an unannounced payment draft for ${method}`, async () => {
-      sinon.stub(User, 'findOne').returns({ select: async () => ({ _id: 'provider', role: 'counsellor' }) });
+      sinon.stub(User, 'findOne').returns({ select: async () => ({ _id: 'provider', role: 'doctor' }) });
+      sinon.stub(slotRepository, 'connection').resolves({ query: sinon.stub().resolves([[{ acquired: 1 }]]), release() {} });
+      sinon.stub(slotRepository, 'ranges').resolves([{ clinic_id: 'clinic', availability_date: '2099-09-22', start_time: '10:00:00', end_time: '11:00:00', slot_duration: 15 }]);
+      sinon.stub(slotRepository, 'unavailable').resolves(null);
+      sinon.stub(slotRepository, 'online').resolves([]);
+      sinon.stub(slotRepository, 'walkins').resolves([]);
       const create = sinon.stub(Appointment, 'create').callsFake(async data => ({ ...data, _id: 'draft' }));
       const res = { status: sinon.stub().returnsThis(), json: sinon.spy() };
       await book({ user: { _id: 'patient', role: 'user' }, body: {
-        counselorId: 'provider', date: new Date(Date.now() + 86400000).toISOString(), payment_method: method,
+        counselorId: 'provider', date: '2099-09-22T10:00:00+05:30', payment_method: method,
         status: 'confirmed', payment_status: 'paid',
       } }, res);
       expect(res.status.firstCall.args[0]).to.equal(201);
       expect(create.firstCall.args[0]).to.include({
         status: 'awaiting_payment', queue_status: 'awaiting_payment', payment_status: 'pending', payment_method: method,
       });
+    });
+  }
+
+  for (const method of [undefined, 'wallet', 'upi', 'credit_card']) {
+    it(`books consultant sessions without upfront payment even with legacy method ${method}`, async () => {
+      sinon.stub(User, 'findOne').returns({ select: async () => ({ _id: 'provider', role: 'counsellor', acceptedPaymentMethods: [] }) });
+      sinon.stub(User, 'findById').returns({ select() { return this; }, lean: async () => ({}) });
+      sinon.stub(Notification, 'create').resolves({ toObject: () => ({}) });
+      const create = sinon.stub(Appointment, 'create').callsFake(async data => ({ ...data, _id: 'appointment' }));
+      const res = { status: sinon.stub().returnsThis(), json: sinon.spy() };
+      await book({ user: { _id: 'patient', role: 'user' }, body: {
+        counselorId: 'provider', date: new Date(Date.now() + 86400000).toISOString(), payment_method: method,
+      } }, res);
+      expect(res.status.firstCall.args[0]).to.equal(201);
+      expect(create.firstCall.args[0]).to.include({ status: 'pending', queue_status: 'booked', payment_method: '', payment_status: 'pending' });
+      expect(Notification.create.calledOnce).to.equal(true);
     });
   }
 

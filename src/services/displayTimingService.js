@@ -33,6 +33,9 @@ export function buildDisplayTiming({ doctorId, date, clinicId = '', records = []
   const waitingForDoctor = unstarted && overdueMinutes > 0 && !current?.timing?.startedAt;
   const expectedAt = estimate?.estimatedStartAt || (breakEnd ? breakEnd.toISOString() : null);
   const paused = state.doctorStatus === 'paused';
+  const emergencyConsultation = state.doctorStatus === 'consulting' && current?.emergency &&
+    (Boolean(current.timing?.startedAt) || ['in-progress', 'in_progress', 'in_consultation', 'consulting', 'serving'].includes(current.status) ||
+      ['in-progress', 'in_progress', 'in_consultation', 'consulting', 'serving'].includes(current.queueStatus));
   const late = !paused && !activeBreak && delayMinutes > 0;
   const hasNext = Boolean(next || nextAppointmentId || nextToken != null);
   let estimatedWaitMinutes = estimate?.estimateUncertain ? null : estimate?.waitingMinutes ?? null;
@@ -49,7 +52,7 @@ export function buildDisplayTiming({ doctorId, date, clinicId = '', records = []
   } else if (estimatedWaitMinutes == null) estimatedWaitLabel = 'Updating estimate';
   return {
     timingAvailable: true,
-    doctorStatus: activeBreak ? 'break' : waitingForDoctor && !paused ? 'delayed' : state.doctorStatus,
+    doctorStatus: activeBreak ? 'break' : emergencyConsultation ? 'emergency' : waitingForDoctor && !paused ? 'delayed' : state.doctorStatus,
     estimatedWaitMinutes, estimatedWaitLabel,
     breakInfo: {
       headline: activeBreak ? 'Doctor is on break' : paused ? 'Consultation paused' : late ? `${delayMinutes} min late` : 'No delay reported',

@@ -1131,7 +1131,6 @@ export const updateUserById = async (req, res) => {
       "age",
       "gender",
       "dateOfBirth",
-      "bloodGroup",
       "isActive",
       "isVerified",
       "profileCompleted",
@@ -1226,23 +1225,6 @@ export const updateUserById = async (req, res) => {
         }
         updates.dateOfBirth = dob.date;
         updates.age = dob.age;
-        continue;
-      }
-
-      if (field === "bloodGroup") {
-        const bloodGroup = String(rawValue).trim().toUpperCase();
-        const validBloodGroups = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
-
-        if (!validBloodGroups.includes(bloodGroup)) {
-          return res.status(400).json({
-            success: false,
-            message: "Invalid blood group.",
-            field: "bloodGroup",
-            allowedValues: validBloodGroups,
-          });
-        }
-
-        updates.bloodGroup = bloodGroup;
         continue;
       }
 
@@ -2069,7 +2051,6 @@ export const completeRegistration = async (req, res) => {
       aboutMe,
       // NEW: Patient profile fields (optional)
       dateOfBirth,
-      bloodGroup,
       address,
       emergencyContact,
       medicalInfo,
@@ -2304,7 +2285,7 @@ export const completeRegistration = async (req, res) => {
       },
       // NEW: Add patient profile fields (will be null/empty for counsellors initially)
       dateOfBirth: dob.date,
-      bloodGroup: bloodGroup || null,
+      bloodGroup: null,
       address: address || {
         line1: "",
         line2: "",

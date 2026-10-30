@@ -28,7 +28,7 @@ router.get('/walkin/:doctorClinicId/queue', handle(async (req, res) => {
   res.json({ success: true, displayType: 'doctor', displayName: 'Clinic queue',
     doctorClinicId: link.id, facility: { id: link.facility_id, name: clinic?.clinic_name || link.facility_name },
     doctor: { id: link.doctor_id, name: doctor.fullName }, roomId: link.roomId || null, queueDate,
-    current: data.current ? { token: data.current.tokenNumber, status: data.current.status } : null,
+    current: data.current ? { token: data.current.tokenNumber, status: data.current.status, priority: data.current.priority || 'normal' } : null,
     nextTokens: data.waiting.slice(0, 2).map(entry => entry.tokenNumber),
     pendingTokens: (data.pending || []).map(entry => entry.tokenNumber),
     waitingCount: data.waitingCount, totalPatients: data.totalPatients, completedCount: data.completedCount, ...timing });

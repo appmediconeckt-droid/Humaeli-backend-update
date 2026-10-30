@@ -568,11 +568,14 @@ export const book = async (req, res) => {
     validateDoctorAppointmentMode(counselor, req.body.consultation_mode);
     const appointment_date = localDate.slice(0, 10), appointment_time = localDate.slice(11, 19);
     const clinic_id = req.body.clinic_id;
+    const isDoctor = String(counselor.role || "").toLowerCase() === "doctor" ||
+      String(counselor.accountType || "").toLowerCase() === "doctor";
     const paymentMethod = req.body.payment_method || req.body.paymentMethod;
-    const methodKey = { Cash: 'cash', Card: 'online', 'Credit Card': 'credit_card', 'Debit Card': 'debit_card', UPI: 'upi', Insurance: 'insurance' }[paymentMethod] || String(paymentMethod || '').toLowerCase();
+    // Consultant sessions use wallet billing when chat/calls are used, not at booking.
+    const methodKey = isDoctor ? ({ Cash: 'cash', Card: 'online', 'Credit Card': 'credit_card', 'Debit Card': 'debit_card', UPI: 'upi', Insurance: 'insurance' }[paymentMethod] || String(paymentMethod || '').toLowerCase()) : '';
     const legacyCard = ['credit_card', 'debit_card'].includes(methodKey) && counselor.acceptedPaymentMethods?.includes('online');
     const requiresPayment = ['credit_card', 'debit_card', 'upi', 'wallet', 'online', 'card'].includes(methodKey);
-    if (methodKey !== 'wallet' && Array.isArray(counselor.acceptedPaymentMethods) && !counselor.acceptedPaymentMethods.includes(methodKey) && !legacyCard) {
+    if (isDoctor && methodKey !== 'wallet' && Array.isArray(counselor.acceptedPaymentMethods) && !counselor.acceptedPaymentMethods.includes(methodKey) && !legacyCard) {
       return res.status(400).json({ message: 'Select a payment method accepted by this doctor' });
     }
     const createAppointmentRecord = async (slot = {}) => Appointment.create({
@@ -597,8 +600,6 @@ export const book = async (req, res) => {
       queue_status: requiresPayment ? 'awaiting_payment' : 'booked',
       priority: "normal",
     });
-    const isDoctor = String(counselor.role || "").toLowerCase() === "doctor" ||
-      String(counselor.accountType || "").toLowerCase() === "doctor";
     const appointment = isDoctor
       ? await withAppointmentSlot({
           doctorId: counselorId,
