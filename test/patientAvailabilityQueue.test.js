@@ -26,6 +26,18 @@ describe('Receptionist patient availability and returned queue priority', () => 
   afterEach(() => sinon.restore());
   const request = (source, availability) => ({ userId: 'staff', params: { id: '333333333333333333333333' }, body: { source, availability } });
   for (const source of ['online', 'walkin']) {
+    it(`allows ${source} check-in after midnight inside the 24-hour window`, async () => {
+      sinon.useFakeTimers(new Date('2026-11-13T09:00:00+05:30'));
+      const Model = source === 'walkin' ? Walkin : Appointment;
+      sinon.stub(Model, 'findOne').resolves(record({ appointment_date: '2026-11-12', appointment_time: '10:00:00',
+        ...(source === 'walkin' ? { status: undefined, appointment_status: 'booked' } : {}) }));
+      const update = sinon.stub(Model, 'updateOne').resolves({ matchedCount: 1 });
+      await updatePatientAvailability(request(source, 'available'), res);
+      expect(res.status.called).to.equal(false);
+      expect(update.firstCall.args[1].$set.checked_in_at).to.be.instanceOf(Date);
+    });
+  }
+  for (const source of ['online', 'walkin']) {
     it(`reception can mark a ${source} patient absent without skipping or changing the token`, async () => {
       const Model = source === 'walkin' ? Walkin : Appointment;
       const row = record(source === 'walkin' ? { status: undefined, appointment_status: 'booked' } : {});

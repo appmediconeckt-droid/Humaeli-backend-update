@@ -140,7 +140,10 @@ const translationChanged = (result, originalText) =>
 
 const normalizeLanguageCode = (language) => {
   if (!language || typeof language !== "string") return undefined;
-  return language.trim().split("-")[0].toLowerCase();
+  const code = language.trim().replace('_', '-').toLowerCase();
+  if (code === 'zh-tw' || code === 'zh-hant') return 'zh-tw';
+  if (code === 'zh-cn' || code === 'zh-hans') return 'zh-cn';
+  return code.split('-')[0];
 };
 
 const GOOGLE_LANGUAGE_MAP = {
@@ -399,11 +402,9 @@ export const translatePlainTextBatch = async ({ texts, to, from }) => {
     const results = await Promise.all(
       group.map(async (text) => {
         try {
-          const result = await translateWithMyMemory({
-            trimmedText: text,
-            sourceLanguage,
-            targetLanguage,
-          });
+          // Use the same provider fallback as single-string translation.
+          // MyMemory-only batches left whole screens in English when limited.
+          const result = await translatePlainText({ text, from: sourceLanguage, to: targetLanguage });
           return result.translatedText;
         } catch {
           return text;

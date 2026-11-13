@@ -1,6 +1,7 @@
 import mongoose from '../persistence/mongoose.js';
 import Appointment from '../models/appointmentModel.js';
 import { createNotificationSafely } from '../services/notificationService.js';
+import { publishDisplayQueueChange } from '../services/displayQueueEvents.js';
 
 export const patientEmergencyDependencies = { notify: createNotificationSafely };
 
@@ -29,6 +30,7 @@ export async function requestPatientEmergency(req, res) {
     }, { $set: { priority: 'emergency', emergency_reason: reason } }, { new: true, runValidators: true });
     if (!updated) return res.status(409).json({ success: false, message: 'Appointment changed. Refresh your appointments and try again.' });
     const doctorId = String(row.counselor._id);
+    publishDisplayQueueChange({ doctorId });
     const notice = await patientEmergencyDependencies.notify({
       recipientId: doctorId, actorId: req.user._id, type: 'appointment',
       title: 'Patient emergency alert', message: 'A booked patient reports worsening health. Please review their emergency request.',

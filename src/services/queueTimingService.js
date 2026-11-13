@@ -1,4 +1,5 @@
 import { buildDaySlots, indiaDateTime, timeMinutes } from './appointmentSlotService.js';
+import { getNoShowCancellationDeadline } from './noShowPolicy.js';
 
 const MINUTE = 60000;
 const terminal = new Set(['completed', 'complete', 'done', 'cancelled', 'canceled', 'rejected', 'reject', 'no-show', 'no_show', 'skipped']);
@@ -39,6 +40,7 @@ export const normalizeQueueAppointment = (record, source = record.source || 'onl
     time: scheduledQueueTime('2000-01-01', time) ? indiaDateTime(scheduledQueueTime('2000-01-01', time)).time : String(time),
     token: Number(record.token ?? record.token_number) > 0 ? Number(record.token ?? record.token_number) : null,
     createdAt: record.createdAt || record.created_at || null,
+    noShowDeadline: getNoShowCancellationDeadline(record)?.toISOString() || null,
     patientArrivalTime: record.patientArrivalTime || record.checked_in_at || null,
     calledAt: record.calledAt || record.called_at || null,
     status, queueStatus: String(record.queueStatus || record.queue_status || status).toLowerCase(), emergency,
@@ -147,7 +149,7 @@ export const calculateEstimatedQueue = (records, { doctorId, date, clinicId = ''
     const difference = calculateTimingDifference(actualStart ?? estimatedStart, scheduled);
     estimates.set(queueRecordKey(item), {
       scheduledStartAt: iso(scheduled), estimatedStartAt: iso(estimatedStart), estimatedEndAt: iso(estimatedEnd),
-      cancelDeadline: calculateCancellationDeadline(iso(estimatedStart)), patientArrivalTime: item.patientArrivalTime || null,
+      cancelDeadline: item.noShowDeadline, patientArrivalTime: item.patientArrivalTime || null,
       actualStartAt: iso(actualStart), actualEndAt: iso(timestamp(item.timing?.endedAt)), expectedDurationMinutes: duration,
       waitingMinutes: item === current && actualStart != null ? 0 : calculateWaitingMinutes(estimatedStart, now),
       timingDifferenceMinutes: difference, timingRelation: difference == null ? null : difference > 0 ? 'late' : difference < 0 ? 'early' : 'on_time',

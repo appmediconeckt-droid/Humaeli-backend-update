@@ -40,6 +40,16 @@ describe('Doctor-scoped staff patient history', () => {
     sinon.stub(WalkinAppointment, 'find').returns(chain([walkin]));
     sinon.stub(Prescription, 'find').returns(chain([{ _id: 'rx-one', psychiatristId: 'doctor-one', patientId: 'patient-one', patientSnapshot: { name: 'Patient One' }, psychiatristSnapshot: { name: 'Dr One' }, problem: 'Chat problem', medicines: [medicine], issuedAt: '2026-10-10T05:00:00Z' }]));
   };
+  it('identifies completed emergency online and walk-in visits without changing their diagnosis', async () => {
+    prepare();
+    Appointment.find.returns(chain([{ ...online, priority: 'emergency', emergency_reason: 'Breathing difficulty' }]));
+    WalkinAppointment.find.returns(chain([{ ...walkin, priority: 'emergency', emergency_reason: 'Urgent chest pain' }]));
+    const res = response();
+    await staffPatientHistory({ userId: 'staff', query: {} }, res);
+    const records = res.json.firstCall.args[0].records;
+    expect(records.find(row => row.source === 'online')).to.include({ isEmergency: true, emergencyReason: 'Breathing difficulty', diagnosis: 'Recorded diagnosis' });
+    expect(records.find(row => row.source === 'walkin')).to.include({ isEmergency: true, emergencyReason: 'Urgent chest pain', diagnosis: 'Walk-in diagnosis' });
+  });
   it('loads and returns the saved doctor signature for completed visits', async () => {
     prepare();
     const select = sinon.stub().resolves({ ...doctor, prescriptionSignature: { url: 'https://example.test/signature.png' } });

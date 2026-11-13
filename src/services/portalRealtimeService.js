@@ -1,3 +1,4 @@
+import { publishDisplayQueueChange } from './displayQueueEvents.js';
 // Invalidate only affected accounts. Never include medical or financial records
 // in the event: each screen reloads through its existing authorized endpoint.
 export const emitResourceUpdated = (resource, recipients = []) => {
@@ -11,7 +12,8 @@ export const emitResourceUpdated = (resource, recipients = []) => {
   for (const id of ids) global.io.to(`user_${id}`).emit(`${resource}:updated`, payload);
 };
 
-export const emitAppointmentUpdated = (appointment) => {
+export const emitAppointmentUpdated = (appointment, { displayChanged = true } = {}) => {
+  if (displayChanged) publishDisplayQueueChange({ doctorId: appointment?.counselor || appointment?.doctor_id });
   emitResourceUpdated('appointments', [
     appointment?.patient, appointment?.patient_id,
     appointment?.counselor, appointment?.doctor_id,

@@ -8,6 +8,7 @@ import { generateObjectId } from "../models/mysql/BaseModel.js";
 import { queueToday } from '../utils/queueDate.js';
 import { withQueueMutex } from '../services/queueMutex.js';
 import { notifyNextQueueTokens } from '../services/queueTurnNotificationService.js';
+import { publishDisplayQueueChange } from '../services/displayQueueEvents.js';
 
 // Valid queue statuses
 const VALID_STATUSES = ["waiting", "called", "in_consultation", "completed", "skipped", "cancelled", "no_show"];
@@ -50,6 +51,7 @@ async function getNextPosition(facilityId, doctorId, queueDate) {
  * Emit real-time queue update through Socket.IO
  */
 function emitQueueUpdate(facilityId, departmentId, doctorId, payload) {
+  publishDisplayQueueChange({ facilityId, departmentId, doctorId });
   const io = global.io;
   if (!io) return;
   // Notify doctor's room

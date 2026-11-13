@@ -118,8 +118,8 @@ export const findOtherActiveConsultation = async (appointment) => {
 };
 
 // Timing updates contain no patient details and go only to affected users.
-export const emitQueueUpdated = async (appointment) => {
-  emitAppointmentUpdated(appointment);
+export const emitQueueUpdated = async (appointment, options) => {
+  emitAppointmentUpdated(appointment, options);
   if (!global.io) return;
   try {
     const doctorId = appointment.doctor_id || appointment.counselor;

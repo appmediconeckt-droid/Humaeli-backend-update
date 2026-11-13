@@ -9,6 +9,7 @@ import { notifyUpcomingQueuePatients, getConsultationTiming, findOtherActiveCons
 import { handle, doctorScope, pick, fail, jsonRecord, bool, dateOnly } from '../utils/clinicAccess.js';
 import { syncAppointmentFollowUp } from '../services/appointmentFollowUpService.js';
 import { emitAppointmentUpdated } from '../services/portalRealtimeService.js';
+import { normalizeAppointmentLifecycle } from '../services/appointmentLifecycle.js';
 const scope = req => doctorScope(req, req.query?.doctor_id || req.body?.doctor_id);
 export const createWalkinAppointment = handle(async (req, res) => {
   const b = req.body || {};
@@ -23,14 +24,16 @@ export const createWalkinAppointment = handle(async (req, res) => {
   const requestedTime = b.appointment_time ?? b.appointmentTime;
   const appointment_date = dateOnly(requestedDate ?? current.date);
   const selected_time = requestedTime === undefined ? null : bookingMinute(requestedTime);
-  const nowMinutes = timeMinutes(current.time);
+  const nowMinutes = timeMinutes(current.time.slice(0, 5));
   const row = await withAppointmentSlot({ doctorId: doctor_id, date: appointment_date,
     time: selected_time, clinicId: b.clinic_id ?? b.clinicId,
-    earliestTime: !selected_time && appointment_date === current.date ? nowMinutes : null }, async (slot) => {
+    earliestTime: appointment_date === current.date ? nowMinutes : null }, async (slot) => {
     // Public intake never creates a verified login, overwrites an existing patient,
     // or trusts a client-supplied token. The selected availability slot owns both.
     return WalkinAppointment.create({ doctor_id, patient_name, phone_number, symptoms: b.symptoms,
       gender: b.gender || undefined, date_of_birth: dob.provided ? dob.value : undefined,
+      location: typeof b.location === 'string' ? b.location.trim().slice(0, 1000) : undefined,
+      email: typeof b.email === 'string' ? b.email.trim().slice(0, 254) : undefined,
       clinic_id: slot.clinicId || undefined, appointment_date: slot.date,
       appointment_time: slot.time, token_number: slot.token,
       booking_source: normalizeBookingSource(b.booking_source ?? b.source ?? req.query?.source) });
@@ -41,7 +44,7 @@ export const createWalkinAppointment = handle(async (req, res) => {
     appointmentTime: row.appointment_time, clinic_id: row.clinic_id || null,
     bookingSource: row.booking_source, booking_source: row.booking_source, date_of_birth: dob.value });
 });
-const enrich = async row => ({ ...jsonRecord(row), ...await getActiveBreakDelayForAppointment(row.doctor_id,
+const enrich = async row => ({ ...normalizeAppointmentLifecycle(jsonRecord(row), 'walkin'), ...await getActiveBreakDelayForAppointment(row.doctor_id,
   new Date(row.appointment_date + 'T' + row.appointment_time + '+05:30')) });
 export const getWalkinAppointments = handle(async (req, res) => {
   res.setHeader?.('Cache-Control', 'no-store');
@@ -64,8 +67,8 @@ export const updateWalkinAppointment = handle(async (req, res) => {
   for (const field of ['medicines', 'recommended_tests', 'recommendedTests']) {
     if (data[field] !== undefined && !Array.isArray(data[field])) throw fail(400, `${field} must be a list`);
   }
-  if (req.body.status || req.body.appointment_status) {
-    const status = String(req.body.status || req.body.appointment_status).toLowerCase();
+  if (req.body.status || req.body.appointment_status || req.body.queue_status === 'completed') {
+    const status = String(req.body.status || req.body.appointment_status || 'completed').toLowerCase();
     data.appointment_status = status === 'in_progress' ? 'in-progress' : status === 'canceled' ? 'cancelled' : status;
     if (!['booked', 'pending', 'confirmed', 'in-progress', 'completed', 'cancelled', 'rejected'].includes(data.appointment_status)) throw fail(400, 'Invalid appointment status');
   }

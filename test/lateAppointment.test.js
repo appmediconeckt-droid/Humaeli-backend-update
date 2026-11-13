@@ -8,6 +8,7 @@ import { slotRepository } from '../src/services/appointmentSlotService.js';
 import { calculateEstimatedQueue, normalizeQueueAppointment, queueRecordKey, calculateCancellationDeadline } from '../src/services/queueTimingService.js';
 import { shouldAutoCancelLateAppointment, checkAndAutoCancelLateAppointments } from '../src/services/lateAppointmentService.js';
 import { cancelAbsentAppointment } from '../src/services/appointmentCancellationService.js';
+import { WalkinAppointment } from '../src/models/clinicModels.js';
 
 const at = (time) => new Date(`2026-10-10T${time}:00+05:30`);
 const row = (id, time, changes = {}) => ({ _id: id, counselor: 'doctor', clinic_id: 'clinic',
@@ -25,7 +26,7 @@ describe('Dynamic grace deadline and real-turn cancellation', () => {
     const current = row('1', '10:00', { queue_status: 'in_progress', consultation_timing: { startedAt: at('10:00'), durationMinutes: 10 } });
     const next = row('2', '10:10');
     expect(estimate(stateFor([current, next], '10:00'), next).estimatedStartAt).to.equal(at('10:10').toISOString());
-    expect(estimate(stateFor([current, next], '10:00'), next).cancelDeadline).to.equal(at('10:15').toISOString());
+    expect(estimate(stateFor([current, next], '10:00'), next).cancelDeadline).to.equal(new Date(at('10:10').getTime() + 86400000).toISOString());
   });
   it('20-minute late start shifts all remaining patients deterministically', () => {
     const current = row('1', '10:00', { queue_status: 'in_progress', consultation_timing: { startedAt: at('10:20'), durationMinutes: 10 } });
@@ -54,7 +55,7 @@ describe('Dynamic grace deadline and real-turn cancellation', () => {
     const own = called();
     for (const time of ['11:00', '11:05', '11:06', '11:10']) {
       const state = stateFor([own], time);
-      expect(estimate(state, own).cancelDeadline).to.equal(at('11:05').toISOString());
+      expect(estimate(state, own).cancelDeadline).to.equal(new Date(at('11:00').getTime() + 86400000).toISOString());
       expect(Boolean(shouldAutoCancelLateAppointment(own, state, at(time).getTime()))).to.equal(false);
     }
   });
@@ -74,7 +75,7 @@ describe('Dynamic grace deadline and real-turn cancellation', () => {
     const rows = [row('1', '10:00'), row('2', '10:10')];
     const state = stateFor(rows, '10:00', [{ started_at: at('10:00'), ended_at: at('10:15'), status: 'ended' }]);
     expect(estimate(state, rows[0]).estimatedStartAt).to.equal(at('10:15').toISOString());
-    expect(estimate(state, rows[1]).cancelDeadline).to.equal(at('10:30').toISOString());
+    expect(estimate(state, rows[1]).cancelDeadline).to.equal(new Date(at('10:10').getTime() + 86400000).toISOString());
   });
   it('emergency insertion shifts normal patients without changing booked times', () => {
     const own = row('2', '10:00'), emergency = row('9', '10:00', { priority: 'emergency', appointment_time: null });
@@ -88,7 +89,7 @@ describe('Dynamic grace deadline and real-turn cancellation', () => {
     const breaks = [{ started_at: at('11:02'), planned_minutes: 15, status: 'active' }];
     expect(Boolean(shouldAutoCancelLateAppointment(own, stateFor([own], '11:06', breaks), at('11:06').getTime()))).to.equal(false);
     breaks[0] = { ...breaks[0], status: 'ended', ended_at: at('11:17') };
-    expect(estimate(stateFor([own], '11:18', breaks), own).cancelDeadline).to.equal(at('11:22').toISOString());
+    expect(estimate(stateFor([own], '11:18', breaks), own).cancelDeadline).to.equal(new Date(at('11:00').getTime() + 86400000).toISOString());
   });
   it('emergency insertion protects an already called absent patient until the emergency resolves', () => {
     const own = called();
@@ -98,7 +99,7 @@ describe('Dynamic grace deadline and real-turn cancellation', () => {
     emergency.queue_status = 'completed';
     emergency.consultation_timing = { startedAt: at('11:06'), endedAt: at('11:20'), durationMinutes: 10 };
     const state = stateFor([own, emergency], '11:21');
-    expect(estimate(state, own).cancelDeadline).to.equal(at('11:25').toISOString());
+    expect(estimate(state, own).cancelDeadline).to.equal(new Date(at('11:00').getTime() + 86400000).toISOString());
     expect(Boolean(shouldAutoCancelLateAppointment(own, state, at('11:21').getTime()))).to.equal(false);
   });
   it('completed history is excluded and remains unchanged', () => {
@@ -132,9 +133,10 @@ describe('Dynamic grace deadline and real-turn cancellation', () => {
       expect(notification.firstCall.args[0].data.cancellationReason).to.equal('PATIENT_LATE');
     } finally { global.io = old; }
   });
-  it('existing backend worker never automatically cancels an absent patient', async () => {
+  it('existing backend worker retains absent patients inside their 24-hour window', async () => {
     const own = called();
     sinon.stub(Appointment, 'find').returns({ lean: async () => [own] });
+    sinon.stub(WalkinAppointment, 'find').returns({ lean: async () => [] });
     sinon.stub(DoctorBreak, 'find').returns({ lean: async () => [] });
     sinon.stub(slotRepository, 'online').resolves([own]);
     sinon.stub(slotRepository, 'walkins').resolves([]);

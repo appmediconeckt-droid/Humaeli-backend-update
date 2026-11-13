@@ -3,13 +3,24 @@ import rateLimit from 'express-rate-limit';
 import { clinicDisplayQueue, notifyClinicDisplayPatients } from '../services/clinicDisplayQueue.js';
 import { queueToday } from '../utils/queueDate.js';
 import { getDisplayTiming } from '../services/displayTimingService.js';
+import { publishDisplayQueueChange } from '../services/displayQueueEvents.js';
 import { protect } from '../middleware/authMiddleware.js';
 import { doctorScope, receptionistClinicScope, handle, fail } from '../utils/clinicAccess.js';
 import { query } from '../config/mysql.js';
+import User from '../models/userModel.js';
+import { getDaySlotAvailability } from '../services/appointmentSlotService.js';
 import { profileQr, publicDoctor, doctorClinics, resolveWalkin, publicWalkin, bookClinicWalkin } from '../services/clinicQrService.js';
 const router = express.Router();
 router.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 router.get('/doctors/:doctorId/profile', handle(async (req, res) => res.json({ success: true, data: await publicDoctor(req.params.doctorId) })));
+router.get('/doctors/:doctorId/slots', handle(async (req, res) => {
+  if (!await User.exists({ _id: req.params.doctorId, role: 'doctor', isActive: true })) throw fail(404, 'Doctor not found');
+  res.json({ success: true, data: await getDaySlotAvailability({ doctorId: req.params.doctorId, date: queueToday() }) });
+}));
+router.get('/walkin/:doctorClinicId/slots', handle(async (req, res) => {
+  const { link } = await resolveWalkin(req.params.doctorClinicId);
+  res.json({ success: true, data: await getDaySlotAvailability({ doctorId: link.doctor_id, clinicId: link.clinic_id || undefined, date: queueToday() }) });
+}));
 router.get('/doctors/:doctorId/clinics', protect, handle(async (req, res) => {
   await doctorScope(req, req.params.doctorId);
   const clinicId = await receptionistClinicScope(req);
@@ -43,6 +54,7 @@ router.patch('/walkin/:doctorClinicId/room', protect, handle(async (req, res) =>
   await query('UPDATE doctor_facilities SET roomId=? WHERE id=? AND doctorId=? AND facilityId=?',
     [room.trim(), link.mapping_id, link.doctor_id, link.facility_id]);
   res.json({ success: true, data: { doctorClinicId: link.id, roomNumber: room.trim() } });
+  publishDisplayQueueChange({ doctorId: link.doctor_id, facilityId: link.facility_id });
 }));
 router.get('/doctors/:doctorId/codes', protect, handle(async (req, res) => {
   await doctorScope(req, req.params.doctorId);

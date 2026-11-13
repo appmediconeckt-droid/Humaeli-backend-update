@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import QRCode from 'qrcode';
 import User from '../src/models/userModel.js';
+import Appointment from '../src/models/appointmentModel.js';
 import Session from '../src/models/sessionModel.js';
 import RegistrationOTP from '../src/models/registrationOtpModel.js';
 import { completeRegistration, loginUser, getMyProfile } from '../src/controllers/authController.js';
@@ -224,6 +225,7 @@ describe('Doctor registration and optional login role', () => {
   it('returns saved account type and QR in the own-profile response', async () => {
     const user = new User({ fullName: 'Doctor', role: 'doctor', accountType: 'doctor', doctorQrCode: 'saved-qr' });
     sandbox.stub(User, 'findById').returns({ select: async () => user });
+    sandbox.stub(Appointment, 'find').returns({ select: () => ({ lean: async () => [] }) });
     const res = response();
     await getMyProfile({ userId: user._id }, res);
     const data = res.json.firstCall.args[0];

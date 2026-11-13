@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
 import Appointment from '../src/models/appointmentModel.js';
+import { WalkinAppointment } from '../src/models/clinicModels.js';
 import { slotRepository } from '../src/services/appointmentSlotService.js';
 import { getAppointmentSessionEnd } from '../src/services/consultationTimingService.js';
 import { markExpiredAppointmentsNoShow } from '../src/controllers/appointmentController.js';
@@ -12,6 +13,7 @@ describe('Slot end never removes appointments', () => {
   afterEach(() => sinon.restore());
   it('does not select uncalled bookings for expiration, even after session end', async () => {
     const find = sinon.stub(Appointment, 'find').returns({ lean: async () => [] });
+    sinon.stub(WalkinAppointment, 'find').returns({ lean: async () => [] });
     const remove = sinon.stub(Appointment, 'deleteOne');
     expect(await markExpiredAppointmentsNoShow(at('18:00:00'))).to.equal(0);
     expect(remove.called).to.equal(false);

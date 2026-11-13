@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import sinon from "sinon";
 import { consultationTransition, emitQueueUpdated, getConsultationTiming } from "../src/services/consultationTimingService.js";
-import { DoctorBreak } from "../src/models/clinicModels.js";
+import { DoctorBreak, WalkinAppointment } from "../src/models/clinicModels.js";
 import { formatTokenStatus } from "../src/controllers/tokenStatusController.js";
 import { markExpiredAppointmentsNoShow, updateDoctorAppointment } from "../src/controllers/appointmentController.js";
 import { updateWalkinAppointment } from "../src/controllers/walkinController.js";
@@ -18,7 +18,7 @@ const response = () => ({ statusCode: 200, status(code) { this.statusCode = code
 
 describe("Persisted consultation timing and live queue", () => {
   let sandbox;
-  beforeEach(() => { sandbox = sinon.createSandbox(); });
+  beforeEach(() => { sandbox = sinon.createSandbox(); sandbox.stub(WalkinAppointment, 'find').returns({ lean: async () => [] }); });
   afterEach(() => { sandbox.restore(); delete global.io; });
   it("starts once and keeps the original start timestamp on repeated requests", () => {
     const started = consultationTransition(null, "start", 15, at("10:00:00"));
@@ -122,7 +122,7 @@ describe("Persisted consultation timing and live queue", () => {
     expect(await markExpiredAppointmentsNoShow(at("11:00:00"))).to.equal(0);
     expect(updateOne.called).to.equal(false);
     expect(find.firstCall.args[0].status).to.deep.equal({
-      $in: ["pending", "confirmed"],
+      $in: ["pending", "confirmed", "booked", "accepted", "skipped", "in-progress", "in_progress"],
     });
   });
   it("never marks a started or cancelled appointment as no-show", async () => {
@@ -177,6 +177,6 @@ describe("Persisted consultation timing and live queue", () => {
     sandbox.stub(slotRepository, "walkins").resolves([]);
     await emitQueueUpdated({ doctor_id: "doctor", appointment_date: "2026-09-22" });
     expect(to.calledWith("user_patient-two")).to.equal(true);
-    expect(emit.firstCall.args).to.deep.equal(["queueUpdated", { doctorId: "doctor", date: "2026-09-22" }]);
+    expect(emit.calledWith("queueUpdated", { doctorId: "doctor", date: "2026-09-22" })).to.equal(true);
   });
 });

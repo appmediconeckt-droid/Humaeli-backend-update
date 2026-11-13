@@ -5,6 +5,7 @@ import WalkinAppointment from "../models/walkinAppointmentModel.js";
 import { indiaDateTime, timeMinutes, slotRepository } from "./appointmentSlotService.js";
 
 import { calculateEstimatedQueue, normalizeQueueAppointment, queueRecordKey } from "./queueTimingService.js";
+import { getNoShowCancellationDeadline } from './noShowPolicy.js';
 
 export const clockTime = (minutes) =>
   `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:00`;
@@ -152,6 +153,8 @@ export const enrichAppointmentsWithDelay = async (appointments, doctorId, date) 
   const now = Date.now();
   return appointments.map((record) => {
     const item = typeof record.toJSON === 'function' ? record.toJSON() : { ...record };
+    item.cancellationReason = item.cancellation_reason || null;
+    item.cancelDeadline = item.cancellation_deadline || getNoShowCancellationDeadline(item)?.toISOString() || null;
     const own = normalizeQueueAppointment(item, sourceFor(item));
     if (own.date !== targetDate || own.doctorId !== targetDoctorId) return item;
     if (!states.has(own.clinicId)) states.set(own.clinicId, calculateEstimatedQueue(records, {

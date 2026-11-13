@@ -68,6 +68,40 @@ export const slotRepository = {
   walkins: (doctorId, date) => WalkinAppointment.find({ doctor_id: doctorId, appointment_date: date }),
 };
 
+export const occupiedSlotMinutes = (online, walkins, excludeWalkinId = null) => new Set([
+  ...online, ...walkins.filter(record => !excludeWalkinId || String(record.id || record._id) !== String(excludeWalkinId)),
+].filter(record => {
+  if (record.status === 'awaiting_payment' && record.queue_status === 'canceled') return false;
+  if (String(record.priority || '').toLowerCase() === 'emergency' && !record.appointment_time) return false;
+  return !['cancelled', 'canceled', 'rejected', 'reject'].includes(String(record.appointment_status || record.status || '').toLowerCase());
+}).map(record => timeMinutes(record.appointment_time || (record.date ? indiaDateTime(record.date).time : ''))));
+
+export function eligibleDaySlots(ranges, date, clinicId) {
+  const blockedClinics = new Set(ranges.filter(range => (range.is_unavailable === true || Number(range.is_unavailable) === 1)
+    && String(range.availability_date || range.date || '').slice(0, 10) === date).map(range => String(range.clinic_id || '')));
+  if (blockedClinics.has('') || (clinicId && blockedClinics.has(String(clinicId)))) return [];
+  return buildDaySlots(ranges, date).map(slot => ({ ...slot, clinicIds: slot.clinicIds.filter(id => !blockedClinics.has(id)) }))
+    .filter(slot => slot.clinicIds.length && (!clinicId || slot.clinicIds.includes(String(clinicId)) || slot.clinicIds.includes('')));
+}
+
+// Public snapshot contains times/statuses only, never patient information.
+export async function getDaySlotAvailability({ doctorId, date, clinicId, now = new Date() }) {
+  buildDaySlots([], date);
+  const [ranges, unavailable, online, walkins] = await Promise.all([
+    slotRepository.ranges(doctorId), slotRepository.unavailable(doctorId, date),
+    slotRepository.online(doctorId, date), slotRepository.walkins(doctorId, date),
+  ]);
+  const occupied = occupiedSlotMinutes(online, walkins);
+  const current = indiaDateTime(now);
+  const slots = unavailable ? [] : eligibleDaySlots(ranges, date, clinicId);
+  return { date, slots: slots.map(slot => {
+    const booked = occupied.has(slot.minutes);
+    const past = date < current.date || (date === current.date && slot.minutes < timeMinutes(current.time.slice(0, 5)));
+    return { time: slot.time, duration: slot.slot_duration, booked, available: !booked && !past,
+      status: booked ? 'booked' : past ? 'expired' : 'available' };
+  }) };
+}
+
 // One lock shared by both booking paths prevents simultaneous requests from
 // reserving the same doctor/time. The dedicated connection owns the lock.
 export const withAppointmentSlot = async ({ doctorId, date, time, clinicId, patientId, earliestTime = null, excludeWalkinId = null }, create) => {
@@ -102,12 +136,8 @@ export const withAppointmentSlot = async ({ doctorId, date, time, clinicId, pati
     })) {
       throw Object.assign(slotError("You already have an appointment with this doctor on this date. Cancel it before booking another slot.", 409), { code: "DUPLICATE_APPOINTMENT" });
     }
-    const occupied = new Set([...online, ...walkins.filter((record) => !excludeWalkinId || String(record.id || record._id) !== String(excludeWalkinId))].filter((record) => {
-      if (record.status === 'awaiting_payment' && record.queue_status === 'canceled') return false;
-      if (String(record.priority || "").toLowerCase() === "emergency" && !record.appointment_time) return false;
-      return !["cancelled", "canceled", "rejected", "reject"].includes(String(record.appointment_status || record.status || "").toLowerCase());
-    }).map((record) => timeMinutes(record.appointment_time || (record.date ? indiaDateTime(record.date).time : ""))));
-    const selected = time ? eligible.find((slot) => slot.minutes === minute)
+    const occupied = occupiedSlotMinutes(online, walkins, excludeWalkinId);
+    const selected = time ? eligible.find((slot) => slot.minutes === minute && (earliestTime === null || slot.minutes >= earliestTime))
       : eligible.find((slot) => (earliestTime === null || slot.minutes >= earliestTime) && !occupied.has(slot.minutes));
     if (!selected) throw slotError("No matching availability slot. Please choose an available date and time.");
     if (occupied.has(selected.minutes)) throw slotError("This slot is already booked. Please choose another time.", 409);

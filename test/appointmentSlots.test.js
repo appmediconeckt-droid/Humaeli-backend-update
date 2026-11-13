@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import sinon from "sinon";
-import { buildDaySlots, timeMinutes, indiaDateTime, withAppointmentSlot, slotRepository } from "../src/services/appointmentSlotService.js";
+import { buildDaySlots, timeMinutes, indiaDateTime, withAppointmentSlot, slotRepository, getDaySlotAvailability } from "../src/services/appointmentSlotService.js";
 import { book, markExpiredAppointmentsNoShow } from "../src/controllers/appointmentController.js";
 import { createWalkinAppointment, updateWalkinAppointment } from "../src/controllers/walkinController.js";
 import { createWalkinAppointment as createPublicWalkinAppointment } from "../src/controllers/walkinAppointmentController.js";
@@ -19,6 +19,7 @@ describe("Availability-based appointment tokens", () => {
   let sandbox, connection;
   beforeEach(() => {
     sandbox = sinon.createSandbox();
+    sandbox.stub(PublicWalkin, 'find').returns({ lean: async () => [] });
     sandbox.stub(clinicStaffRepository, "query").resolves([[{ Field: "clinic_id" }]]);
     connection = { query: sandbox.stub().resolves([[{ acquired: 1 }]]), release: sandbox.spy() };
     sandbox.stub(slotRepository, "connection").resolves(connection);
@@ -30,6 +31,30 @@ describe("Availability-based appointment tokens", () => {
   });
   afterEach(() => sandbox.restore());
   const reserve = (time, options = {}) => withAppointmentSlot({ doctorId: "doctor-1", date, time, ...options }, async (slot) => slot);
+
+  it('public slot list disables both online and walk-in bookings without exposing patients', async () => {
+    slotRepository.online.resolves([{ appointment_time: '10:00:00', status: 'completed', patient: 'private-patient' }]);
+    slotRepository.walkins.resolves([{ appointment_time: '10:15:00', appointment_status: 'booked', patient_name: 'Private Name' }]);
+    const result = await getDaySlotAvailability({ doctorId: 'doctor-1', clinicId: 'clinic-1', date, now: '2099-09-22T04:00:00Z' });
+    expect(result.slots[0]).to.include({ time: '10:00:00', booked: true, available: false, status: 'booked' });
+    expect(result.slots[1]).to.include({ time: '10:15:00', booked: true, available: false });
+    expect(result.slots[2]).to.include({ time: '10:30:00', booked: false, available: true });
+    expect(JSON.stringify(result)).not.to.match(/private-patient|Private Name|patient_name/);
+  });
+
+  it('public slot list releases canceled bookings, disables past slots and honors clinic blocks', async () => {
+    slotRepository.online.resolves([{ appointment_time: '10:15:00', status: 'cancelled' }]);
+    const result = await getDaySlotAvailability({ doctorId: 'doctor-1', clinicId: 'clinic-1', date, now: '2099-09-22T04:45:00Z' });
+    expect(result.slots[0]).to.include({ status: 'expired', available: false });
+    expect(result.slots[1]).to.include({ booked: false, available: true });
+    slotRepository.ranges.resolves([range, { clinic_id: 'clinic-1', availability_date: date, is_unavailable: true }]);
+    expect((await getDaySlotAvailability({ doctorId: 'doctor-1', clinicId: 'clinic-1', date })).slots).to.deep.equal([]);
+  });
+
+  it('requested slots before the minimum booking time cannot bypass the slot picker', async () => {
+    try { await reserve('10:00', { earliestTime: 615 }); throw new Error('Should reject'); }
+    catch (error) { expect(error.status).to.equal(422); }
+  });
 
   for (const status of ["pending", "confirmed", "in-progress", "completed"]) {
     it(`temporarily allows another slot for the same patient and doctor after a ${status} booking`, async () => {

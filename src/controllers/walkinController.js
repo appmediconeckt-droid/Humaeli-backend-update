@@ -1,4 +1,5 @@
 import { filterPatientDirectory } from '../services/patientDirectoryService.js';
+import { normalizeAppointmentLifecycle } from '../services/appointmentLifecycle.js';
 // src/controllers/walkinController.js
 import WalkinAppointment from "../models/walkinAppointmentModel.js";
 import { ensureClinicStaffSchema } from "../services/clinicStaffService.js";
@@ -31,6 +32,7 @@ export const getWalkinAppointments = async (req, res) => {
 
     let appointments = await WalkinAppointment.find(filter)
       .sort({ appointment_date: 1, appointment_time: 1, token_number: 1, createdAt: -1 });
+    appointments = appointments.map(row => normalizeAppointmentLifecycle(row.toObject ? row.toObject() : { ...row }, 'walkin'));
     if (req.query.patient_directory === 'true') {
       appointments = await filterPatientDirectory(appointments, 'walkin');
       res.set('Cache-Control', 'no-store');

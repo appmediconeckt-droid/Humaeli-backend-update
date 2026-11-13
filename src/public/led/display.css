@@ -56,3 +56,4 @@
 .emergency-badge { display: inline-flex; align-items: center; margin-bottom: 1vh; padding: .45em .85em; border: 1px solid #f87171; border-radius: 999px; color: #fff; background: #b91c1c; font-size: clamp(11px, 1.6vh, 17px); font-weight: 750; letter-spacing: .08em; line-height: 1.2; }
 .doctor-info .doctor-status-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
 .doctor-status-heading .emergency-badge { margin: 0 0 0 auto; flex-shrink: 0; box-shadow: 0 0 14px #ef444433; }
+.audio-controls #audio-status{max-width:42ch;font-size:clamp(11px,1.4vh,15px);line-height:1.4;color:#cbd5e1}

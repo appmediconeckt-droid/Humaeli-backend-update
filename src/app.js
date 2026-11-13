@@ -527,8 +527,8 @@ app.use("/api/admin/reviews", adminReviewRoutes);
 app.use("/api/admin/payments", adminPaymentRoutes);
 app.use("/api/admin/support", adminSupportRoutes);
 app.use("/api/admin/refunds", adminRefundRoutes);
-// Existing minute job cancels only explicitly called, absent patients after
-// their live deadline. Slot end never removes booked patients or history.
+// Reconcile completed visits and cancel absent patients after 24 hours.
+// Appointment history is retained.
 export const startDatabaseJobs = createDatabaseStartup(mongoose.connection, async () => {
   if (process.env.NODE_ENV === "test") return;
   await resetAllUsersPresence();
@@ -548,6 +548,7 @@ export const startDatabaseJobs = createDatabaseStartup(mongoose.connection, asyn
   };
   const appointmentCleanupInterval = setInterval(runAppointmentCleanup, 60 * 1000);
   appointmentCleanupInterval.unref?.();
+  void runAppointmentCleanup();
   const chatBillingSettlementInterval = setInterval(() => {
     if (mongoose.connection.readyState !== 1) return;
     settleInactiveChatSessions().catch((error) => {

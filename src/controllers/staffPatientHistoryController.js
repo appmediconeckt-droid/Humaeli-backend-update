@@ -42,9 +42,12 @@ export const staffPatientHistory = handle(async (req, res) => {
     .some(value => ['completed', 'complete', 'done'].includes(String(value || '').trim().toLowerCase())));
   const visits = [...online.map(row => ({ row, visitSource: 'online' })), ...completedWalkins.map(row => ({ row: asWalkinConsultation(row), visitSource: 'walkin' }))].map(({ row, visitSource }) => {
     const expanded = expandConsultationDetails(row);
+    const isEmergency = String(row.priority || '').trim().toLowerCase() === 'emergency' || row.is_emergency === true || row.isEmergency === true;
+    const emergencyReason = isEmergency ? String(row.emergency_reason || row.emergencyReason || '').trim() : '';
     const patient = { id: idOf(row.patient), name: row.patient?.fullName || row.patient_name || 'Patient', phoneNumber: row.patient?.phoneNumber || row.phone_number || '', gender: row.patient?.gender || row.gender, age: row.patient?.age ?? row.age };
     const prescription = { ...appointmentToPrescriptionResponse(row, doctor, clinics.find(clinic => idOf(clinic) === idOf(row.clinic_id))), patient };
     return { id: `${visitSource}:${idOf(row)}`, source: visitSource, patient, clinicId: idOf(row.clinic_id),
+      isEmergency, priority: isEmergency ? 'emergency' : 'normal', emergencyReason,
       doctor: { id: doctorId, name: doctor.fullName }, appointmentDate: row.appointment_date || dayIST(row.date),
       checkedDate: dayIST(row.consultation_ended_at) || row.appointment_date || dayIST(row.date),
       checkedAt: row.consultation_ended_at || null, appointmentTime: row.appointment_time || '', token: row.token_number ?? null,

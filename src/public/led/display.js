@@ -4,7 +4,12 @@
   const queueUrl = location.pathname.startsWith('/display/clinic/')
     ? `/api/qr/walkin/${encodeURIComponent(displayId)}/queue`
     : `/api/displays/${encodeURIComponent(displayId)}/queue`;
-  let lastSuccess = 0;
+  const kind = location.pathname.startsWith('/display/clinic/') ? 'clinic' : 'display';
+  const stream = new EventSource(`/led-control/${kind}/${encodeURIComponent(displayId)}/events`);
+  let pending = false;
+  let dirty = false;
+  let disposed = false;
+  let retry;
   const textNode = (tag, className, text) => {
     const node = document.createElement(tag); node.className = className; node.textContent = text; return node;
   };
@@ -75,20 +80,24 @@
     }));
     el('message').hidden = doctors.length > 0;
     el('message').textContent = 'No doctors configured for this display.';
-    lastSuccess = Date.now(); document.body.classList.remove('stale');
-    el('connection').textContent = 'Live · refreshes every 3 seconds';
+    document.body.classList.remove('stale');
+    el('connection').textContent = 'Live · updates when the queue changes';
     el('updated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
     globalThis.queueDisplayAudio?.update(doctors);
   }
   async function refresh() {
+    if (disposed) return;
+    if (pending) { dirty = true; return; }
+    pending = true;
+    clearTimeout(retry);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
       const response = await fetch(queueUrl, { cache: 'no-store', signal: controller.signal });
       const data = await response.json();
       if (!response.ok || !data.success) {
-        if ([403, 404, 422].includes(response.status)) { el('doctors').replaceChildren(); lastSuccess = 0; }
-        throw new Error(data.code === 'DATABASE_UNAVAILABLE' ? 'Database reconnecting — retrying automatically' : data.message || 'Unable to load queue');
+        if ([403, 404, 410, 422].includes(response.status)) el('doctors').replaceChildren();
+        throw Object.assign(new Error(data.code === 'DATABASE_UNAVAILABLE' ? 'Database reconnecting — retrying automatically' : data.message || 'Unable to load queue'), { status: response.status });
       }
       render(data);
     } catch (error) {
@@ -97,7 +106,12 @@
       el('connection').textContent = 'Connection interrupted';
       el('message').hidden = false;
       el('message').textContent = error.name === 'AbortError' ? 'Connection timed out — retrying automatically' : error.message;
-    } finally { clearTimeout(timeout); setTimeout(refresh, 3000); }
+      if (![403, 404, 410, 422].includes(error.status)) retry = setTimeout(refresh, 10000);
+    } finally {
+      clearTimeout(timeout);
+      pending = false;
+      if (dirty) { dirty = false; void refresh(); }
+    }
   }
   el('fullscreen').addEventListener('click', async () => {
     try { await document.documentElement.requestFullscreen(); }
@@ -105,11 +119,14 @@
   });
   function clock() {
     el('clock').textContent = new Date().toLocaleTimeString();
-    if (lastSuccess && Date.now() - lastSuccess > 15000) {
-      document.body.classList.add('stale');
-      globalThis.queueDisplayAudio?.clear();
-    }
-    if (lastSuccess && Date.now() - lastSuccess > 60000) el('doctors').replaceChildren();
   }
-  clock(); setInterval(clock, 1000); refresh();
+  stream.onopen = refresh;
+  stream.onmessage = refresh;
+  stream.onerror = () => {
+    document.body.classList.add('stale');
+    el('connection').textContent = 'Live connection reconnecting';
+    globalThis.queueDisplayAudio?.clear();
+  };
+  window.addEventListener('pagehide', () => { disposed = true; clearTimeout(retry); stream.close(); });
+  clock(); setInterval(clock, 1000);
 })();

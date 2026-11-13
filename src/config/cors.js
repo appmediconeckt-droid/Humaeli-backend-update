@@ -15,6 +15,7 @@ const isPrivateNetworkOrigin = (origin) =>
   );
 
 export const configuredOrigins = splitEnvOrigins(
+  process.env.PUBLIC_APP_URL,
   process.env.CLIENT_URL,
   process.env.TUNNEL_URL,
   process.env.FRONTEND_URL,

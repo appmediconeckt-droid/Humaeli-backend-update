@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import sinon from "sinon";
 import Appointment from "../src/models/appointmentModel.js";
+import { WalkinAppointment } from '../src/models/clinicModels.js';
 import Walkin from "../src/models/walkinAppointmentModel.js";
 import { updateDoctorAppointment, markExpiredAppointmentsNoShow } from "../src/controllers/appointmentController.js";
 import { updateWalkinAppointment } from "../src/controllers/walkinController.js";
@@ -29,7 +30,8 @@ describe("Doctor Next appointment queue", () => {
     expect(record.save.called).to.equal(false);
   });
   it("does not automatically cancel skipped appointments when the original slot expires", async () => {
-    sinon.stub(Appointment, "find").returns({ lean: async () => [{ status: "pending", queue_status: "skipped", date: new Date("2020-01-01"), counselor: "doctor-1" }] });
+    sinon.stub(Appointment, "find").returns({ lean: async () => [{ status: "pending", queue_status: "skipped", date: new Date(), counselor: "doctor-1" }] });
+    sinon.stub(WalkinAppointment, 'find').returns({ lean: async () => [] });
     const update = sinon.stub(Appointment, "updateOne");
     const ranges = sinon.stub(slotRepository, "ranges");
     expect(await markExpiredAppointmentsNoShow()).to.equal(0);

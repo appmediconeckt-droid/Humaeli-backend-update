@@ -6,6 +6,7 @@ import { handle, doctorScope, receptionistClinicScope, dateOnly, todayIST, fail 
 import { normalizeQueueAppointment, isActiveQueueAppointment, isServingQueueAppointment, comparePatientReturnPriority } from '../services/queueTimingService.js';
 import { emitAppointmentUpdated } from '../services/portalRealtimeService.js';
 import { notifyUpcomingQueuePatients } from '../services/consultationTimingService.js';
+import { getNoShowCancellationDeadline } from '../services/noShowPolicy.js';
 
 export const updatePatientAvailability = handle(async (req, res) => {
   const doctorId = await doctorScope(req);
@@ -21,7 +22,10 @@ export const updatePatientAvailability = handle(async (req, res) => {
   const skipped = normalized.status === 'skipped' || normalized.queueStatus === 'skipped';
   if (['completed', 'complete', 'done', 'canceled', 'cancelled', 'rejected', 'no_show', 'no-show'].includes(normalized.status) || normalized.timing.endedAt) throw fail(409, 'Availability cannot be changed for a closed appointment');
   if ((!skipped && !isActiveQueueAppointment(normalized)) || (isServingQueueAppointment(normalized) && normalized.queueStatus !== 'called') || normalized.timing.startedAt) throw fail(409, 'Availability can only be changed before consultation starts');
-  if (normalized.date !== todayIST()) throw fail(409, "Availability can only be updated for today's appointments");
+  const deadline = getNoShowCancellationDeadline(row);
+  if (normalized.date > todayIST() || (!normalized.patientArrivalTime && deadline && Date.now() >= deadline.getTime())) {
+    throw fail(409, 'Patient availability can only be updated within the 24-hour arrival window.');
+  }
   const returned = availability === 'available' && (skipped || normalized.availability.status === 'unavailable');
   const now = new Date().toISOString();
   const state = { status: availability, updatedAt: now, updatedBy: actorId(req), updatedRole: req.clinicAccessUser.role,

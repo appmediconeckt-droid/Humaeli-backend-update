@@ -8,6 +8,7 @@ import { getDoctorQueueData } from "./queueController.js";
 import { queueToday } from '../utils/queueDate.js';
 import { clinicDisplayQueue, notifyClinicDisplayPatients } from '../services/clinicDisplayQueue.js';
 import { getDisplayTiming } from '../services/displayTimingService.js';
+import { publishDisplayQueueChange } from '../services/displayQueueEvents.js';
 
 const DISPLAY_TYPES = ["doctor", "department", "floor", "hospital", "reception"];
 
@@ -79,6 +80,7 @@ export const updateDisplay = async (req, res) => {
     }
     await Display.updateOne({ _id: req.params.id }, updates);
     const updated = await Display.findById(req.params.id);
+    publishDisplayQueueChange({ doctorId: display.doctorId, facilityId: display.facilityId });
     return ok(res, { message: "Display updated", display: updated });
   } catch (err) {
     console.error("updateDisplay error:", err.message);
@@ -91,6 +93,7 @@ export const deleteDisplay = async (req, res) => {
     const display = await Display.findById(req.params.id);
     if (!display) return fail(res, "Display not found", 404);
     await Display.updateOne({ _id: req.params.id }, { isActive: false });
+    publishDisplayQueueChange({ doctorId: display.doctorId, facilityId: display.facilityId });
     return ok(res, { message: "Display deactivated" });
   } catch (err) {
     console.error("deleteDisplay error:", err.message);

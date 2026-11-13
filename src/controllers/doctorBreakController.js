@@ -4,6 +4,7 @@ import {
   startDoctorBreak,
 } from "../services/doctorBreakService.js";
 import { actorId } from '../utils/clinicAccess.js';
+import { publishDisplayQueueChange } from '../services/displayQueueEvents.js';
 
 const emitAppointmentDelays = (io, appointments, reason) => {
   for (const appointment of appointments) {
@@ -38,6 +39,7 @@ export const startBreak = async (req, res) => {
       durationMinutes,
       reason: req.body.reason,
     });
+    publishDisplayQueueChange({ doctorId: actorId(req) });
     const io = req.app.get("io");
     io?.to(`user:${actorId(req)}`).emit("break:started", breakData);
     emitAppointmentDelays(
@@ -69,6 +71,7 @@ export const endBreak = async (req, res) => {
     });
     const io = req.app.get("io");
     io?.to(`user:${actorId(req)}`).emit("break:ended", breakData);
+    publishDisplayQueueChange({ doctorId: actorId(req) });
     emitAppointmentDelays(io, appointments, "Doctor break duration updated");
 
     res.json({

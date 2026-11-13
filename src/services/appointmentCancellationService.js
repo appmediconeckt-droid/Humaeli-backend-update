@@ -4,13 +4,15 @@ import { emitQueueUpdated, notifyUpcomingQueuePatients } from './consultationTim
 
 // Shared cancellation side effects for the existing status API and late worker.
 // This project has no appointment refund handler; payment/chat billing is separate.
-export const finishAppointmentCancellation = async (appointment, actorId = appointment.counselor) => {
+export const finishAppointmentCancellation = async (appointment, actorId = appointment.counselor || appointment.doctor_id) => {
   await emitQueueUpdated(appointment);
   await notifyUpcomingQueuePatients(appointment);
   await createNotificationSafely({
-    recipientId: appointment.patient, actorId, type: 'appointment',
+    recipientId: appointment.patient || appointment.patient_id, actorId, type: 'appointment',
     title: 'Appointment canceled',
-    message: appointment.cancellation_reason === 'PATIENT_LATE'
+    message: appointment.cancellation_reason === 'NO_SHOW_24_HOURS'
+      ? 'Your appointment was automatically canceled because no patient check-in was recorded within 24 hours.'
+      : appointment.cancellation_reason === 'PATIENT_LATE'
       ? 'Patient did not arrive before the dynamically adjusted appointment deadline.'
       : 'Your appointment request has been canceled.',
     data: { appointmentId: appointment._id, status: 'canceled', queue_status: 'canceled',

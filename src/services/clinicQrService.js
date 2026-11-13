@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { publishDisplayQueueChange } from './displayQueueEvents.js';
 import QRCode from 'qrcode';
 import mongoose from '../persistence/mongoose.js';
 import { writeRow } from '../persistence/columns.js';
@@ -10,6 +11,7 @@ import { queueToday } from '../utils/queueDate.js';
 import { withQueueMutex } from './queueMutex.js';
 import { doctorProfileUrl, clinicWalkinUrl } from './qrLinks.js';
 import { timeMinutes, withAppointmentSlot } from './appointmentSlotService.js';
+import { normalizeDateOfBirth } from './patientDateOfBirthService.js';
 
 const id = () => randomBytes(12).toString('hex');
 const rows = async (db, sql, params = []) => (await db.query(sql, params))[0];
@@ -150,11 +152,17 @@ export async function bookClinicWalkin(linkId, body) {
   const symptoms = String(body.symptoms || '').trim();
   if (!name || name.length > 150 || !/^\+?\d{7,15}$/.test(phone) || !symptoms || symptoms.length > 2000) throw fail(400, 'Name, valid phone number and symptoms are required');
   if (typeof body.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,64}$/.test(body.requestId)) throw fail(400, 'A valid requestId is required');
+  const dob = normalizeDateOfBirth(body.dateOfBirth ?? body.date_of_birth);
+  const gender = body.gender || undefined;
+  if (gender && !['male', 'female', 'other', 'prefer-not-to-say'].includes(gender)) throw fail(400, 'Invalid gender');
+  const location = String(body.location || '').trim();
+  const email = String(body.email || '').trim();
+  if (location.length > 1000 || email.length > 254 || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) throw fail(400, 'Invalid patient contact details');
   const date = queueToday();
   if (body.appointmentDate && body.appointmentDate !== date) throw fail(400, 'Clinic walk-in is available for today only');
   const requestedTime = body.appointmentTime ?? body.appointment_time ?? null;
   const currentTime = new Intl.DateTimeFormat('en-GB', { timeZone: process.env.QUEUE_TIMEZONE || 'Asia/Kolkata', hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23' }).format(new Date());
-  const earliestTime = requestedTime ? null : timeMinutes(currentTime);
+  const earliestTime = timeMinutes(currentTime.slice(0, 5));
   const storage = mongoose.connection.db;
   if (!storage) throw fail(503, 'Database is not ready');
   const table = WalkinAppointment.collection.name;
@@ -179,6 +187,8 @@ export async function bookClinicWalkin(linkId, body) {
       const appointment = new WalkinAppointment({ doctor_id: link.doctor_id, clinic_id: link.clinic_id || undefined,
         doctor_clinic_id: link.id, facility_id: link.facility_id, queue_entry_id: entryId,
         patient_name: name, phone_number: phone, symptoms, appointment_date: date,
+        date_of_birth: dob.provided ? dob.value : undefined, gender,
+        location: location || undefined, email: email || undefined,
         appointment_time: slot.time,
         token_number: slot.token, booking_source: 'qr', createdAt: new Date(), updatedAt: new Date() });
       await appointment.validate();
@@ -196,6 +206,7 @@ export async function bookClinicWalkin(linkId, body) {
   const response = { appointmentId: result.appointmentId, queueEntryId: result.id, doctorClinicId: linkId,
     doctorId: result.doctorId, facilityId: result.facilityId, clinicId: first.link.clinic_id,
     tokenNumber: result.tokenNumber, queueDate: result.queueDate, status: result.status, room: result.roomId };
+  publishDisplayQueueChange({ doctorId: result.doctorId, facilityId: result.facilityId });
   global.io?.to(`doctor:${result.doctorId}`).emit('queueUpdated', response);
   global.io?.to(`facility:${result.facilityId}`).emit('queueUpdated', response);
   return response;

@@ -1,4 +1,6 @@
 import { emitAppointmentUpdated } from "../services/portalRealtimeService.js";
+import { normalizeAppointmentLifecycle } from '../services/appointmentLifecycle.js';
+import { publishDisplayQueueChange } from '../services/displayQueueEvents.js';
 import { recoverPatientPaymentDrafts } from '../services/appointmentPaymentService.js';
 import { filterPatientDirectory } from '../services/patientDirectoryService.js';
 // import Appointment from '../models/appointmentModel.js';
@@ -376,7 +378,7 @@ import { enrichAppointmentGroups } from '../services/appointmentDelayService.js'
 import { attachAppointmentDoctorRatings } from '../services/doctorRatingService.js';
 import { normalizeQueueAppointment, isReturnedQueuePatient } from '../services/queueTimingService.js';
 import { validateDoctorAppointmentMode } from '../services/doctorAppointmentModes.js';
-// Keep the existing scheduler entry point; slot/session end never expires bookings.
+// The minute scheduler cancels absent patients after the 24-hour arrival window.
 export const markExpiredAppointmentsNoShow = checkAndAutoCancelLateAppointments;
 
 // IST (India Standard Time) is UTC+5:30
@@ -713,6 +715,7 @@ export const getAppointments = async (req, res) => {
       .sort({ date: -1 })
       .lean();
 
+    appointments = appointments.map(record => normalizeAppointmentLifecycle(record));
     if (isProvider && req.query.patient_directory === 'true') {
       appointments = await filterPatientDirectory(appointments, 'online');
       res.set('Cache-Control', 'no-store');
@@ -1186,7 +1189,7 @@ export const updateDoctorAppointment = async (req, res) => {
       }
       appointment.notes = JSON.stringify({ __doctorConsultation: 1, originalNotes: existing.notes || "", details });
     }
-    appointment.$where = { ...(appointment.$where || {}), cancellation_reason: { $ne: 'PATIENT_LATE' } };
+    appointment.$where = { ...(appointment.$where || {}), cancellation_reason: { $nin: ['PATIENT_LATE', 'NO_SHOW_24_HOURS'] } };
     await appointment.save();
     await emitTimingQueueUpdated(appointment);
     if (becameEmergency && !['canceled', 'rejected', 'completed'].includes(appointment.status)) {
@@ -1343,9 +1346,9 @@ export const deleteAppointment = handle(async (req, res) => {
 });
 
 async function saveOnlineAppointment(row) {
-  if (row.cancellation_reason === 'PATIENT_LATE' && row.status !== 'canceled') throw fail(409, 'Appointment was canceled for non-arrival');
-  if (row.cancellation_reason !== 'PATIENT_LATE') {
-    row.$where = { ...(row.$where || {}), cancellation_reason: { $ne: 'PATIENT_LATE' } };
+  if (['PATIENT_LATE', 'NO_SHOW_24_HOURS'].includes(row.cancellation_reason) && row.status !== 'canceled') throw fail(409, 'Appointment was canceled for non-arrival');
+  if (!['PATIENT_LATE', 'NO_SHOW_24_HOURS'].includes(row.cancellation_reason)) {
+    row.$where = { ...(row.$where || {}), cancellation_reason: { $nin: ['PATIENT_LATE', 'NO_SHOW_24_HOURS'] } };
   }
   if (['canceled', 'rejected'].includes(row.status)) return row.save();
   const local = new Date(new Date(row.date).getTime() + 19800000).toISOString();
@@ -1386,6 +1389,7 @@ const sortQueue = (appointments = []) =>
   });
 
 const emitQueueUpdated = (doctorId, appointmentDate) => {
+  publishDisplayQueueChange({ doctorId });
   if (!global.io || !doctorId) return;
 
   const payload = {
