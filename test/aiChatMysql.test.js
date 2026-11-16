@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import sinon from "sinon";
+import Chat from "../src/models/chatModel.js";
 import { getPool } from "../src/config/mysql.js";
 import { getMyChatHistory, deleteMyChatMessage } from "../src/controllers/chatController.js";
 
@@ -13,6 +14,7 @@ describe("AI chat MySQL persistence", () => {
   let sandbox, query, execute;
   beforeEach(() => {
     sandbox = sinon.createSandbox();
+    sandbox.stub(Chat, "countDocuments").resolves(0);
     query = sandbox.stub(getPool(), "query");
     execute = sandbox.stub(getPool(), "execute");
   });
@@ -54,6 +56,19 @@ describe("AI chat MySQL persistence", () => {
     expect(res.statusCode).to.equal(200);
     expect(res.body.deletedChatId).to.equal("chat-123456789");
     expect(execute.firstCall.args[1]).to.deep.equal(["chat-123456789", "patient-123456"]);
+  });
+
+  it("restores the account limit even when the latest language/thread has fewer turns", async () => {
+    Chat.countDocuments.resolves(5);
+    query.onFirstCall().resolves([[{ sessionId: "new-language" }]]);
+    query.onSecondCall().resolves([[{ id: "last-turn", userMessage: "One question", aiResponse: "One answer" }]]);
+    const res = response();
+    await getMyChatHistory({ user: { id: "patient-123456" } }, res);
+    expect(res.body.userMessageCount).to.equal(5);
+    expect(res.body.chatLimitReached).to.equal(true);
+    expect(Chat.countDocuments.firstCall.args[0]).to.deep.equal({
+      userId: "patient-123456", userMessage: { $nin: ["", null] },
+    });
   });
 
   it("does not delete another user's turn", async () => {

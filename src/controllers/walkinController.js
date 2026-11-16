@@ -1,3 +1,5 @@
+import { emitAppointmentUpdated } from '../services/portalRealtimeService.js';
+import { walkinPatientId } from '../services/patientWalkinAppointments.js';
 import { filterPatientDirectory } from '../services/patientDirectoryService.js';
 import { normalizeAppointmentLifecycle } from '../services/appointmentLifecycle.js';
 // src/controllers/walkinController.js
@@ -136,6 +138,7 @@ export const createWalkinAppointment = async (req, res) => {
       earliestTime: resolvedDate === todayDateStr ? currentTime[0] * 60 + currentTime[1] + currentTime[2] / 60 : null,
     }, (slot) => WalkinAppointment.create({
       doctor_id: resolvedDoctorId,
+      patient_id: walkinPatientId(req.user),
       clinic_id: slot.clinicId || null,
       patient_name: resolvedName.trim(),
       phone_number: resolvedPhone.trim(),
@@ -155,6 +158,7 @@ export const createWalkinAppointment = async (req, res) => {
       booking_source: resolvedSource,
     }));
 
+    emitAppointmentUpdated(newRecord);
     return res.status(201).json({
       success: true,
       message: "Walk-in appointment booked successfully",

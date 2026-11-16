@@ -1,3 +1,4 @@
+import { walkinPatientId } from '../services/patientWalkinAppointments.js';
 import { WalkinAppointment, FollowUp } from '../models/clinicModels.js';
 import User from '../models/userModel.js';
 import { normalizeDateOfBirth } from '../services/patientDateOfBirthService.js';
@@ -30,7 +31,7 @@ export const createWalkinAppointment = handle(async (req, res) => {
     earliestTime: appointment_date === current.date ? nowMinutes : null }, async (slot) => {
     // Public intake never creates a verified login, overwrites an existing patient,
     // or trusts a client-supplied token. The selected availability slot owns both.
-    return WalkinAppointment.create({ doctor_id, patient_name, phone_number, symptoms: b.symptoms,
+    return WalkinAppointment.create({ doctor_id, patient_id: walkinPatientId(req.user), patient_name, phone_number, symptoms: b.symptoms,
       gender: b.gender || undefined, date_of_birth: dob.provided ? dob.value : undefined,
       location: typeof b.location === 'string' ? b.location.trim().slice(0, 1000) : undefined,
       email: typeof b.email === 'string' ? b.email.trim().slice(0, 254) : undefined,
@@ -38,6 +39,7 @@ export const createWalkinAppointment = handle(async (req, res) => {
       appointment_time: slot.time, token_number: slot.token,
       booking_source: normalizeBookingSource(b.booking_source ?? b.source ?? req.query?.source) });
   });
+  emitAppointmentUpdated(row);
   const token_number = row.token_number;
   res.status(201).json({ success: true, message: 'Walk-in appointment created', id: String(row._id),
     doctor_id: String(doctor_id), tokenNumber: token_number, token_number, appointmentDate: appointment_date,

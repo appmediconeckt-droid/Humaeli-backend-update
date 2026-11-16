@@ -1,3 +1,4 @@
+import { DIRECT_ANSWER_RULE, isGreetingMessage, isGreetingOnlyReply } from '../services/aiReplyPolicy.js';
 import { v4 as uuidv4 } from "uuid";
 import mongoose from "../persistence/mongoose.js";
 import OpenAI from "openai";
@@ -23,26 +24,6 @@ const getOpenAIClient = () => {
   return _openaiClient;
 };
 
-const translateWithAiFallback = async (text, targetLanguageName) => {
-  if (!process.env.OPENAI_API_KEY) return text;
-  const response = await getOpenAIClient().chat.completions.create({
-    model: process.env.OPENAI_TRANSLATION_MODEL || "gpt-4o-mini",
-    temperature: 0,
-    max_tokens: 500,
-    messages: [
-      {
-        role: "system",
-        content:
-          "Translate the user's text into the requested language. Return only the translated text. Preserve meaning, names, numbers, emojis, and medical terms. Convert romanized language (such as Hinglish) into the target language's native script when appropriate.",
-      },
-      {
-        role: "user",
-        content: `Target language: ${targetLanguageName}\nText: ${text}`,
-      },
-    ],
-  });
-  return response.choices?.[0]?.message?.content?.trim() || text;
-};
 const MAX_HISTORY_TURNS = 10;
 const GUEST_CHAT_LIMIT_MS = 10 * 60 * 1000;
 const AI_OPENING_EVENT = "__humaelio_ai_opening__";
@@ -139,7 +120,7 @@ export const chatWithAI = async (req, res) => {
     // Threading rules:
     // - Logged-in user: thread by (userId, sessionId). Client MUST echo back the
     //   sessionId returned in each response so the conversation continues.
-    //   No sessionId from client = a brand-new session = onboarding fires.
+    //   No sessionId from client starts a new thread, never a new message budget.
     // - Guest: thread by sessionId only (must be sent by client to continue)
     // - Neither: brand new conversation, fall back to client-provided history
     let sessionId = req.body.sessionId;
@@ -147,11 +128,8 @@ export const chatWithAI = async (req, res) => {
     let userMessageCount = 0;
 
     if (userId) {
-      // Scope history to the CURRENT session so onboarding (age/gender/where)
-      // fires at the start of every new chat, not just the user's lifetime
-      // first chat. If the client didn't send a sessionId, treat this as a
-      // brand-new session — history stays empty so the onboarding greeting
-      // is triggered.
+      // History belongs to this user's thread; usage belongs to the account
+      // and is shared across all reply languages and thread IDs.
       if (!sessionId) sessionId = uuidv4();
       const priorChats = await Chat.find({ userId, sessionId })
         .sort({ createdAt: -1 })
@@ -159,9 +137,7 @@ export const chatWithAI = async (req, res) => {
         .lean();
 
       history = chatTurnsToHistory(priorChats);
-      userMessageCount = priorChats.filter((chat) =>
-        String(chat.userMessage || "").trim(),
-      ).length;
+      userMessageCount = await Chat.countDocuments({ userId, userMessage: { $nin: ["", null] } });
     } else if (sessionId) {
       const priorChats = await Chat.find({ sessionId, userId: null })
         .sort({ createdAt: -1 })
@@ -225,45 +201,9 @@ export const chatWithAI = async (req, res) => {
       ? { code: clientLangCode, name: getLanguageName(clientLangCode) }
       : detectLanguage(message || AI_OPENING_RESPONSE);
 
-    // Normalize on the backend so AI chat does not depend on browser/device
-    // translation availability. This value is saved, sent to the model, and
-    // returned to clients for the user's bubble.
-    let localizedUserMessage = typeof message === "string" ? message.trim() : "";
-    if (!isOpeningEvent && localizedUserMessage) {
-      try {
-        const translatedUserMessage = await aiChatRuntime.translatePlainText({
-          text: localizedUserMessage,
-          to: detectedLanguage.code,
-        });
-        localizedUserMessage =
-          translatedUserMessage.translatedText?.trim() || localizedUserMessage;
-
-        const translationWasUnchanged =
-          localizedUserMessage.toLocaleLowerCase() ===
-          message.trim().toLocaleLowerCase();
-        const needsEnglishFallback =
-          detectedLanguage.code === "en" && /[^\u0000-\u007f]/.test(message);
-        if (
-          translationWasUnchanged &&
-          (detectedLanguage.code !== "en" || needsEnglishFallback)
-        ) {
-          localizedUserMessage = await translateWithAiFallback(
-            message.trim(),
-            detectedLanguage.name,
-          );
-        }
-      } catch (error) {
-        console.warn("[AI-CHAT] user message translation failed:", error.message);
-        try {
-          localizedUserMessage = await translateWithAiFallback(
-            message.trim(),
-            detectedLanguage.name,
-          );
-        } catch (fallbackError) {
-          console.warn("[AI-CHAT] AI translation fallback failed:", fallbackError.message);
-        }
-      }
-    }
+    // Preserve the original question. Translating before understanding can
+    // change the meaning of misspelled or Romanized symptom descriptions.
+    const localizedUserMessage = typeof message === "string" ? message.trim() : "";
 
     if (isOpeningEvent) {
       let openingResponse = AI_OPENING_RESPONSE;
@@ -296,10 +236,10 @@ export const chatWithAI = async (req, res) => {
           sessionId,
           detectedLanguage: detectedLanguage.name,
           opening: true,
-          userMessageCount: 0,
+          userMessageCount,
           messageLimit,
-          remainingMessages: messageLimit,
-          chatLimitReached: false,
+          remainingMessages: messageLimit == null ? null : Math.max(0, messageLimit - userMessageCount),
+          chatLimitReached: Boolean(userId) && userMessageCount >= AI_USER_MESSAGE_LIMIT,
         },
       });
     }
@@ -394,6 +334,13 @@ export const chatWithAI = async (req, res) => {
     // Detect crisis
     const crisisDetection = detectCrisis(localizedUserMessage);
 
+    if (userId && userMessageCount >= AI_USER_MESSAGE_LIMIT &&
+        !(crisisDetection.isCrisis && crisisDetection.level !== "medium")) {
+      return res.status(403).json({ success: false, code: "AI_CHAT_LIMIT_REACHED",
+        message: "You have completed 5 AI messages. Please choose a Humaeli consultant.",
+        data: { sessionId, userMessageCount, messageLimit, remainingMessages: 0, chatLimitReached: true } });
+    }
+
     // Fetch counsellors who are ONLINE RIGHT NOW.
     // AI should only recommend counsellors who can actually take a session.
     // (Crisis flow below ignores this filter — see crisis branch.)
@@ -429,13 +376,7 @@ export const chatWithAI = async (req, res) => {
 
     // Build system instruction - INTERACTIVE, SUPPORTIVE CHATBOT STYLE
     const systemInstruction = `
-${isFirstTurn && userId ? `🚨 FIRST MESSAGE OF THE CONVERSATION.
-The greeting is normally returned deterministically before reaching you. If you ARE generating this, follow this rule:
-- If the Known profile already shows age AND gender → warm welcome + ask only how they're feeling. DO NOT re-ask age/gender.
-- If age or gender is missing → ask ONLY the missing field, warmly, plus how they're feeling.
-- Never ask for fields that are already known. Never give tips/advice on the first turn.
-═══════════════════════════════════════════════════════════════
-` : ""}
+${DIRECT_ANSWER_RULE}
 You are MindHelper, a supportive mental health and wellbeing chat companion for Humaeli.
 You help with mental health (stress, anxiety, sleep, relationships, mood) AND general wellbeing questions (mild physical issues, lifestyle, sexual health concerns, family problems).
 Be like a good, non-judgmental friend who listens, gives practical help, and knows when to point someone to a doctor.
@@ -513,7 +454,7 @@ ${knownProfile?.safetyFlags?.length ? `- ⚠️ Safety flags raised by user: ${k
 
 🟢 PROFILE-AWARE RULE — DO NOT RE-ASK WHAT YOU ALREADY KNOW:
 
-The server returns the first-turn greeting deterministically. By the time YOU see a message, the user is in active conversation. Follow these rules:
+Only the silent opening event receives a greeting. Every actual user message needs a relevant response, including the first question. Follow these rules:
 
   - Look at "Known profile" above. If age, gender, or city is shown with a real value (not "?"), NEVER ask for it again — just use it silently.
   - Only ask SITUATIONAL info (where they are right now, who's with them, what just happened) IF that info would meaningfully change the advice you're about to give. Otherwise, give the help directly.
@@ -560,7 +501,7 @@ IF USER NAMES A SPECIFIC COUNSELLOR WHO IS NOT IN THE ONLINE LIST:
 
 ═══════════════════════════════════════════════════════════════
 
-🎯 CONVERSATION STYLE (applies AFTER the onboarding turn):
+🎯 CONVERSATION STYLE (applies to every actual user question):
 
 EVERY follow-up MESSAGE — give a direct, helpful answer FIRST. Do NOT lead with a clarifying question.
 
@@ -721,16 +662,15 @@ Your goal: Be a supportive friend who helps them feel heard, understood, and gui
     // Handle crisis immediately
     let aiResponse;
 
-    // Recommendation requests and the fifth user message are resolved
-    // deterministically from Humaeli's own database. This prevents model-made
-    // names/links and makes the five-message rule impossible to bypass in UI.
+    // Recommendation requests use only database-backed consultant cards.
+    // The fifth ordinary question is answered before adding these cards.
     const recommendationSafety = evaluateSafety({
       message: localizedUserMessage,
       history,
       knownAge: knownProfile?.age,
     });
     if (
-      (recommendationRequested || chatLimitReached) &&
+      recommendationRequested &&
       !recommendationSafety.block &&
       !(crisisDetection.isCrisis && crisisDetection.level !== "medium")
     ) {
@@ -775,126 +715,6 @@ Your goal: Be a supportive friend who helps them feel heard, understood, and gui
           chatId: chat._id,
           sessionId,
           consultants: recommendedConsultants,
-          userMessageCount: nextUserMessageCount,
-          messageLimit,
-          remainingMessages: messageLimit == null ? null : Math.max(0, messageLimit - nextUserMessageCount),
-          chatLimitReached,
-        },
-      });
-    }
-
-    // First-turn greeting: deterministic so the entry point feels consistent.
-    // The best chatbots (Woebot, Wysa) ask profile info ONCE at signup and
-    // never re-ask. So we branch on what we already know:
-    //   1. Profile complete (age + gender known) → warm welcome + mood check only
-    //   2. Profile partial (Google-auth user missing fields) → ask ONLY what's missing
-    //   3. Guest / no profile → ask age + gender in chat (one-time per session)
-    // Crisis still takes priority over greeting (next block).
-    // English has a static onboarding message. Every other selected language
-    // goes through the model so its first reply follows the native-script rule
-    // rather than the old Roman-script greeting templates.
-    const isFirstTurnOnboarding =
-      Boolean(userId) &&
-      isFirstTurn &&
-      detectedLanguage.code === "en" &&
-      !(crisisDetection.isCrisis && crisisDetection.level !== "medium");
-
-    if (isFirstTurnOnboarding) {
-      const lang = detectedLanguage.code;
-      const hasAge = !!knownProfile?.age;
-      const hasGender = !!knownProfile?.gender;
-      const hasFullProfile = hasAge && hasGender;
-      const isGuest = !userId;
-
-      const QUICK_REPLIES = {
-        hi: ['😢 Udaas', '😐 Theek', '🙂 Acha', '✨ Bahut acha'],
-        ta: ['😢 Kashtam', '😐 Sari', '🙂 Nalla irukken', '✨ Romba nalla'],
-        te: ['😢 Baadhaga', '😐괜찮아', '🙂 Bagunnanu', '✨ Chaala bagunnanu'],
-        kn: ['😢 Kashta', '😐 Parvaagilla', '🙂 Chennaagide', '✨ Tumba chennaagide'],
-        ml: ['😢 Dukham', '😐 Sari', '🙂 Nannayirikkunnu', '✨ Valare nannayirikkunnu'],
-        bn: ['😢 Kharap', '😐 Theek ache', '🙂 Bhalo', '✨ Khub bhalo'],
-        mr: ['😢 Waaeet', '😐 Theek', '🙂 Chhan', '✨ Khup chhan'],
-        gu: ['😢 Kharab', '😐 Thaik', '🙂 Saaru', '✨ Khub saaru'],
-      }
-      // const moodQuickReplies = QUICK_REPLIES[lang] || ["😢 Low", "😐 Okay", "🙂 Good", "✨ Great"];
-
-      const GREETINGS = {
-        hi: {
-          full:    "Hi! Wapas aane ke liye shukriya 💙 Abhi kaisa feel ho raha hai?",
-          noAll:   "Hi! Main MindHelper hu, bahut khushi hui aapne yahan baat ki. Aapko behtar help dene ke liye — aapki umar kya hai aur aap male hain, female ya something else? Aur abhi kaisa feel ho raha hai?",
-          noAge:   "Hi! Wapas aane ke liye shukriya 💙 Ek chhoti si baat — aapki umar kya hai? Aur abhi kaisa feel ho raha hai?",
-          noGend:  "Hi! Wapas aane ke liye shukriya 💙 Ek chhoti si baat — aap male hain, female ya something else? Aur abhi kaisa feel ho raha hai?",
-        },
-        ta: {
-          full:    "Vanakkam! Thirumba vandhadharku nandri 💙 Ippo eppadi irukkeenga?",
-          noAll:   "Vanakkam! Naan MindHelper. Ungalukku sari seidha help kodukkanum — ungal vayasu enna, neenga male-a, female-a illa vere-a? Ippo eppadi feel pannreenga?",
-          noAge:   "Vanakkam! Thirumba vandhadharku nandri 💙 Oru vishayam — ungal vayasu enna? Ippo eppadi feel pannreenga?",
-          noGend:  "Vanakkam! Thirumba vandhadharku nandri 💙 Oru vishayam — neenga male-a, female-a illa vere-a? Ippo eppadi feel pannreenga?",
-        },
-        te: {
-          full:    "Namaskaram! Thirigi ravadaniki dhanyavadalu 💙 Ipudu ela unnaru?",
-          noAll:   "Namaskaram! Nenu MindHelper. Mee ki manchiga sahayam cheyyalanante — mee vayassu enti, meru male-a, female-a? Ipudu ela feel avutunnaru?",
-          noAge:   "Namaskaram! Thirigi ravadaniki dhanyavadalu 💙 Oka vishayam — mee vayassu enti? Ipudu ela feel avutunnaru?",
-          noGend:  "Namaskaram! Thirigi ravadaniki dhanyavadalu 💙 Oka vishayam — meru male-a, female-a? Ipudu ela feel avutunnaru?",
-        },
-        kn: {
-          full:    "Namaskara! Matte bandidakke dhanyavadagalu 💙 Iga hege iddeera?",
-          noAll:   "Namaskara! Naanu MindHelper. Nimage uttama sahaya nidbekadare — nimma vayassu eshtu, neevu male-a, female-a? Iga hege feel aaguttide?",
-          noAge:   "Namaskara! Matte bandidakke dhanyavadagalu 💙 Ondu vishaya — nimma vayassu eshtu? Iga hege feel aaguttide?",
-          noGend:  "Namaskara! Matte bandidakke dhanyavadagalu 💙 Ondu vishaya — neevu male-a, female-a? Iga hege feel aaguttide?",
-        },
-        bn: {
-          full:    "Namaskar! Phire ashar jonno dhonyobad 💙 Ekhon kemon lagche?",
-          noAll:   "Namaskar! Ami MindHelper. Apnake bhalo sahajyo dite — apnar boyos koto, apni male na female? Ar ekhon kemon feel korchen?",
-          noAge:   "Namaskar! Phire ashar jonno dhonyobad 💙 Ekta kotha — apnar boyos koto? Ekhon kemon feel korchen?",
-          noGend:  "Namaskar! Phire ashar jonno dhonyobad 💙 Ekta kotha — apni male na female? Ekhon kemon feel korchen?",
-        },
-        mr: {
-          full:    "Namaskar! Parat aalyabaddal aabhari 💙 Adhi kaasa vaatata?",
-          noAll:   "Namaskar! Mi MindHelper ahe. Tumhala changali madad karayla — tumchi umar kiti, tumi male ka female? Adhi kaasa feel hotay?",
-          noAge:   "Namaskar! Parat aalyabaddal aabhari 💙 Ek gosht — tumchi umar kiti? Adhi kaasa feel hotay?",
-          noGend:  "Namaskar! Parat aalyabaddal aabhari 💙 Ek gosht — tumi male ka female? Adhi kaasa feel hotay?",
-        },
-      };
-
-      const g = GREETINGS[lang] || null;
-
-      if (hasFullProfile) {
-        aiResponse = g?.full || "Hi! Welcome back 💙 How are you feeling right now?";
-      } else if (isGuest || (!hasAge && !hasGender)) {
-        aiResponse = g?.noAll || "Hi, I’m Humaeli. To understand you better and provide more personalized support, please share your age range and gender";
-      } else if (!hasAge) {
-        aiResponse = g?.noAge || "Hi! Welcome back 💙 Quick thing — could you share your age? (Helps me give better tips.) And how are you feeling right now?";
-      } else {
-        aiResponse = g?.noGend || "Hi! Welcome back 💙 Quick thing — how do you identify (male, female, or other)? And how are you feeling right now?";
-      }
-
-      // Save and return immediately, skipping Gemini.
-      const chatData = {
-        sessionId,
-        userMessage: localizedUserMessage,
-        aiResponse,
-        language: detectedLanguage.code,
-        mood: moodAnalysis,
-        crisisLevel: crisisDetection.level,
-        crisisDetected: crisisDetection.isCrisis,
-      };
-      if (userId) chatData.userId = userId;
-      const chat = await Chat.create(chatData);
-
-      return res.status(200).json({
-        success: true,
-        data: {
-          aiResponse,
-          localizedUserMessage,
-          chatId: chat._id,
-          sessionId,
-          detectedLanguage: detectedLanguage.name,
-          moodAnalysis: { mood: moodAnalysis.mood, score: moodAnalysis.score },
-          crisisDetected: crisisDetection.isCrisis,
-          crisisLevel: crisisDetection.level,
-          onboarding: true,
-          quickReplies: [],
           userMessageCount: nextUserMessageCount,
           messageLimit,
           remainingMessages: messageLimit == null ? null : Math.max(0, messageLimit - nextUserMessageCount),
@@ -958,7 +778,16 @@ Your goal: Be a supportive friend who helps them feel heard, understood, and gui
           history,
           systemInstruction,
         );
+        if (!isGreetingMessage(localizedUserMessage) && isGreetingOnlyReply(aiResponse)) {
+          aiResponse = await aiChatRuntime.generateAIResponse(localizedUserMessage, history,
+            `${systemInstruction}\nYour previous attempt was only a generic greeting. Answer the current question directly with relevant next steps.`);
+          if (isGreetingOnlyReply(aiResponse)) throw new Error("AI did not provide a relevant answer. Please retry.");
+        }
       }
+    }
+
+    if (typeof aiResponse !== 'string' || !aiResponse.trim()) {
+      throw new Error("AI did not return an answer. Please retry.");
     }
 
     // Collapse line breaks into single spaces for a clean one-line response
@@ -968,11 +797,29 @@ Your goal: Be a supportive friend who helps them feel heard, understood, and gui
       );
     }
 
+    const includeLimitRecommendation = chatLimitReached && !recommendationSafety.block &&
+      !(crisisDetection.isCrisis && crisisDetection.level !== "medium");
+    if (includeLimitRecommendation) {
+      let handoff = buildRecommendationReply(recommendedConsultants, true);
+      if (detectedLanguage.code !== 'en') {
+        try {
+          const translated = await aiChatRuntime.translatePlainText({ text: handoff, from: 'en', to: detectedLanguage.code });
+          handoff = translated.translatedText || '';
+        } catch {
+          // Keep the useful answer and consultant cards if handoff translation fails.
+          handoff = '';
+        }
+      }
+      if (handoff) aiResponse = `${aiResponse} ${handoff}`;
+    }
+
     // Save to database
     const chatData = {
       sessionId,
       userMessage: localizedUserMessage,
       aiResponse: aiResponse,
+      responseType: includeLimitRecommendation ? "consultant_recommendation" : "answer",
+      consultants: includeLimitRecommendation ? recommendedConsultants : [],
       language: detectedLanguage.code,
       mood: moodAnalysis,
       crisisLevel: crisisDetection.level,
@@ -1005,8 +852,8 @@ Your goal: Be a supportive friend who helps them feel heard, understood, and gui
         },
         crisisDetected: crisisDetection.isCrisis,
         crisisLevel: crisisDetection.level,
-        type: "answer",
-        consultants: [],
+        type: includeLimitRecommendation ? "consultant_recommendation" : "answer",
+        consultants: includeLimitRecommendation ? recommendedConsultants : [],
         userMessageCount: nextUserMessageCount,
         messageLimit,
         remainingMessages: messageLimit == null ? null : Math.max(0, messageLimit - nextUserMessageCount),
@@ -1041,6 +888,7 @@ export const getMyChatHistory = async (req, res) => {
         .json({ success: false, message: "Authentication required" });
     }
 
+    const userMessageCount = await Chat.countDocuments({ userId, userMessage: { $nin: ["", null] } });
     const [latestRows] = await getPool().query(
       "SELECT `sessionId` FROM `aichats` WHERE `userId` = ? ORDER BY `createdAt` DESC LIMIT 1",
       [String(userId)],
@@ -1095,13 +943,9 @@ export const getMyChatHistory = async (req, res) => {
       success: true,
       sessionId: latestChat.sessionId || null,
       history,
-      userMessageCount: chats.filter((chat) =>
-        String(chat.userMessage || "").trim(),
-      ).length,
+      userMessageCount,
       messageLimit: AI_USER_MESSAGE_LIMIT,
-      chatLimitReached:
-        chats.filter((chat) => String(chat.userMessage || "").trim()).length >=
-        AI_USER_MESSAGE_LIMIT,
+      chatLimitReached: userMessageCount >= AI_USER_MESSAGE_LIMIT,
     });
   } catch (err) {
     console.error("getMyChatHistory error:", err);

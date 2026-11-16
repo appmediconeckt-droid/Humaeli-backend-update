@@ -4,7 +4,7 @@ import { clinicDisplayQueue, notifyClinicDisplayPatients } from '../services/cli
 import { queueToday } from '../utils/queueDate.js';
 import { getDisplayTiming } from '../services/displayTimingService.js';
 import { publishDisplayQueueChange } from '../services/displayQueueEvents.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { protect, optionalAuth } from '../middleware/authMiddleware.js';
 import { doctorScope, receptionistClinicScope, handle, fail } from '../utils/clinicAccess.js';
 import { query } from '../config/mysql.js';
 import User from '../models/userModel.js';
@@ -61,7 +61,7 @@ router.get('/doctors/:doctorId/codes', protect, handle(async (req, res) => {
   res.json({ success: true, data: { ...await profileQr(req.params.doctorId), clinics: await doctorClinics(req.params.doctorId, true) } });
 }));
 router.get('/walkin/:doctorClinicId', handle(async (req, res) => res.json({ success: true, data: publicWalkin(await resolveWalkin(req.params.doctorClinicId)) })));
-router.post('/walkin/:doctorClinicId', rateLimit({ windowMs: 15 * 60 * 1000, limit: 20 }), handle(async (req, res) => {
-  res.status(201).json({ success: true, data: await bookClinicWalkin(req.params.doctorClinicId, req.body || {}) });
+router.post('/walkin/:doctorClinicId', rateLimit({ windowMs: 15 * 60 * 1000, limit: 20 }), optionalAuth, handle(async (req, res) => {
+  res.status(201).json({ success: true, data: await bookClinicWalkin(req.params.doctorClinicId, req.body || {}, req.user) });
 }));
 export default router;

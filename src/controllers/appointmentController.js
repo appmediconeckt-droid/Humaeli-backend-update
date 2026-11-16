@@ -1,3 +1,4 @@
+import { getPatientWalkinAppointments } from '../services/patientWalkinAppointments.js';
 import { emitAppointmentUpdated } from "../services/portalRealtimeService.js";
 import { normalizeAppointmentLifecycle } from '../services/appointmentLifecycle.js';
 import { publishDisplayQueueChange } from '../services/displayQueueEvents.js';
@@ -749,7 +750,9 @@ export const getAppointments = async (req, res) => {
       );
     }
 
-    return res.json(appointments.map((appointment) => ({ ...appointment, appointment_type: "online" })));
+    const walkins = role === 'user' ? await getPatientWalkinAppointments(userId, dateFilter, statusFilter) : [];
+    return res.json([...appointments.map(appointment => ({ ...appointment, appointment_type: "online" })), ...walkins]
+      .sort((a, b) => new Date(b.date) - new Date(a.date)));
   } catch (err) {
     console.error("❌ get appointments error", err);
     return res.status(500).json({ message: "Server error" });

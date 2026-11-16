@@ -7,13 +7,13 @@ import {
   updateWalkinAppointment,
   deleteWalkinAppointment,
 } from "../controllers/walkinAppointmentController.js";
-import { protect, allowRoles } from "../middleware/authMiddleware.js";
+import { protect, allowRoles, optionalAuth } from "../middleware/authMiddleware.js";
 import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
 
 // Public: walk-in patients do not have an account/session yet.
-router.post("/", rateLimit({ windowMs: 15 * 60 * 1000, limit: 20 }), createWalkinAppointment);
+router.post("/", rateLimit({ windowMs: 15 * 60 * 1000, limit: 20 }), optionalAuth, createWalkinAppointment);
 
 // Reading or modifying walk-in appointments still requires authentication.
 router.use(protect, allowRoles('doctor', 'admin', 'assistant', 'nurse'));

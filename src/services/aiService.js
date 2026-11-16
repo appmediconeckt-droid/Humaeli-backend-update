@@ -72,7 +72,7 @@ const handleGemini = async (message, history, systemInstruction) => {
   }));
 
   // Add system instruction as the first exchange if present.
-  // Canned ack confirms the onboarding rule so the model doesn't bypass it.
+  // Keep provider behavior consistent: answer actual questions from the first turn.
   if (systemInstruction) {
     formattedHistory.unshift(
       {
@@ -83,7 +83,7 @@ const handleGemini = async (message, history, systemInstruction) => {
         role: "model",
         parts: [
           {
-            text: "Understood. I will follow the ONBOARDING RULE strictly: if this is the first turn, I will only greet warmly and ask the onboarding questions (age, where they are, who is with them, what's on their mind) — no tips, no advice, no counselor recommendation. On follow-up turns I will give direct practical advice. I will use the Known profile to avoid re-asking fields already known.",
+            text: "Understood. I will answer the current question directly, including the first question, with relevant practical guidance in the selected language. I will not replace a specific question with greetings or onboarding. I will avoid diagnosis, invented facts and unsafe advice.",
           },
         ],
       },

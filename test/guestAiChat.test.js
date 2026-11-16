@@ -14,6 +14,7 @@ describe('Landing guest AI conversation', () => {
     generate = sinon.stub(aiChatRuntime, 'generateAIResponse').callsFake(async message => `Answer to: ${message}`);
     sinon.stub(User, 'find').returns({ select: async () => [] });
     sinon.stub(User, 'findById').returns({ select() { return this; }, lean: async () => ({ anonymous: 'Friend-Owl', age: 30, gender: 'male' }) });
+    sinon.stub(Chat, 'countDocuments').callsFake(async filter => turns.filter(turn => turn.userId === filter.userId && String(turn.userMessage || '').trim()).length);
     sinon.stub(Chat, 'find').callsFake(filter => ({ sort() { return this; }, limit() { return this; }, lean: async () => turns.filter(turn => turn.sessionId === filter.sessionId).slice().reverse() }));
     sinon.stub(Chat, 'findOne').returns({ sort() { return this; }, select() { return this; }, lean: async () => turns[0] || null });
     sinon.stub(Chat, 'create').callsFake(async data => { const turn = { ...data, _id: `turn-${turns.length}`, createdAt: new Date() }; turns.push(turn); return turn; });
@@ -69,6 +70,65 @@ describe('Landing guest AI conversation', () => {
     expect(result.chatLimitReached).to.equal(true);
     expect(result.messageLimit).to.equal(5);
     expect(result.type).to.equal('consultant_recommendation');
+    expect(generate.calledOnce).to.equal(true);
+    expect(result.aiResponse).to.include('Answer to: How do I focus?');
+  });
+
+  it('answers the first signed-in weakness question instead of onboarding, in either language', async () => {
+    for (const language of ['hi-IN', 'en-IN']) {
+      const question = 'mujhe aaj bht jada weekness lag rhi hai';
+      const result = await send({ sessionId: `weakness-${language}`, message: question, language }, { _id: 'user' });
+      expect(result.aiResponse).to.equal(`Answer to: ${question}`);
+      expect(generate.lastCall.args[0]).to.equal(question);
+      expect(generate.lastCall.args[2]).to.include('ANSWER THE CURRENT MESSAGE');
+      expect(generate.lastCall.args[2]).to.not.include('Never give tips/advice on the first turn');
+    }
+  });
+
+  it('retries a generic Hindi greeting before saving the reply to a specific question', async () => {
+    generate.onFirstCall().resolves('नमस्ते! अगर आप किसी विशेष विषय पर बात करना चाहते हैं या कोई समस्या है जिसमें मदद चाहिए, तो कृपया बताएं। मैं आपकी सहायता करने की पूरी कोशिश करूंगा।');
+    generate.onSecondCall().resolves('कमज़ोरी कब से महसूस हो रही है?');
+    const result = await send({ message: 'mujhe aaj bht jada weekness lag rhi hai', language: 'hi-IN' }, { _id: 'user' });
+    expect(generate.calledTwice).to.equal(true);
+    expect(result.aiResponse).to.equal('कमज़ोरी कब से महसूस हो रही है?');
+    expect(turns).to.have.length(1);
+  });
+
+  it('does not save or charge a turn when both attempts only return a generic greeting', async () => {
+    sinon.stub(console, 'error');
+    generate.resolves('Hello! How can I help you today?');
+    const res = response();
+    await chatWithAI({ user: { _id: 'user' }, body: {
+      message: 'Hi, I feel very weak today', language: 'en-IN',
+    } }, res);
+    expect(res.statusCode).to.equal(500);
+    expect(generate.calledTwice).to.equal(true);
+    expect(turns).to.have.length(0);
+  });
+
+  it('counts mixed-language questions together and answers the fifth before the consultant handoff', async () => {
+    const opening = await send({ kind: 'opening', language: 'hi-IN' }, { _id: 'user' });
+    for (let index = 0; index < 5; index++) {
+      const result = await send({ sessionId: opening.sessionId, language: index < 3 ? 'hi-IN' : 'en-IN', message: `How can I focus better today ${index}?` }, { _id: 'user' });
+      expect(result.userMessageCount).to.equal(index + 1);
+      expect(result.remainingMessages).to.equal(4 - index);
+      expect(result.aiResponse).to.include(`Answer to: How can I focus better today ${index}?`);
+    }
+    const res = response();
+    await chatWithAI({ user: { _id: 'user' }, body: { sessionId: 'different-language-session', language: 'ta-IN', message: 'How do I focus?' } }, res);
+    expect(res.statusCode).to.equal(403);
+    expect(res.body.code).to.equal('AI_CHAT_LIMIT_REACHED');
+    expect(res.body.data.chatLimitReached).to.equal(true);
+    expect(generate.callCount).to.equal(5);
+    expect(turns.filter(turn => turn.userMessage)).to.have.length(5);
+  });
+
+  it('an opening request cannot clear the limit metadata after a language switch', async () => {
+    for (let index = 0; index < 5; index++) turns.push({ sessionId: 'old', userId: 'user', userMessage: 'Earlier question', createdAt: new Date() });
+    const result = await send({ kind: 'opening', language: 'hi-IN' }, { _id: 'user' });
+    expect(result.chatLimitReached).to.equal(true);
+    expect(result.remainingMessages).to.equal(0);
+    expect(result.userMessageCount).to.equal(5);
     expect(generate.called).to.equal(false);
   });
 });

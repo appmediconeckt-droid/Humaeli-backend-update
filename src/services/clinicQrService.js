@@ -1,3 +1,5 @@
+import { emitResourceUpdated } from './portalRealtimeService.js';
+import { walkinPatientId } from './patientWalkinAppointments.js';
 import { randomBytes } from 'node:crypto';
 import { publishDisplayQueueChange } from './displayQueueEvents.js';
 import QRCode from 'qrcode';
@@ -141,7 +143,7 @@ export async function publicDoctor(doctorId) {
     specialization: doctor.specialization, experience: doctor.experience, about: doctor.aboutMe,
     profilePhoto: doctor.profilePhoto, qrType: 'DOCTOR_PROFILE', profileQrUrl: doctorProfileUrl(doctorId), clinics: await doctorClinics(doctorId) };
 }
-export async function bookClinicWalkin(linkId, body) {
+export async function bookClinicWalkin(linkId, body, user = null) {
   const first = await resolveWalkin(linkId);
   // The URL is authoritative; reject attempts to change its doctor/clinic.
   const expected = { doctorId: first.link.doctor_id, doctor_id: first.link.doctor_id,
@@ -186,7 +188,7 @@ export async function bookClinicWalkin(linkId, body) {
       const position = (slot.minutes * 10000) + slot.token;
       const appointment = new WalkinAppointment({ doctor_id: link.doctor_id, clinic_id: link.clinic_id || undefined,
         doctor_clinic_id: link.id, facility_id: link.facility_id, queue_entry_id: entryId,
-        patient_name: name, phone_number: phone, symptoms, appointment_date: date,
+        patient_id: walkinPatientId(user), patient_name: name, phone_number: phone, symptoms, appointment_date: date,
         date_of_birth: dob.provided ? dob.value : undefined, gender,
         location: location || undefined, email: email || undefined,
         appointment_time: slot.time,
@@ -209,5 +211,6 @@ export async function bookClinicWalkin(linkId, body) {
   publishDisplayQueueChange({ doctorId: result.doctorId, facilityId: result.facilityId });
   global.io?.to(`doctor:${result.doctorId}`).emit('queueUpdated', response);
   global.io?.to(`facility:${result.facilityId}`).emit('queueUpdated', response);
+  emitResourceUpdated('appointments', [result.doctorId, walkinPatientId(user)]);
   return response;
 }
