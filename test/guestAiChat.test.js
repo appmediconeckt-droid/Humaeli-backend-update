@@ -6,13 +6,16 @@ import { aiChatRuntime, chatWithAI } from '../src/controllers/chatController.js'
 
 const response = () => ({ status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } });
 describe('Landing guest AI conversation', () => {
-  let turns, generate;
+  let turns, generate, counsellors;
   beforeEach(() => {
     turns = [];
+    counsellors = [];
     sinon.stub(console, 'log');
     sinon.stub(aiChatRuntime, 'translatePlainText').callsFake(async ({ text }) => ({ translatedText: text }));
     generate = sinon.stub(aiChatRuntime, 'generateAIResponse').callsFake(async message => `Answer to: ${message}`);
-    sinon.stub(User, 'find').returns({ select: async () => [] });
+    sinon.stub(User, 'find').callsFake(filter => ({ select: async () => counsellors.filter(c =>
+      Object.entries(filter).every(([key, value]) => c[key] === value)
+    ) }));
     sinon.stub(User, 'findById').returns({ select() { return this; }, lean: async () => ({ anonymous: 'Friend-Owl', age: 30, gender: 'male' }) });
     sinon.stub(Chat, 'countDocuments').callsFake(async filter => turns.filter(turn => turn.userId === filter.userId && String(turn.userMessage || '').trim()).length);
     sinon.stub(Chat, 'find').callsFake(filter => ({ sort() { return this; }, limit() { return this; }, lean: async () => turns.filter(turn => turn.sessionId === filter.sessionId).slice().reverse() }));
@@ -72,6 +75,26 @@ describe('Landing guest AI conversation', () => {
     expect(result.type).to.equal('consultant_recommendation');
     expect(generate.calledOnce).to.equal(true);
     expect(result.aiResponse).to.include('Answer to: How do I focus?');
+    expect(result.aiResponse).to.include('No Humaeli consultant is online and available right now');
+    expect(result.aiResponse).to.not.include('best matches');
+    expect(result.consultants).to.deep.equal([]);
+  });
+
+  it('does not recommend offline consultants when professional help is requested', async () => {
+    counsellors = [{ _id: 'offline', fullName: 'Offline Consultant', role: 'counsellor', isActive: true, profileCompleted: true, isOnline: false }];
+    const result = await send({ message: 'Please recommend a consultant' }, { _id: 'user' });
+    expect(User.find.firstCall.args[0]).to.include({ isOnline: true });
+    expect(result.consultants).to.deep.equal([]);
+    expect(result.aiResponse).to.include('No Humaeli consultant is online and available right now');
+    expect(result.aiResponse).to.not.include('best matches');
+  });
+
+  it('recommends only online active consultants with completed profiles', async () => {
+    const eligible = { _id: 'online', fullName: 'Online Consultant', role: 'counsellor', isActive: true, profileCompleted: true, isOnline: true };
+    counsellors = [eligible, { ...eligible, _id: 'offline', isOnline: false }, { ...eligible, _id: 'inactive', isActive: false }, { ...eligible, _id: 'incomplete', profileCompleted: false }];
+    const result = await send({ message: 'Please recommend a consultant' }, { _id: 'user' });
+    expect(result.consultants.map(c => c.id)).to.deep.equal(['online']);
+    expect(result.aiResponse).to.include('best matches');
   });
 
   it('answers the first signed-in weakness question instead of onboarding, in either language', async () => {

@@ -62,8 +62,8 @@ const toConsultantCard = (entry) => {
 const buildRecommendationReply = (consultants, limitReached) => {
   if (!consultants.length) {
     return limitReached
-      ? "You have completed 5 AI messages. No active Humaeli consultant is available right now; please check the Consultants directory again shortly."
-      : "No active Humaeli consultant is available right now. Please check the Consultants directory again shortly.";
+      ? "You have completed 5 AI messages. No Humaeli consultant is online and available right now; please check the Consultants directory again shortly."
+      : "No Humaeli consultant is online and available right now. Please check the Consultants directory again shortly.";
   }
 
   return limitReached
@@ -348,6 +348,7 @@ export const chatWithAI = async (req, res) => {
       role: "counsellor",
       isActive: true,
       profileCompleted: true,
+      isOnline: true,
     }).select(
       "fullName role gender specialization experience qualification aboutMe location consultationMode languages rating totalSessions isOnline profilePhoto avatar",
     );
