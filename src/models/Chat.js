@@ -70,6 +70,7 @@ const chatSchema = new mongoose.Schema({
   },
   lastMessage: String,
   lastMessageAt: Date,
+  blockedByUser: { type: Boolean, default: false },
   deletedByUser: {
     type: Boolean,
     default: false,

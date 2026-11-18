@@ -18,8 +18,7 @@ router.post("/send-message", optionalAuth, chatWithAI);
 router.post("/tts", optionalAuth, textToSpeech);
 router.get("/tts", optionalAuth, textToSpeechGet);
 router.get("/history", authMiddleware, getMyChatHistory);
-// User-triggered: wipe the caller's own chat history so onboarding can
-// trigger fresh. Auth required — users can only clear their OWN messages.
+// Legacy reset endpoint rejects deletion so refresh cannot reset AI usage.
 router.delete("/my-history", authMiddleware, clearMyChatHistory);
 router.delete("/message/:chatId", authMiddleware, deleteMyChatMessage);
 

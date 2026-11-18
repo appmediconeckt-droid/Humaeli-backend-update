@@ -954,29 +954,17 @@ export const getMyChatHistory = async (req, res) => {
   }
 };
 
-// Wipe all chat history for the authenticated user. Lets them start over
-// with a clean onboarding turn. Auth-protected — callers can only delete
-// their own messages.
+// Kept for older clients: refreshing must preserve history and account usage.
 export const clearMyChatHistory = async (req, res) => {
-  try {
-    const userId = req.user?.id || req.user?._id;
-    if (!userId) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Authentication required" });
-    }
-    const result = await Chat.deleteMany({ userId });
-    return res.status(200).json({
-      success: true,
-      deletedCount: result.deletedCount,
-      message: `Cleared ${result.deletedCount} chat messages.`,
-    });
-  } catch (err) {
-    console.error("clearMyChatHistory error:", err);
-    return res
-      .status(500)
-      .json({ success: false, message: err.message });
+  const userId = req.user?.id || req.user?._id;
+  if (!userId) {
+    return res.status(401).json({ success: false, message: "Authentication required" });
   }
+  return res.status(409).json({
+    success: false,
+    code: "AI_CHAT_RESET_DISABLED",
+    message: "Chat refresh preserves your history and five-message limit. Please reload your saved conversation.",
+  });
 };
 
 // Delete one AI chat message/turn for the authenticated user.

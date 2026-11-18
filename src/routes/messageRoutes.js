@@ -21,6 +21,7 @@ import {
   deleteChat,
   setChatArchived,
   clearChat,
+  setUserChatBlock,
   markAllRead,
   getUnreadCount,
   getCounselors,
@@ -55,6 +56,7 @@ router.post(
 router.delete("/message/:messageId", authenticateToken, deletePersonalMessage);
 router.delete("/chat/:chatId", authenticateToken, deleteChat);
 router.patch("/chat/:chatId/archive", authenticateToken, setChatArchived);
+router.patch("/chat/:chatId/block", authenticateToken, setUserChatBlock);
 // Backward-compatible aliases used by older web/mobile clients.
 router.delete("/chats/:chatId", authenticateToken, deleteChat);
 router.delete("/clear/:chatId", authenticateToken, clearChat);

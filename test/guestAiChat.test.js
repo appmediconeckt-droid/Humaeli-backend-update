@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import sinon from 'sinon';
 import Chat from '../src/models/chatModel.js';
 import User from '../src/models/userModel.js';
-import { aiChatRuntime, chatWithAI } from '../src/controllers/chatController.js';
+import { aiChatRuntime, chatWithAI, clearMyChatHistory } from '../src/controllers/chatController.js';
 
 const response = () => ({ status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } });
 describe('Landing guest AI conversation', () => {
@@ -152,6 +152,22 @@ describe('Landing guest AI conversation', () => {
     expect(result.chatLimitReached).to.equal(true);
     expect(result.remainingMessages).to.equal(0);
     expect(result.userMessageCount).to.equal(5);
+    expect(generate.called).to.equal(false);
+  });
+
+  it('rejects legacy refresh deletion and keeps the limit across languages', async () => {
+    for (let index = 0; index < 5; index++) turns.push({ sessionId: 'english', userId: 'user', userMessage: 'Earlier question', createdAt: new Date() });
+    const deletion = sinon.stub(Chat, 'deleteMany');
+    const refresh = response();
+    await clearMyChatHistory({ user: { _id: 'user' } }, refresh);
+    expect(refresh.statusCode).to.equal(409);
+    expect(refresh.body.code).to.equal('AI_CHAT_RESET_DISABLED');
+    expect(deletion.called).to.equal(false);
+    const res = response();
+    await chatWithAI({ user: { _id: 'user' }, body: { language: 'hi-IN', message: 'How do I focus?' } }, res);
+    expect(res.statusCode).to.equal(403);
+    expect(res.body.code).to.equal('AI_CHAT_LIMIT_REACHED');
+    expect(turns).to.have.length(5);
     expect(generate.called).to.equal(false);
   });
 });

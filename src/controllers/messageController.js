@@ -1227,6 +1227,7 @@ export const getChatMessages = async (req, res) => {
 
     res.json({
       chatStatus: chat.status,
+      blockedByUser: Boolean(chat.blockedByUser),
       chat: populatedChat
         ? {
             id: String(populatedChat._id),
@@ -1310,6 +1311,10 @@ export const sendMessage = async (req, res) => {
 
     if (!isAuthorized) {
       return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    if (chat.blockedByUser) {
+      return res.status(403).json({ error: "This conversation is blocked by the user." });
     }
 
     // Only allow messaging if chat is pending, accepted, or active
@@ -1529,6 +1534,23 @@ export const deleteChat = async (req, res) => {
   } catch (error) {
     console.error("Error deleting chat:", error);
     res.status(500).json({ error: "Error deleting chat" });
+  }
+};
+
+export const setUserChatBlock = async (req, res) => {
+  try {
+    const chat = await findChatByIdentifier(req.params.chatId);
+    if (!chat) return res.status(404).json({ error: "Chat not found" });
+    if (req.user.role !== "user" || String(chat.userId) !== String(req.user._id))
+      return res.status(403).json({ error: "Unauthorized" });
+    if (typeof req.body.blocked !== "boolean") return res.status(400).json({ error: "A block state is required" });
+    chat.blockedByUser = req.body.blocked;
+    await chat.save();
+    emitChatUpdated(chat);
+    return res.json({ success: true, blockedByUser: chat.blockedByUser });
+  } catch (error) {
+    console.error("Error updating chat block:", error);
+    return res.status(500).json({ error: "Unable to update chat block" });
   }
 };
 

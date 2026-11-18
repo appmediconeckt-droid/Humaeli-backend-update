@@ -484,6 +484,11 @@ class SocketHandler {
         return;
       }
 
+      if (populatedChat.blockedByUser) {
+        socket.emit("error", { message: "This conversation is blocked by the user." });
+        return;
+      }
+
       // Check if admin has blocked the counselor from chatting
       const counselorForSocket = await User.findById(populatedChat.counselorId._id).lean();
       if (counselorForSocket?.chatPermission?.enabled === false) {
