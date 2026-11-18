@@ -1228,6 +1228,7 @@ export const getChatMessages = async (req, res) => {
     res.json({
       chatStatus: chat.status,
       blockedByUser: Boolean(chat.blockedByUser),
+      blockedByCounselor: Boolean(chat.blockedByCounselor),
       chat: populatedChat
         ? {
             id: String(populatedChat._id),
@@ -1313,8 +1314,8 @@ export const sendMessage = async (req, res) => {
       return res.status(403).json({ error: "Unauthorized" });
     }
 
-    if (chat.blockedByUser) {
-      return res.status(403).json({ error: "This conversation is blocked by the user." });
+    if (chat.blockedByUser || chat.blockedByCounselor) {
+      return res.status(403).json({ error: "This conversation is blocked." });
     }
 
     // Only allow messaging if chat is pending, accepted, or active
@@ -1541,13 +1542,15 @@ export const setUserChatBlock = async (req, res) => {
   try {
     const chat = await findChatByIdentifier(req.params.chatId);
     if (!chat) return res.status(404).json({ error: "Chat not found" });
-    if (req.user.role !== "user" || String(chat.userId) !== String(req.user._id))
-      return res.status(403).json({ error: "Unauthorized" });
+    const isUser = req.user.role === "user" && String(chat.userId) === String(req.user._id);
+    const isCounselor = isCounselorRole(String(req.user.role || "").toLowerCase()) && String(chat.counselorId) === String(req.user._id);
+    if (!isUser && !isCounselor) return res.status(403).json({ error: "Only a participant in this conversation can change its block status.", code: "CHAT_BLOCK_PARTICIPANT_MISMATCH" });
     if (typeof req.body.blocked !== "boolean") return res.status(400).json({ error: "A block state is required" });
-    chat.blockedByUser = req.body.blocked;
+    if (isUser) chat.blockedByUser = req.body.blocked;
+    else chat.blockedByCounselor = req.body.blocked;
     await chat.save();
     emitChatUpdated(chat);
-    return res.json({ success: true, blockedByUser: chat.blockedByUser });
+    return res.json({ success: true, blockedByUser: Boolean(chat.blockedByUser), blockedByCounselor: Boolean(chat.blockedByCounselor) });
   } catch (error) {
     console.error("Error updating chat block:", error);
     return res.status(500).json({ error: "Unable to update chat block" });

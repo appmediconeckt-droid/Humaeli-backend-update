@@ -7,6 +7,7 @@
   let enabled = false;
   let blocked = false;
   let saving = false;
+  let syncError = "";
   const parts = location.pathname.split('/').filter(Boolean);
   const kind = parts[1] === 'clinic' ? 'clinic' : 'display';
   const audioUrl = `/led-control/${kind}/${encodeURIComponent(parts.at(-1))}/audio`;
@@ -20,11 +21,11 @@
       toggle.setAttribute('aria-pressed', String(enabled));
     }
     if (repeat) repeat.disabled = !enabled || !supported || blocked || announcements.length === 0;
-    if (allow) allow.hidden = !enabled || !supported || !blocked;
+    if (allow) allow.hidden = !enabled || !supported;
     if (status) {
-      status.textContent = !enabled ? 'Linked audio muted' : !supported ? 'Audio enabled for linked screens. Speech playback is unavailable in this browser.'
+      status.textContent = syncError || (!enabled ? 'Linked audio muted' : !supported ? 'Audio enabled for linked screens. Speech playback is unavailable in this browser.'
         : blocked ? 'Audio is enabled, but this browser blocked playback. Allow sound on this screen once, or use the Windows LED receiver launcher.'
-          : announcements.length ? 'Linked audio enabled' : 'Linked audio enabled. Waiting for next tokens.';
+          : announcements.length ? 'Linked audio enabled' : 'Linked audio enabled. Waiting for next tokens.');
     }
   }
 
@@ -48,6 +49,16 @@
     };
     utterance.onstart = () => { blocked = false; controls(); };
     speechSynthesis.speak(utterance);
+  }
+
+  function testSound() {
+    if (!supported) return;
+    speechSynthesis.cancel();
+    const test = new SpeechSynthesisUtterance('Token announcement sound is enabled. Waiting for the next patient.');
+    test.lang = 'en-IN';
+    test.onerror = () => { blocked = true; controls(); };
+    test.onstart = () => { blocked = false; controls(); };
+    speechSynthesis.speak(test);
   }
 
   globalThis.queueDisplayAudio = {
@@ -80,7 +91,8 @@
   stream.onmessage = event => {
     try {
       const state = JSON.parse(event.data);
-      if (typeof state.enabled !== 'boolean') return;
+      if (typeof state.enabled !== 'boolean' || saving) return;
+      syncError = '';
       const changed = enabled !== state.enabled;
       enabled = state.enabled;
       controls();
@@ -88,17 +100,20 @@
       else if (changed) speak();
     } catch { /* Keep the last confirmed setting during reconnects. */ }
   };
-  stream.onerror = () => { if (toggle) toggle.title = 'Audio sync reconnecting'; };
-  stream.onopen = () => { if (toggle) toggle.title = ''; };
+  stream.onerror = () => { syncError = 'Audio connection interrupted. Retrying...'; controls(); };
+  stream.onopen = () => { syncError = ''; controls(); };
   window.addEventListener('pagehide', () => stream.close());
   toggle?.addEventListener('click', async () => {
     if (saving) return;
     const previous = enabled;
+    syncError = '';
     enabled = !enabled;
     saving = true;
     controls();
-    if (enabled) speak();
-    else if (supported) speechSynthesis.cancel();
+    if (enabled) {
+      if (announcements.length) speak();
+      else testSound();
+    } else if (supported) speechSynthesis.cancel();
     try {
       const response = await fetch(audioUrl, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -109,13 +124,14 @@
       enabled = previous;
       if (!enabled && supported) speechSynthesis.cancel();
       else if (enabled) speak();
-      if (toggle) toggle.title = 'Audio setting could not be synced. Please retry.';
+      syncError = 'Audio setting could not be saved. Check the connection and try again.';
     } finally { saving = false; controls(); }
   });
   allow?.addEventListener('click', () => {
     blocked = false;
     controls();
-    speak();
+    if (announcements.length) speak();
+    else testSound();
   });
   repeat?.addEventListener('click', speak);
   controls();

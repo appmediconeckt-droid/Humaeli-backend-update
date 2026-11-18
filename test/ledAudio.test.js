@@ -53,6 +53,34 @@ describe('Queue display audio announcements', () => {
     assert.equal(fresh.buttons['audio-toggle'].textContent, 'Mute linked screens');
   });
 
+  it('plays a sound check when enabled without waiting tokens', async () => {
+    const { buttons, spoken } = await setup();
+    await buttons['audio-toggle'].handlers.click();
+    assert.match(spoken[0].text, /sound is enabled.*Waiting for the next patient/);
+    assert.equal(buttons['audio-repeat'].disabled, true);
+  });
+
+  it('does not let an old audio event undo a pending enable request', async () => {
+    const { context, audio, buttons, stream } = await setup();
+    audio.update(doctor([3]));
+    let finish;
+    context.fetch = () => new Promise(resolve => { finish = resolve; });
+    const pending = buttons['audio-toggle'].handlers.click();
+    stream.onmessage({ data: JSON.stringify({ enabled: false }) });
+    assert.equal(buttons['audio-toggle'].attributes['aria-pressed'], 'true');
+    finish({ ok: true });
+    await pending;
+    assert.equal(buttons['audio-toggle'].attributes['aria-pressed'], 'true');
+  });
+
+  it('shows an actionable error when the audio setting cannot be saved', async () => {
+    const { context, buttons } = await setup();
+    context.fetch = async () => ({ ok: false });
+    await buttons['audio-toggle'].handlers.click();
+    assert.equal(buttons['audio-toggle'].attributes['aria-pressed'], 'false');
+    assert.match(buttons['audio-status'].textContent, /could not be saved/);
+  });
+
   it('starts with a click, announces live tokens and does not repeat unchanged queue refreshes', async () => {
     const { audio, buttons, spoken } = await setup();
     audio.update(doctor([3, 4]));

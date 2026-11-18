@@ -77,6 +77,8 @@ describe('LED browser page', () => {
     await stream.onmessage();
     assert.match(flatten(elements.doctors), /Pending — patient unavailable/);
     assert.match(flatten(elements.doctors), /AM-009/);
+    const infoWithPending = elements.doctors.children[0].children.find(node => node.className === 'doctor-info');
+    assert.deepEqual(Array.from(infoWithPending.children, node => node.className), ['status-panel', 'delay-panel', 'pending-patients']);
     assert.match(flatten(elements.doctors), /Room 101/);
     const counts = elements.doctors.children[0].children.find(node => node.className === 'counts');
     assert.equal(counts.children[3].children[1].children[0].className, 'wait-status');

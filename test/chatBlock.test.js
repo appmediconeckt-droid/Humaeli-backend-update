@@ -14,6 +14,24 @@ describe('conversation blocking', () => {
     expect(res.status.calledWith(403)).to.equal(true); expect(chat.blockedByUser).to.equal(true);
     await setUserChatBlock({ ...req, body: { blocked: false } }, res); expect(chat.blockedByUser).to.equal(false);
   });
+  it('keeps each participant block independent', async () => {
+    const chat = { ...makeChat(), blockedByUser: true }; sinon.stub(Chat, 'findOne').resolves(chat); const res = response();
+    const req = { params: { chatId: 'chat_public' }, user: { role: 'counsellor', _id: 'counselor1' }, body: { blocked: true } };
+    await setUserChatBlock(req, res); expect(chat.blockedByCounselor).to.equal(true);
+    await setUserChatBlock({ ...req, body: { blocked: false } }, res);
+    expect(chat.blockedByCounselor).to.equal(false); expect(chat.blockedByUser).to.equal(true);
+  });
+  it('accepts the counselor role spelling for the assigned professional', async () => {
+    const chat = makeChat(); sinon.stub(Chat, 'findOne').resolves(chat); const res = response();
+    await setUserChatBlock({ params: { chatId: 'chat_public' }, user: { role: 'counselor', _id: 'counselor1' }, body: { blocked: true } }, res);
+    expect(chat.blockedByCounselor).to.equal(true);
+    expect(res.status.calledWith(403)).to.equal(false);
+  });
+  it('prevents messaging when the counsellor has blocked the user', async () => {
+    sinon.stub(Chat, 'findOne').resolves({ ...makeChat(), blockedByCounselor: true }); const res = response();
+    await sendMessage({ params: { chatId: 'chat_public' }, user: { role: 'user', _id: 'user1' }, body: { content: 'hello' } }, res);
+    expect(res.status.calledWith(403)).to.equal(true);
+  });
   for (const [role, id] of [['user', 'user1'], ['counsellor', 'counselor1']]) {
     it(`prevents ${role} messages while blocked`, async () => {
       sinon.stub(Chat, 'findOne').resolves({ ...makeChat(), blockedByUser: true }); const res = response();

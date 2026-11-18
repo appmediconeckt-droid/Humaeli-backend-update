@@ -33,13 +33,6 @@
       card.append(textNode('p', 'details', details), textNode('p', 'label', 'Now serving'),
         current, textNode('p', 'label next-label', 'Next tokens'),
         textNode('div', 'next', (doctor.nextTokens || (doctor.nextToken ? [doctor.nextToken] : [])).join('  ·  ') || '—'));
-      if (doctor.pendingTokens?.length) {
-        const pending = textNode('section', 'pending-patients', '');
-        pending.append(textNode('h3', '', 'Pending — patient unavailable'),
-          textNode('div', 'pending-tokens', doctor.pendingTokens.join('  ·  ')),
-          textNode('p', '', 'Please report to reception when you return. Returned patients will be prioritised after the current consultation.'));
-        card.append(pending);
-      }
       const counts = textNode('div', 'counts', '');
       for (const [label, value, icon] of [['Waiting', doctor.waitingCount, '♟'], ['Completed', doctor.completedCount, '✓'], ['Total today', doctor.totalPatients, '▥'], ['Estimated wait for next token', doctor.estimatedWaitLabel || (doctor.estimatedWaitMinutes == null ? 'Timing unavailable' : `${doctor.estimatedWaitMinutes} min`), '◷']]) {
         const count = textNode('div', 'count', '');
@@ -76,6 +69,13 @@
         row.append(textNode('span', '', label + ':'), textNode('strong', '', value == null ? '—' : String(value))); delayBody.append(row);
       }
       delay.append(delayBody); aside.append(status, delay);
+      if (doctor.pendingTokens?.length) {
+        const pending = textNode('section', 'pending-patients', '');
+        pending.append(textNode('h3', '', 'Pending — patient unavailable'),
+          textNode('div', 'pending-tokens', doctor.pendingTokens.join('  ·  ')),
+          textNode('p', '', 'Please report to reception when you return. Returned patients will be prioritised after the current consultation.'));
+        aside.append(pending);
+      }
       card.append(counts, aside); return card;
     }));
     el('message').hidden = doctors.length > 0;

@@ -484,8 +484,8 @@ class SocketHandler {
         return;
       }
 
-      if (populatedChat.blockedByUser) {
-        socket.emit("error", { message: "This conversation is blocked by the user." });
+      if (populatedChat.blockedByUser || populatedChat.blockedByCounselor) {
+        socket.emit("error", { message: "This conversation is blocked." });
         return;
       }
 
