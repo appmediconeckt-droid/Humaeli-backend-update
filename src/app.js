@@ -316,7 +316,7 @@ import queueRoutes from './routes/queueRoutes.js';
 import displayRoutes from './routes/displayRoutes.js';
 import ledPageRoutes from './routes/ledPageRoutes.js';
 import clinicQrRoutes from './routes/clinicQrRoutes.js';
-import { corsOptions, isAllowedOrigin } from "./config/cors.js";
+import { corsOptions, httpCorsOptions, isAllowedOrigin } from "./config/cors.js";
 
 
 
@@ -325,8 +325,8 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 app.disable('etag');
-app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
+app.use(cors(httpCorsOptions));
+app.options(/.*/, cors(httpCorsOptions));
 app.use('/api', apiFreshness);
 
 // Use a tolerant JSON parser: accept text for application/json, keep raw body,

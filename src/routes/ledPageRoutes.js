@@ -54,7 +54,10 @@ router.get('/led-control/:kind/:displayId/events', audioLimit, audioDisplay, asy
 router.patch('/led-control/:kind/:displayId/audio', audioLimit, audioDisplay, async (req, res) => {
   if (typeof req.body?.enabled !== 'boolean') return res.sendStatus(400);
   try { res.json(await setDisplayAudio(req.audioKey, req.body.enabled)); }
-  catch { res.status(503).json({ message: 'Audio setting could not be saved' }); }
+  catch (error) {
+    console.error('LED audio setting save failed:', error.code || error.message);
+    res.status(503).json({ message: 'Audio setting could not be saved', code: 'LED_AUDIO_SAVE_FAILED' });
+  }
 });
 router.get('/led-control/:kind/:displayId/audio', audioLimit, audioDisplay, async (req, res) => {
   let initial;

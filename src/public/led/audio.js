@@ -119,12 +119,22 @@
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled }),
       });
-      if (!response.ok) throw new Error('Audio setting could not be saved');
-    } catch {
+      if (!response.ok) {
+        const problem = await response.json().catch(() => ({}));
+        const error = new Error(problem.message || 'Audio setting could not be saved');
+        error.status = response.status;
+        throw error;
+      }
+    } catch (error) {
       enabled = previous;
       if (!enabled && supported) speechSynthesis.cancel();
       else if (enabled) speak();
-      syncError = 'Audio setting could not be saved. Check the connection and try again.';
+      syncError = error.status === 429 ? 'Too many requests. Wait a minute and retry.'
+        : error.status === 404 || error.status === 410 ? 'Display link is unavailable. Open the latest LED link.'
+        : error.status === 400 ? 'Audio request was rejected. Refresh the screen and retry.'
+        : error.status === 503 ? 'Audio service is unavailable. Please retry shortly.'
+        : error.status ? `Audio setting could not be saved (HTTP ${error.status}).`
+        : 'Audio setting could not be saved. Check the connection and try again.';
     } finally { saving = false; controls(); }
   });
   allow?.addEventListener('click', () => {

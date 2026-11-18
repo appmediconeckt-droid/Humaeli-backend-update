@@ -63,3 +63,17 @@ export const corsOptions = {
   ],
   optionsSuccessStatus: 204,
 };
+
+// A browser sends Origin even for same-origin PATCH requests. The backend may
+// be hosted on a different hostname in each environment, so allow its own host
+// without broadly allowing unrelated Railway origins.
+export const httpCorsOptions = (req, callback) => {
+  const origin = req.get('Origin');
+  const host = req.get('Host');
+  let sameHost = false;
+  try {
+    const url = new URL(origin);
+    sameHost = ['http:', 'https:'].includes(url.protocol) && url.host.toLowerCase() === String(host || '').toLowerCase();
+  } catch { /* Missing or invalid Origin follows the existing origin policy. */ }
+  callback(null, sameHost ? { ...corsOptions, origin: true } : corsOptions);
+};

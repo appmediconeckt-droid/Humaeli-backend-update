@@ -1,7 +1,19 @@
 import { expect } from "chai";
-import { corsOptions, isAllowedOrigin } from "../src/config/cors.js";
+import { corsOptions, httpCorsOptions, isAllowedOrigin } from "../src/config/cors.js";
 
 describe("CORS", () => {
+  it('allows the backend own origin for same-origin LED PATCH requests', () => {
+    const req = { get(name) { return { Origin: 'https://example.railway.app', Host: 'example.railway.app' }[name]; } };
+    httpCorsOptions(req, (error, options) => { expect(error).to.equal(null); expect(options.origin).to.equal(true); });
+  });
+  it('does not allow unrelated hosted origins by matching a suffix', () => {
+    const req = { get(name) { return { Origin: 'https://attacker.example', Host: 'example.railway.app' }[name]; } };
+    httpCorsOptions(req, (error, options) => {
+      expect(error).to.equal(null);
+      options.origin('https://attacker.example', (originError, allowed) => { expect(originError).to.be.instanceOf(Error); expect(allowed).to.equal(false); });
+    });
+  });
+
   it("allows login preflight methods and headers", () => {
     expect(corsOptions.methods).to.include("OPTIONS");
     expect(corsOptions.methods).to.include("POST");
