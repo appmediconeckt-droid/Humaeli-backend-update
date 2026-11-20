@@ -4,6 +4,7 @@ import { videoCallController } from '../src/controllers/videoCallController.js';
 import User from '../src/models/userModel.js';
 import Call from '../src/models/Call.js';
 import Chat from '../src/models/Chat.js';
+import Message from '../src/models/Message.js';
 import Notification from '../src/models/Notification.js';
 import NotificationToken from '../src/models/NotificationToken.js';
 import Transaction from '../src/models/transactionModel.js';
@@ -32,6 +33,7 @@ describe('Doctor appointment call delivery', () => {
     sinon.stub(Call, 'findOneAndUpdate').resolves({});
     sinon.stub(Chat, 'findOne').resolves(null);
     sinon.stub(Chat, 'updateMany').resolves({ modifiedCount: 1 });
+    sinon.stub(Message, 'create').resolves({});
     sinon.stub(Notification, 'create').callsFake(async data => ({ _id: 'notification', toObject: () => data }));
     sinon.stub(NotificationToken, 'find').returns({ select() { return this; }, lean: async () => [] });
     sinon.stub(User, 'findById').returns({ select() { return this; }, lean: async () => ({}) });

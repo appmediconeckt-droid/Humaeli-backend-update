@@ -1,9 +1,11 @@
 ﻿import { expect } from 'chai';
 import sinon from 'sinon';
 import Chat from '../src/models/Chat.js';
+import Message from '../src/models/Message.js';
 import { getChatBlockStatus, setUserChatBlock, sendMessage } from '../src/controllers/messageController.js';
 describe('conversation blocking', () => {
   beforeEach(() => sinon.stub(Chat, 'updateMany').resolves({ modifiedCount: 1 }));
+  beforeEach(() => sinon.stub(Message, 'create').resolves({}));
   afterEach(() => sinon.restore());
   const response = () => { const res = {}; res.status = sinon.stub().returns(res); res.json = sinon.stub().returns(res); return res; };
   const makeChat = () => ({ _id: 'chat', chatId: 'chat_public', userId: 'user1', counselorId: 'counselor1', status: 'active', blockedByUser: false, save: sinon.stub().resolves() });
@@ -28,6 +30,8 @@ describe('conversation blocking', () => {
     expect(res.status.calledWith(403)).to.equal(true); expect(chat.blockedByUser).to.equal(true);
     await setUserChatBlock({ ...req, body: { blocked: false } }, res); expect(chat.blockedByUser).to.equal(false);
     expect(Chat.updateMany.lastCall.args[1]).to.deep.equal({ $set: { blockedByUser: false } });
+    expect(Message.create.getCalls().map(call => call.args[0].content)).to.deep.equal(['User blocked this chat.', 'User unblocked this chat.']);
+    expect(Message.create.firstCall.args[0]).to.include({ chatId: 'chat', senderId: 'user1', contentType: 'SYSTEM' });
   });
   it('keeps each participant block independent', async () => {
     const chat = { ...makeChat(), blockedByUser: true }; sinon.stub(Chat, 'findOne').resolves(chat); const res = response();

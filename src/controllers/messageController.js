@@ -1562,6 +1562,7 @@ export const setUserChatBlock = async (req, res) => {
     if (!isUser && !isCounselor) return res.status(403).json({ error: "Only a participant in this conversation can change its block status.", code: "CHAT_BLOCK_PARTICIPANT_MISMATCH" });
     if (typeof req.body.blocked !== "boolean") return res.status(400).json({ error: "A block state is required" });
     if (isUser) {
+      const changed = Boolean(chat.blockedByUser) !== req.body.blocked;
       // Older installations may contain multiple conversations for the same
       // pair. Keep their user block state consistent for every call client.
       await Chat.updateMany(
@@ -1569,6 +1570,15 @@ export const setUserChatBlock = async (req, res) => {
         { $set: { blockedByUser: req.body.blocked } },
       );
       chat.blockedByUser = req.body.blocked;
+      if (changed) {
+        await Message.create({
+          chatId: chat._id,
+          senderId: req.user._id,
+          senderRole: "user",
+          contentType: "SYSTEM",
+          content: req.body.blocked ? "User blocked this chat." : "User unblocked this chat.",
+        });
+      }
     } else {
       chat.blockedByCounselor = req.body.blocked;
       await chat.save();
