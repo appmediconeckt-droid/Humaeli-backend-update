@@ -1538,6 +1538,21 @@ export const deleteChat = async (req, res) => {
   }
 };
 
+export const getChatBlockStatus = async (req, res) => {
+  try {
+    const chat = await findChatByIdentifier(req.params.chatId);
+    if (!chat) return res.status(404).json({ error: "Chat not found" });
+    const isUser = req.user.role === "user" && String(chat.userId) === String(req.user._id);
+    const isCounselor = isCounselorRole(String(req.user.role || "").toLowerCase()) && String(chat.counselorId) === String(req.user._id);
+    if (!isUser && !isCounselor) return res.status(403).json({ error: "Only a participant can view this block status." });
+    res.setHeader("Cache-Control", "no-store");
+    return res.json({ success: true, blockedByUser: Boolean(chat.blockedByUser), blockedByCounselor: Boolean(chat.blockedByCounselor) });
+  } catch (error) {
+    console.error("Error fetching chat block status:", error);
+    return res.status(500).json({ error: "Unable to fetch chat block status" });
+  }
+};
+
 export const setUserChatBlock = async (req, res) => {
   try {
     const chat = await findChatByIdentifier(req.params.chatId);
