@@ -1561,9 +1561,18 @@ export const setUserChatBlock = async (req, res) => {
     const isCounselor = isCounselorRole(String(req.user.role || "").toLowerCase()) && String(chat.counselorId) === String(req.user._id);
     if (!isUser && !isCounselor) return res.status(403).json({ error: "Only a participant in this conversation can change its block status.", code: "CHAT_BLOCK_PARTICIPANT_MISMATCH" });
     if (typeof req.body.blocked !== "boolean") return res.status(400).json({ error: "A block state is required" });
-    if (isUser) chat.blockedByUser = req.body.blocked;
-    else chat.blockedByCounselor = req.body.blocked;
-    await chat.save();
+    if (isUser) {
+      // Older installations may contain multiple conversations for the same
+      // pair. Keep their user block state consistent for every call client.
+      await Chat.updateMany(
+        { userId: chat.userId, counselorId: chat.counselorId },
+        { $set: { blockedByUser: req.body.blocked } },
+      );
+      chat.blockedByUser = req.body.blocked;
+    } else {
+      chat.blockedByCounselor = req.body.blocked;
+      await chat.save();
+    }
     emitChatUpdated(chat);
     return res.json({ success: true, blockedByUser: Boolean(chat.blockedByUser), blockedByCounselor: Boolean(chat.blockedByCounselor) });
   } catch (error) {

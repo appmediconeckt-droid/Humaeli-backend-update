@@ -50,7 +50,7 @@ export const initiateCall = async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    if (chat.blockedByUser || chat.blockedByCounselor) {
+    if (chat.blockedByUser) {
       return res.status(403).json({ code: 'CHAT_BLOCKED', error: 'Calls are unavailable because this conversation is blocked.' });
     }
 

@@ -8,6 +8,7 @@ import Notification from '../src/models/Notification.js';
 import NotificationToken from '../src/models/NotificationToken.js';
 import Transaction from '../src/models/transactionModel.js';
 import CounselorEarning from '../src/models/CounselorEarning.js';
+import { setUserChatBlock } from '../src/controllers/messageController.js';
 
 // Socket delivery and notifications are captured locally; no real patient is called.
 describe('Doctor appointment call delivery', () => {
@@ -30,6 +31,7 @@ describe('Doctor appointment call delivery', () => {
     });
     sinon.stub(Call, 'findOneAndUpdate').resolves({});
     sinon.stub(Chat, 'findOne').resolves(null);
+    sinon.stub(Chat, 'updateMany').resolves({ modifiedCount: 1 });
     sinon.stub(Notification, 'create').callsFake(async data => ({ _id: 'notification', toObject: () => data }));
     sinon.stub(NotificationToken, 'find').returns({ select() { return this; }, lean: async () => [] });
     sinon.stub(User, 'findById').returns({ select() { return this; }, lean: async () => ({}) });
@@ -46,6 +48,26 @@ describe('Doctor appointment call delivery', () => {
       expect(Call.create.called).to.equal(false);
       expect(Notification.create.called).to.equal(false);
       expect(events).to.deep.equal([]);
+    });
+    it(`allows a consultant ${callType} call when only a legacy consultant block flag is set`, async () => {
+      Chat.findOne.resolves({ blockedByUser: false, blockedByCounselor: true });
+      const res = response();
+      await videoCallController.initiateCall({ user: { _id: doctor, role: 'counsellor' }, body: { receiverId: patient, receiverType: 'user', callType } }, res);
+      expect(res.code).to.equal(201);
+    });
+    it(`allows a consultant ${callType} call after the user unblocks the conversation`, async () => {
+      const chat = { chatId: 'chat_public', userId: patient, counselorId: doctor, blockedByUser: true, blockedByCounselor: false, save: sinon.stub().resolves() };
+      Chat.findOne.resolves(chat);
+      const blocked = response();
+      await videoCallController.initiateCall({ user: { _id: doctor, role: 'counsellor' }, body: { receiverId: patient, receiverType: 'user', callType } }, blocked);
+      expect(blocked.code).to.equal(403);
+      const unblocked = response();
+      await setUserChatBlock({ params: { chatId: 'chat_public' }, user: { _id: patient, role: 'user' }, body: { blocked: false } }, unblocked);
+      expect(unblocked.body.blockedByUser).to.equal(false);
+      const initiated = response();
+      await videoCallController.initiateCall({ user: { _id: doctor, role: 'counsellor' }, body: { receiverId: patient, receiverType: 'user', callType } }, initiated);
+      expect(initiated.code).to.equal(201);
+      expect(events.some(event => event.room === `user_${patient}` && event.event === 'incoming_call_request')).to.equal(true);
     });
   }
   for (const callType of ['video', 'voice', 'audio']) {

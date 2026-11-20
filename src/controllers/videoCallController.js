@@ -31,11 +31,11 @@ const isConversationBlocked = async (initiatorId, initiatorType, receiverId, rec
   const userIsCaller = patientTypes.includes(normalizeParticipantType(initiatorType)) && counselorTypes.includes(normalizeParticipantType(receiverType));
   const counselorIsCaller = counselorTypes.includes(normalizeParticipantType(initiatorType)) && patientTypes.includes(normalizeParticipantType(receiverType));
   if (!userIsCaller && !counselorIsCaller) return false;
-  return Boolean(await Chat.findOne({
+  const chat = await Chat.findOne({
     userId: userIsCaller ? initiatorId : receiverId,
     counselorId: userIsCaller ? receiverId : initiatorId,
-    $or: [{ blockedByUser: true }, { blockedByCounselor: true }],
-  }));
+  });
+  return Boolean(chat?.blockedByUser);
 };
 
 const TERMINAL_CALL_STATUSES = ["ended", "rejected", "missed", "cancelled"];
