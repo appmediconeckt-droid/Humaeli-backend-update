@@ -1050,6 +1050,7 @@ export const videoCallController = {
 
         const statusPayload = {
           callId,
+          roomId: call.roomId,
           status: "active",
           from: acceptorId,
           timestamp: acceptedAt,
@@ -1063,6 +1064,7 @@ export const videoCallController = {
           {
             callId,
             roomId: call.roomId,
+            status: "active",
             by: acceptorDisplayName,
             byProfilePhoto: acceptorDetails.profilePhoto,
             timestamp: acceptedAt,
