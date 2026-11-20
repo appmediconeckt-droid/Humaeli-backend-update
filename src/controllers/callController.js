@@ -49,6 +49,15 @@ export const initiateCall = async (req, res) => {
     if (!isAuthorized) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
+
+    if (chat.blockedByUser || chat.blockedByCounselor) {
+      return res.status(403).json({ code: 'CHAT_BLOCKED', error: 'Calls are unavailable because this conversation is blocked.' });
+    }
+
+    const expectedReceiver = req.user.role === 'user' ? chat.counselorId : chat.userId;
+    if (String(expectedReceiver._id) !== String(receiverId)) {
+      return res.status(403).json({ error: 'Receiver is not a participant in this conversation' });
+    }
     
     // Get caller and receiver info
     const isCallerUser = req.user.role === 'user';

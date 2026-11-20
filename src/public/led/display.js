@@ -45,19 +45,20 @@
       const statusHeading = textNode('h3', 'doctor-status-heading', '');
       statusHeading.append(textNode('span', '', '♟  Doctor status'));
       status.append(statusHeading);
-      const currentEmergency = doctor.current?.priority === 'emergency' && ['in_consultation', 'in_progress', 'in-progress', 'consulting', 'serving'].includes(doctor.current.status);
-      const state = currentEmergency && !['break', 'paused'].includes(doctor.doctorStatus) ? 'emergency' : doctor.doctorStatus;
+      const currentStatus = String(doctor.current?.status || '').toLowerCase();
+      const currentEmergency = String(doctor.current?.priority || '').toLowerCase() === 'emergency' && ['called', 'in_consultation', 'in_progress', 'in-progress', 'consulting', 'serving'].includes(currentStatus);
+      const emergency = currentEmergency || doctor.doctorStatus === 'emergency';
+      const state = doctor.doctorStatus;
       const paused = ['break', 'paused', 'delayed'].includes(state);
-      const emergency = state === 'emergency';
       if (emergency) {
         status.classList.add('has-emergency');
         card.classList.add('has-emergency');
         statusHeading.append(textNode('span', 'emergency-badge', 'EMERGENCY'));
       }
-      const statusBody = textNode('div', `status-body${paused ? ' paused' : emergency ? ' emergency' : ''}`, '');
+      const statusBody = textNode('div', `status-body${paused ? ' paused' : ''}${emergency ? ' emergency' : ''}`, '');
       const statusCopy = textNode('div', '', '');
       statusCopy.append(textNode('strong', '', ({ break: 'On break', paused: 'Paused', delayed: 'Delayed', emergency: 'Available', consulting: 'Available', waiting: 'Waiting' })[state] || (doctor.current ? 'Available' : 'Waiting')),
-        textNode('p', '', paused ? 'Please wait for updates' : emergency ? 'Emergency checkup in progress. Regular appointments will follow.' : doctor.current ? 'Seeing patients' : 'Waiting for next consultation'));
+        textNode('p', '', paused ? 'Please wait for updates' : emergency ? (currentStatus === 'called' ? 'Emergency patient called. Regular appointments will follow.' : 'Emergency checkup in progress. Regular appointments will follow.') : doctor.current ? 'Seeing patients' : 'Waiting for next consultation'));
       statusBody.append(textNode('span', 'status-dot', ''), statusCopy); status.append(statusBody);
       const info = doctor.breakInfo || {};
       const delay = textNode('section', 'delay-panel', '');

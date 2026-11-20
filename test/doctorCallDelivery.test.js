@@ -3,6 +3,7 @@ import sinon from 'sinon';
 import { videoCallController } from '../src/controllers/videoCallController.js';
 import User from '../src/models/userModel.js';
 import Call from '../src/models/Call.js';
+import Chat from '../src/models/Chat.js';
 import Notification from '../src/models/Notification.js';
 import NotificationToken from '../src/models/NotificationToken.js';
 import Transaction from '../src/models/transactionModel.js';
@@ -28,11 +29,25 @@ describe('Doctor appointment call delivery', () => {
       return record;
     });
     sinon.stub(Call, 'findOneAndUpdate').resolves({});
+    sinon.stub(Chat, 'findOne').resolves(null);
     sinon.stub(Notification, 'create').callsFake(async data => ({ _id: 'notification', toObject: () => data }));
     sinon.stub(NotificationToken, 'find').returns({ select() { return this; }, lean: async () => [] });
     sinon.stub(User, 'findById').returns({ select() { return this; }, lean: async () => ({}) });
   });
   afterEach(() => { sinon.restore(); global.io = oldIo; global.socketHandler = oldHandler; });
+  for (const callType of ['voice', 'video']) {
+    it(`rejects a blocked consultant ${callType} call before notifying the user`, async () => {
+      Chat.findOne.resolves({ blockedByUser: true });
+      const res = response();
+      await videoCallController.initiateCall({ user: { _id: doctor, role: 'counsellor' }, body: { receiverId: patient, receiverType: 'user', callType } }, res);
+      expect(res.code).to.equal(403);
+      expect(res.body.code).to.equal('CHAT_BLOCKED');
+      expect(Chat.findOne.firstCall.args[0]).to.include({ userId: patient, counselorId: doctor });
+      expect(Call.create.called).to.equal(false);
+      expect(Notification.create.called).to.equal(false);
+      expect(events).to.deep.equal([]);
+    });
+  }
   for (const callType of ['video', 'voice', 'audio']) {
     for (const endedByPatient of [false, true]) {
       it(`${callType}: ends a doctor appointment without wallet billing when ${endedByPatient ? 'patient' : 'doctor'} hangs up`, async () => {

@@ -111,7 +111,14 @@ describe('LED browser page', () => {
     await stream.onmessage();
     assert.match(flatten(elements.doctors), /EMERGENCY/);
     assert.match(flatten(elements.doctors), /EMERGENCY.*Available/);
-    payload = { ...payload, current: { token: '7', status: 'in_consultation', priority: 'normal' } };
+    payload = { ...payload, current: { token: '8', status: 'called', priority: 'Emergency' } };
+    await stream.onmessage();
+    assert.match(flatten(elements.doctors), /EMERGENCY/);
+    assert.match(flatten(elements.doctors), /Emergency patient called/);
+    payload = { ...payload, doctorStatus: 'break', current: { token: '8', status: 'called', priority: 'emergency' } };
+    await stream.onmessage();
+    assert.match(flatten(elements.doctors), /EMERGENCY.*On break/);
+    payload = { ...payload, doctorStatus: 'consulting', current: { token: '7', status: 'in_consultation', priority: 'normal' } };
     await stream.onmessage();
     assert.doesNotMatch(flatten(elements.doctors), /EMERGENCY/);
     status = 403; payload = { success: false, message: 'Display is inactive' };

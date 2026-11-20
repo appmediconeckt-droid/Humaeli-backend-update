@@ -1,4 +1,10 @@
 (() => {
+  const chooseMaleAnnouncementVoice = (voices = []) => {
+    const english = voices.filter(voice => /^en(?:-|_)/i.test(voice.lang || ''));
+    const male = voice => /\b(ravi|prabhat|david|mark|guy|ryan|george|daniel|james|thomas|alex|arthur|male)\b/i.test(voice.name || '') && !/\bfemale\b/i.test(voice.name || '');
+    return english.find(voice => male(voice) && /^en[-_]in$/i.test(voice.lang)) ||
+      english.find(male) || english.find(voice => /^en[-_]in$/i.test(voice.lang)) || english[0];
+  };
   const toggle = document.getElementById('audio-toggle');
   const repeat = document.getElementById('audio-repeat');
   const allow = document.getElementById('audio-allow');
@@ -38,9 +44,7 @@
     utterance.lang = 'en-IN';
     utterance.rate = 0.9;
     utterance.volume = 1;
-    const voices = speechSynthesis.getVoices();
-    const voice = voices.find(item => item.lang.toLowerCase() === 'en-in') ||
-      voices.find(item => item.lang.toLowerCase().startsWith('en'));
+    const voice = chooseMaleAnnouncementVoice(speechSynthesis.getVoices());
     if (voice) utterance.voice = voice;
     utterance.onerror = event => {
       if (['canceled', 'interrupted'].includes(event.error)) return;
@@ -56,6 +60,9 @@
     speechSynthesis.cancel();
     const test = new SpeechSynthesisUtterance('Token announcement sound is enabled. Waiting for the next patient.');
     test.lang = 'en-IN';
+    test.rate = 0.9;
+    const voice = chooseMaleAnnouncementVoice(speechSynthesis.getVoices());
+    if (voice) test.voice = voice;
     test.onerror = () => { blocked = true; controls(); };
     test.onstart = () => { blocked = false; controls(); };
     speechSynthesis.speak(test);

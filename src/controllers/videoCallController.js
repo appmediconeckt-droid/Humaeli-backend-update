@@ -2,6 +2,7 @@ import mongoose from "../persistence/mongoose.js";
 import { v4 as uuidv4 } from "uuid";
 import User from "../models/userModel.js";
 import Call from "../models/Call.js";
+import Chat from "../models/Chat.js";
 import { chargeCallByDuration } from "../services/paidSessionService.js";
 import { createNotificationSafely } from "../services/notificationService.js";
 
@@ -22,6 +23,19 @@ const normalizeParticipantType = (type) => {
   }
 
   return normalized;
+};
+
+const isConversationBlocked = async (initiatorId, initiatorType, receiverId, receiverType) => {
+  const patientTypes = ["user", "patient"];
+  const counselorTypes = ["counsellor", "counselour", "consultant"];
+  const userIsCaller = patientTypes.includes(normalizeParticipantType(initiatorType)) && counselorTypes.includes(normalizeParticipantType(receiverType));
+  const counselorIsCaller = counselorTypes.includes(normalizeParticipantType(initiatorType)) && patientTypes.includes(normalizeParticipantType(receiverType));
+  if (!userIsCaller && !counselorIsCaller) return false;
+  return Boolean(await Chat.findOne({
+    userId: userIsCaller ? initiatorId : receiverId,
+    counselorId: userIsCaller ? receiverId : initiatorId,
+    $or: [{ blockedByUser: true }, { blockedByCounselor: true }],
+  }));
 };
 
 const TERMINAL_CALL_STATUSES = ["ended", "rejected", "missed", "cancelled"];
@@ -387,6 +401,10 @@ export const videoCallController = {
           success: false,
           error: `Receiver not found`,
         });
+      }
+
+      if (await isConversationBlocked(initiatorId, initiatorType, receiverId, receiverTypeNormalized)) {
+        return res.status(403).json({ success: false, code: "CHAT_BLOCKED", error: "Calls are unavailable because this conversation is blocked." });
       }
 
       // Patients receive doctor calls; only doctors may initiate this pair.
@@ -1740,6 +1758,10 @@ export const videoCallController = {
           success: false,
           error: "Only the initiator can resend the request",
         });
+      }
+
+      if (await isConversationBlocked(call.initiator.id, call.initiator.type, call.receiver.id, call.receiver.type)) {
+        return res.status(403).json({ success: false, code: "CHAT_BLOCKED", error: "Calls are unavailable because this conversation is blocked." });
       }
 
       // Only allow resend if call is cancelled or rejected

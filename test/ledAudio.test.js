@@ -53,6 +53,19 @@ describe('Queue display audio announcements', () => {
     assert.equal(fresh.buttons['audio-toggle'].textContent, 'Mute linked screens');
   });
 
+  it('prefers an available Indian male voice for announcements and sound checks', async () => {
+    const { context, audio, buttons, spoken } = await setup();
+    const female = { lang: 'en-IN', name: 'Microsoft Heera' };
+    const male = { lang: 'en-IN', name: 'Microsoft Ravi' };
+    context.speechSynthesis.getVoices = () => [female, male];
+    audio.update(doctor([3]));
+    await buttons['audio-toggle'].handlers.click();
+    assert.equal(spoken[0].voice, male);
+    audio.update(doctor([]));
+    buttons['audio-allow'].handlers.click();
+    assert.equal(spoken.at(-1).voice, male);
+  });
+
   it('plays a sound check when enabled without waiting tokens', async () => {
     const { buttons, spoken } = await setup();
     await buttons['audio-toggle'].handlers.click();
