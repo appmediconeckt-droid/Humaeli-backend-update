@@ -29,10 +29,19 @@ export async function clinicFeeUpdate(body, doctorId) {
   return result;
 }
 const clinicRecord = row => ({ ...serializeClinicPhoto(jsonRecord(row)), fee: row.fee ?? null, videoConsultationAdditionalFee: row.videoConsultationAdditionalFee ?? 0 });
+export function clinicHoursUpdate(body, required = false) {
+  const { opening_time, closing_time } = body;
+  if (!required && opening_time === undefined && closing_time === undefined) return {};
+  const validTime = value => typeof value === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+  if (!validTime(opening_time) || !validTime(closing_time) || opening_time === closing_time) {
+    throw fail(400, 'Enter valid, different clinic opening and closing times.');
+  }
+  return { opening_time, closing_time };
+}
 export const createClinic = handle(async (req, res) => {
   const doctor_id = await doctorScope(req, req.body.doctor_id);
   const clinic = await Clinic.create({ ...pick(req.body, ['clinic_name', 'phone_number', 'location']), doctor_id,
-    ...await clinicFeeUpdate(req.body, doctor_id),
+    ...await clinicFeeUpdate(req.body, doctor_id), ...clinicHoursUpdate(req.body, true),
     clinic_photo: clinicPhotoPath(req.file) });
   const qr = await ensureClinicQr(clinic);
   emitAvailabilityUpdated(doctor_id);
@@ -58,7 +67,7 @@ export const updateClinic = handle(async (req, res) => {
   const clinic = await Clinic.findById(req.params.id);
   if (!clinic) throw fail(404, 'Clinic not found');
   await doctorScope(req, clinic.doctor_id);
-  Object.assign(clinic, pick(req.body, ['clinic_name', 'phone_number', 'location']), await clinicFeeUpdate(req.body, clinic.doctor_id));
+  Object.assign(clinic, pick(req.body, ['clinic_name', 'phone_number', 'location']), await clinicFeeUpdate(req.body, clinic.doctor_id), clinicHoursUpdate(req.body));
   if (req.file) clinic.clinic_photo = clinicPhotoPath(req.file);
   await clinic.save();
   const qr = await ensureClinicQr(clinic);

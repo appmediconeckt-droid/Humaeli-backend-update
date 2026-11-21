@@ -12,6 +12,7 @@ const model = (name, collection, fields, indexes = []) => {
 export const Clinic = model('Clinic', 'clinics', {
   doctor_id: ref(), clinic_name: requiredText, phone_number: requiredText,
   location: requiredText, clinic_photo: String,
+  opening_time: String, closing_time: String,
   fee: { type: Number, min: 0, max: 9999999.99, default: null },
   videoConsultationAdditionalFee: { type: Number, min: 0, max: 9999999.99, default: 0 },
 });

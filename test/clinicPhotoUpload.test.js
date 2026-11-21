@@ -43,7 +43,7 @@ describe('Clinic uploaded image persistence and GET responses', () => {
   sinon.stub(Object.getPrototypeOf(multer.diskStorage({})),'_handleFile').callsFake(store);
  });
  afterEach(()=>{sinon.restore();if(secret===undefined)delete process.env.ACCESS_SECRET;else process.env.ACCESS_SECRET=secret;});
- const upload=(method='post',field='clinic_photo',type='image/png')=>request(app)[method](method==='post'?'/api/clinics':'/api/clinics/clinic-test').auth(token,{type:'bearer'}).field('clinic_name','Test Clinic').field('phone_number','9876543210').field('location','Pune').attach(field,Buffer.from('photo'),{filename:'photo.png',contentType:type});
+ const upload=(method='post',field='clinic_photo',type='image/png')=>request(app)[method](method==='post'?'/api/clinics':'/api/clinics/clinic-test').auth(token,{type:'bearer'}).field('clinic_name','Test Clinic').field('phone_number','9876543210').field('location','Pune').field('opening_time','09:00').field('closing_time','20:00').attach(field,Buffer.from('photo'),{filename:'photo.png',contentType:type});
  it('preserves the cloud image URL in create, list and single-clinic GET',async()=>{
   const created=await upload();expect(created.status).to.equal(201);expect(created.body.clinic.clinic_photo).to.equal(cloud);
   expect((await request(app).get('/api/clinics')).body.clinics[0].clinic_photo).to.equal(cloud);
@@ -67,8 +67,18 @@ describe('Clinic uploaded image persistence and GET responses', () => {
   const res=await upload('post','wrong');expect(res.status).to.equal(400);expect(res.body.success).to.equal(false);expect(Clinic.create.called).to.equal(false);
  });
  it('returns an explicit null photo for clinics without an image',async()=>{
-  const res=await request(app).post('/api/clinics').auth(token,{type:'bearer'}).send({clinic_name:'Test Clinic',phone_number:'9876543210',location:'Pune'});
+  const res=await request(app).post('/api/clinics').auth(token,{type:'bearer'}).send({clinic_name:'Test Clinic',phone_number:'9876543210',location:'Pune',opening_time:'09:00',closing_time:'20:00'});
   expect(res.status).to.equal(201);expect(res.body.clinic.clinic_photo).to.equal(null);
+ });
+ it('requires valid clinic hours and saves changes to them',async()=>{
+  const post=body=>request(app).post('/api/clinics').auth(token,{type:'bearer'}).send({clinic_name:'Test Clinic',phone_number:'9876543210',location:'Pune',...body});
+  expect((await post({})).status).to.equal(400);
+  expect((await post({opening_time:'25:00',closing_time:'20:00'})).status).to.equal(400);
+  expect((await post({opening_time:'09:00',closing_time:'09:00'})).status).to.equal(400);
+  const created=await post({opening_time:'09:00',closing_time:'20:00'});
+  expect(created.status).to.equal(201); expect(created.body.clinic.opening_time).to.equal('09:00');
+  const updated=await request(app).patch('/api/clinics/clinic-test').auth(token,{type:'bearer'}).send({opening_time:'22:00',closing_time:'06:00'});
+  expect(updated.status).to.equal(200); expect(updated.body.clinic.closing_time).to.equal('06:00');
  });
  it('saves an independent clinic fee, preserves it on unrelated edits and resets to the common fee',async()=>{
   const patch=body=>request(app).patch('/api/clinics/clinic-test').auth(token,{type:'bearer'}).send(body);
@@ -78,7 +88,7 @@ describe('Clinic uploaded image persistence and GET responses', () => {
   expect((await patch({fee:''})).body.clinic.fee).to.equal(null);
  });
  it('accepts a clinic fee during creation',async()=>{
-  const res=await request(app).post('/api/clinics').auth(token,{type:'bearer'}).send({clinic_name:'Test Clinic',phone_number:'9876543210',location:'Pune',fee:'650'});
+  const res=await request(app).post('/api/clinics').auth(token,{type:'bearer'}).send({clinic_name:'Test Clinic',phone_number:'9876543210',location:'Pune',fee:'650',opening_time:'09:00',closing_time:'20:00'});
   expect(res.status).to.equal(201);expect(res.body.clinic.fee).to.equal(650);
  });
  it('returns an explicit fee field for legacy clinics with no saved fee',async()=>{

@@ -43,7 +43,7 @@ until an authorized assignment workflow exists; existing accounts are not silent
 
 - `/api/clinics`: GET public list, POST doctor/admin create.
 - `/api/clinics/:id`: GET public detail, PATCH/DELETE owner doctor/admin.
-- Clinic fields: `clinic_name`, `phone_number`, `location`; multipart `clinic_photo` optional.
+- Clinic fields: `clinic_name`, `phone_number`, `location`, `opening_time`, `closing_time`; multipart `clinic_photo` optional. Times use 24-hour `HH:mm` format. A closing time earlier than opening means the next day. Existing clinics can add hours through the edit form.
 - `/api/availability/ranges`: authenticated GET/POST; PUT/DELETE `/:id`.
 - Range fields: `clinic_id`, either `date` (`YYYY-MM-DD`) or `weekday` (Sunday=0),
   `start_time`, `end_time` (`HH:mm`), `slot_duration` (minutes), `is_unavailable`.
