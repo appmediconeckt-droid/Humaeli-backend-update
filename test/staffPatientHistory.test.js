@@ -157,7 +157,7 @@ describe('Doctor-scoped staff patient history', () => {
   });
   it('validates dates and pagination', async () => {
     prepare();
-    for (const query of [{ from: '2026-02-30' }, { from: '2026-10-12', to: '2026-10-10' }, { limit: 100 }, { page: 0 }, { source: 'other' }]) {
+    for (const query of [{ from: '2026-02-30' }, { from: '2026-10-12', to: '2026-10-10' }, { limit: 101 }, { page: 0 }, { source: 'other' }]) {
       const res = response(); await staffPatientHistory({ userId: 'staff', query }, res); expect(res.status.calledWith(400)).to.equal(true);
     }
   });

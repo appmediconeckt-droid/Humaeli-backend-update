@@ -21,7 +21,7 @@ export const staffPatientHistory = handle(async (req, res) => {
   const source = req.query?.source || 'all';
   if (!['all', 'online', 'walkin', 'prescription'].includes(source)) throw fail(400, 'Invalid history source');
   const page = Number(req.query?.page ?? 1), limit = Number(req.query?.limit ?? 10);
-  if (!Number.isInteger(page) || page < 1 || !Number.isInteger(limit) || limit < 1 || limit > 50) throw fail(400, 'Invalid pagination');
+  if (!Number.isInteger(page) || page < 1 || !Number.isInteger(limit) || limit < 1 || limit > 100) throw fail(400, 'Invalid pagination');
   const [doctor, clinics] = await Promise.all([
     User.findOne({ _id: doctorId, role: 'doctor', isActive: true }).select('fullName qualification specialization role accountType prescriptionSignature prescriptionSeal email phoneNumber'),
     Clinic.find({ doctor_id: doctorId, ...(clinicId ? { _id: clinicId } : {}) }),

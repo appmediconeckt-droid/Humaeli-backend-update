@@ -72,8 +72,9 @@ export const updateWalkinAppointment = handle(async (req, res) => {
   if (req.body.status || req.body.appointment_status || req.body.queue_status === 'completed') {
     const status = String(req.body.status || req.body.appointment_status || 'completed').toLowerCase();
     data.appointment_status = status === 'in_progress' ? 'in-progress' : status === 'canceled' ? 'cancelled' : status;
-    if (!['booked', 'pending', 'confirmed', 'in-progress', 'completed', 'cancelled', 'rejected'].includes(data.appointment_status)) throw fail(400, 'Invalid appointment status');
+    if (!['booked', 'pending', 'confirmed', 'skipped', 'in-progress', 'completed', 'cancelled', 'rejected'].includes(data.appointment_status)) throw fail(400, 'Invalid appointment status');
   }
+  if (data.appointment_status === 'skipped' && (!['booked', 'pending', 'confirmed', 'skipped'].includes(row.appointment_status) || row.consultation_started_at || row.consultation_timing?.startedAt)) throw fail(409, 'Only an unstarted appointment can be moved to Next');
   if (data.appointment_status === 'in-progress') {
     if (['completed', 'cancelled', 'rejected'].includes(row.appointment_status)) throw fail(409, 'Only an active appointment can start consultation');
     const other = await findOtherActiveConsultation(row);
@@ -88,7 +89,8 @@ export const updateWalkinAppointment = handle(async (req, res) => {
     data.consultation_started_at = timing.startedAt ? new Date(timing.startedAt) : null;
     data.consultation_ended_at = timing.endedAt ? new Date(timing.endedAt) : null;
   }
-  if (data.appointment_status === 'in-progress') data.queue_status = 'in_progress';
+  if (data.appointment_status === 'skipped') data.queue_status = 'skipped';
+  else if (data.appointment_status === 'in-progress') data.queue_status = 'in_progress';
   else if (data.appointment_status === 'completed') data.queue_status = 'completed';
   else if (['cancelled', 'rejected'].includes(data.appointment_status)) data.queue_status = 'canceled';
   const required = req.body.follow_up_required ?? req.body.followUpRequired;

@@ -29,6 +29,23 @@ describe('Walk-in consultation start', () => {
   });
   afterEach(() => { sinon.restore(); mongoose.connection.db = oldDb; global.io = oldIo; });
   const update = body => updateWalkinAppointment({ user: { _id: doctorId }, params: { id: visitId }, body }, res);
+  for (const field of ['status', 'appointment_status']) {
+    it(`saves skipped through ${field} and returns the saved status`, async () => {
+      await update({ [field]: 'skipped' });
+      expect(save.calledOnce).to.equal(true);
+      expect(row.appointment_status).to.equal('skipped');
+      expect(row.queue_status).to.equal('skipped');
+      expect(res.json.firstCall.args[0].data).to.include({ appointment_status: 'skipped', queue_status: 'skipped' });
+      await update({ appointment_status: 'in-progress' });
+      expect(row.appointment_status).to.equal('in-progress');
+      expect(row.queue_status).to.equal('in_progress');
+    });
+  }
+  it('does not skip a consultation that has already started', async () => {
+    row.appointment_status = 'in-progress'; row.consultation_started_at = new Date();
+    await update({ appointment_status: 'skipped' });
+    expect(res.status.calledWith(409)).to.equal(true); expect(save.called).to.equal(false);
+  });
   it('validates and saves in-progress status with the consultation start time', async () => {
     await update({ status: 'in-progress' });
     expect(save.calledOnce).to.equal(true);

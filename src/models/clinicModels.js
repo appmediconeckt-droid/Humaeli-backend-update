@@ -33,7 +33,7 @@ export const WalkinAppointment = model('WalkinAppointment', 'walkin_appointments
   location: String, email: String,
   symptoms: requiredText, appointment_date: requiredText, appointment_time: requiredText,
   token_number: { type: Number, required: true },
-  appointment_status: { type: String, enum: ['booked', 'pending', 'confirmed', 'in-progress', 'completed', 'cancelled', 'rejected'], default: 'booked' },
+  appointment_status: { type: String, enum: ['booked', 'pending', 'confirmed', 'skipped', 'in-progress', 'completed', 'cancelled', 'rejected'], default: 'booked' },
   queue_status: { type: String, enum: ['booked', 'waiting', 'called', 'in_progress', 'completed', 'skipped', 'no_show', 'canceled'], default: 'booked' },
   consultation_timing: mongoose.Schema.Types.Mixed,
   consultation_started_at: Date, consultation_ended_at: Date,

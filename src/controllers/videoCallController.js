@@ -2040,6 +2040,13 @@ getCallHistory: async (req, res) => {
     const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
     const parsedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
 
+    const { from, before } = req.query;
+    const fromTime = from ? new Date(from) : null;
+    const beforeTime = before ? new Date(before) : null;
+    if ((from && Number.isNaN(fromTime.getTime())) || (before && Number.isNaN(beforeTime.getTime())) || (fromTime && beforeTime && fromTime >= beforeTime)) {
+      return res.status(400).json({ success: false, error: 'Invalid date range' });
+    }
+
     if (!mongoose.Types.ObjectId.isValid(userId) || !(await User.exists({ _id: userId }))) {
       return res.json({
         success: true,
@@ -2069,6 +2076,10 @@ getCallHistory: async (req, res) => {
         },
       ],
     };
+
+    if (fromTime || beforeTime) {
+      query.$and.push({ createdAt: { ...(fromTime && { $gte: fromTime }), ...(beforeTime && { $lt: beforeTime }) } });
+    }
 
     if (status !== "all") {
       query.$and.push({ status });
