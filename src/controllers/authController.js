@@ -4229,9 +4229,9 @@ export const deleteUser = async (req, res) => {
     const profilePhotoPublicId = user.profilePhoto?.publicId;
     let cleanup;
     try {
-      cleanup = await cleanupAccountData({ userId: id, email: user.email, role: user.role, accountType: user.accountType });
+      cleanup = await cleanupAccountData({ userId: id, email: user.email });
     } catch (cleanupError) {
-      if (cleanupError?.message !== "A valid userId is required for account cleanup" || ["doctor", "counsellor", "counselor", "counsellour", "consultant"].includes(String(user.role || "").toLowerCase()) || ["doctor", "consultant"].includes(String(user.accountType || "").toLowerCase())) {
+      if (cleanupError?.message !== "A valid userId is required for account cleanup") {
         throw cleanupError;
       }
       const sessionCleanup = await Session.deleteMany({ userId: id });
