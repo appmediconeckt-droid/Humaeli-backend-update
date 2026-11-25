@@ -104,12 +104,11 @@ export const receptionistDashboard = handle(async (req, res) => {
   if (clinicId && !clinics.some(row => String(row._id || row.id) === clinicId)) throw fail(403, 'Clinic does not belong to your doctor');
   const clinicFilter = clinicId ? { clinic_id: clinicId } : {};
   const [online, walkins] = await Promise.all([
-    Appointment.find({ counselor: doctorId, appointment_date: date, ...clinicFilter })
+    Appointment.find({ counselor: doctorId, ...clinicFilter })
       .populate('patient', 'fullName phoneNumber phone_number phone mobile age gender').sort({ appointment_time: 1, token_number: 1 }).lean(),
-    WalkinAppointment.find({ doctor_id: doctorId, appointment_date: date, ...clinicFilter }).lean(),
+    WalkinAppointment.find({ doctor_id: doctorId, ...clinicFilter }).lean(),
   ]);
-  const appointments = [...online.map(row => ({ row, source: 'online' })), ...walkins.map(row => ({ row, source: 'walkin' }))]
-    .map(({ row, source }) => ({
+  const normalizePatient = ({ row, source }) => ({
       ...normalizeQueueAppointment(row, source),
       patientName: row.patient?.fullName || row.patient_name || 'Patient',
       phoneNumber: appointmentPatientPhone(row),
@@ -117,13 +116,22 @@ export const receptionistDashboard = handle(async (req, res) => {
       emergencyReason: row.emergency_reason || row.emergencyReason || '',
       symptoms: row.symptoms || '', diagnosis: row.diagnosis || '', advice: row.advice || '',
       vitals: row.vitals || null,
-    })).sort((a, b) => comparePatientReturnPriority(a, b) || a.time.localeCompare(b.time) || (a.token || 0) - (b.token || 0));
+    });
+  const allAppointments = [...online.map(row => ({ row, source: 'online' })), ...walkins.map(row => ({ row, source: 'walkin' }))].map(normalizePatient);
+  const appointments = allAppointments.filter(row => row.date === date)
+    .sort((a, b) => comparePatientReturnPriority(a, b) || a.time.localeCompare(b.time) || (a.token || 0) - (b.token || 0));
+  const outstandingAppointments = allAppointments
+    .filter(row => row.date !== date && (isActiveQueueAppointment(row) ||
+      ((row.status === 'skipped' || row.queueStatus === 'skipped') &&
+        !['completed', 'complete', 'done', 'canceled', 'cancelled', 'rejected', 'no_show', 'no-show'].includes(row.status) &&
+        !['completed', 'complete', 'done', 'canceled', 'cancelled', 'rejected', 'no_show', 'no-show'].includes(row.queueStatus) && !row.timing?.endedAt)))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
   const currentPatients = appointments.filter(isServingQueueAppointment);
   const waiting = appointments.filter(row => isActiveQueueAppointment(row) && !isServingQueueAppointment(row));
   const pendingPatients = appointments.filter(row => row.status === 'skipped' || row.queueStatus === 'skipped');
   const timing = clinicId ? await getDisplayTiming({ doctorId, date, clinicId }) : null;
   res.set('Cache-Control', 'no-store');
-  res.json({ success: true, doctor, clinics, date, appointments, currentPatients, waiting, pendingPatients,
+  res.json({ success: true, doctor, clinics, date, appointments, outstandingAppointments, currentPatients, waiting, pendingPatients,
     summary: { total: appointments.length, waiting: waiting.length, ongoing: currentPatients.length,
       completed: appointments.filter(row => ['completed', 'complete', 'done'].includes(row.status) || row.queueStatus === 'completed').length },
     timing, updatedAt: new Date().toISOString() });

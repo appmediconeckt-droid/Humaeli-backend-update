@@ -688,20 +688,25 @@ export const reviewPatientPhoto = async (req, res) => {
       getImageUrl(req.body.prescriptionSealUrl) ||
       getImageUrl(req.body.sealUrl) ||
       getImageUrl(psychiatrist?.prescriptionSeal);
-    if (prescriptionSignature) record.psychiatristSnapshot.prescriptionSignature = prescriptionSignature;
-    if (prescriptionSeal) record.psychiatristSnapshot.prescriptionSeal = prescriptionSeal;
-    record.identityVerification = {
-      status: action === "approve" ? "verified" : "rejected",
-      reviewedBy: req.user._id,
-      reviewedAt: new Date(),
-      rejectionReason: action === "reject" ? reason : "",
+    const updates = {
+      "identityVerification.status": action === "approve" ? "verified" : "rejected",
+      "identityVerification.reviewedBy": req.user._id,
+      "identityVerification.reviewedAt": new Date(),
+      "identityVerification.rejectionReason": action === "reject" ? reason : "",
     };
-    await record.save();
-    emitPrescriptionUpdated(record);
+    if (prescriptionSignature) updates["psychiatristSnapshot.prescriptionSignature"] = prescriptionSignature;
+    if (prescriptionSeal) updates["psychiatristSnapshot.prescriptionSeal"] = prescriptionSeal;
+    const reviewed = await Prescription.findOneAndUpdate(
+      { _id: record._id, psychiatristId: req.user._id, "identityVerification.status": "pending" },
+      { $set: updates },
+      { returnDocument: "after", runValidators: true },
+    );
+    if (!reviewed) return res.status(409).json({ success: false, error: "This request has already been reviewed. A new patient photo is required for another review." });
+    emitPrescriptionUpdated(reviewed);
     return res.json({
       success: true,
-      verificationStatus: record.identityVerification.status,
-      prescription: toResponse(record),
+      verificationStatus: reviewed.identityVerification.status,
+      prescription: toResponse(reviewed),
     });
   } catch {
     return res.status(500).json({ success: false, error: "Unable to review patient photo" });
