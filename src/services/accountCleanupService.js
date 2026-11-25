@@ -14,13 +14,15 @@ import RatingStatus from "../models/RatingStatus.js";
 import RegistrationOTP from "../models/registrationOtpModel.js";
 import Session from "../models/sessionModel.js";
 import AIChat from "../models/chatModel.js";
+import WalkinAppointment from "../models/walkinAppointmentModel.js";
+import { FollowUp } from "../models/clinicModels.js";
 
 const toObjectId = (value) => {
   if (!mongoose.Types.ObjectId.isValid(value)) return null;
   return new mongoose.Types.ObjectId(value);
 };
 
-export const cleanupAccountData = async ({ userId, email } = {}) => {
+export const cleanupAccountData = async ({ userId, email, role } = {}) => {
   const objectId = toObjectId(userId);
   if (!objectId) {
     throw new Error("A valid userId is required for account cleanup");
@@ -36,6 +38,10 @@ export const cleanupAccountData = async ({ userId, email } = {}) => {
   const messageChatIds = [...chatObjectIds, ...chatPublicIds];
 
   const normalizedEmail = String(email || "").trim().toLowerCase();
+  const patientWalkins = role === "user"
+    ? await WalkinAppointment.find({ patient_id: objectId }).select("_id").lean()
+    : [];
+  const walkinIds = patientWalkins.map((walkin) => walkin._id);
   const cleanupTasks = [
     Appointment.deleteMany({ $or: [{ patient: objectId }, { counselor: objectId }] }),
     Call.deleteMany({
@@ -64,6 +70,11 @@ export const cleanupAccountData = async ({ userId, email } = {}) => {
       ],
     }),
   ];
+
+  if (role === "user") {
+    if (walkinIds.length) cleanupTasks.push(FollowUp.deleteMany({ walkin_id: { $in: walkinIds }, patient_id: objectId }));
+    cleanupTasks.push(WalkinAppointment.deleteMany({ patient_id: objectId }));
+  }
 
 
   if (messageChatIds.length) {
