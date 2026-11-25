@@ -93,6 +93,16 @@ describe('Doctor profile details and completion', () => {
     const { save } = await update({ experience: 0 });
     expect(save.firstCall.args[1].$set.profileCompleted).to.equal(true);
   });
+  it('accepts a complete counsellor profile with zero years of experience', async () => {
+    const user = complete(); user.role = 'counsellor'; user.address = address; user.experience = 0;
+    const { save } = await update({}, user);
+    expect(save.firstCall.args[1].$set.profileCompleted).to.equal(true);
+  });
+  it('keeps a counsellor profile incomplete when an address field is missing', async () => {
+    const user = complete(); user.role = 'counsellor'; user.address = { ...address, city: '' };
+    const { save } = await update({}, user);
+    expect(save.firstCall.args[1].$set.profileCompleted).to.equal(false);
+  });
   it('rejects malformed identity details without saving', async () => {
     const { res, save } = await update({ aadhaarNumber: '123' });
     expect(res.status.calledWith(400)).to.equal(true);
@@ -110,7 +120,8 @@ describe('Doctor profile details and completion', () => {
   it('lists active professionals including legacy incomplete profiles', async () => {
     const find = sinon.stub(User, 'find').returns({ select: () => ({ lean: async () => [] }) });
     await getUsers({ query: { role: 'doctor' }, user: { role: 'user' } }, response());
-    expect(find.firstCall.args[0]).to.deep.equal({ role: 'doctor', isActive: true });
+    expect(find.firstCall.args[0]).to.include({ role: 'doctor', isActive: true });
+    expect(find.firstCall.args[0].$or).to.deep.include({ role: 'doctor' });
   });
   it('does not expose incomplete doctor public profiles', async () => {
     const find = sinon.stub(User, 'findOne').returns({ select: () => ({ lean: async () => null }) });

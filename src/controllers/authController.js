@@ -344,7 +344,7 @@ const normalizePhoneNumber = (value = "", fallbackCountryCode = DEFAULT_PHONE_CO
 };
 
 const hasText = (value) => String(value || "").trim().length > 0;
-const hasArrayItems = (value) => Array.isArray(value) && value.length > 0;
+const hasArrayItems = (value) => Array.isArray(value) && value.some(item => typeof item === "string" && item.trim());
 const hasProfilePhoto = (value) => {
   if (!value) return false;
   if (typeof value === "string") return hasText(value);
@@ -355,10 +355,10 @@ const hasCertification = (value) =>
   value.some((cert) =>
     hasText(cert?.name) && (hasText(cert?.documentUrl) || hasText(cert?.documentPublicId)),
   );
-const hasCompleteAddress = (value) => Boolean(hasText(value) || (
+const hasCompleteAddress = (value) => Boolean(
   value && typeof value === "object" &&
   ["line1", "city", "state", "pincode", "country"].every(key => hasText(value[key]))
-));
+);
 const doctorProfileFields = (body) => {
   const fields = {};
   for (const [key, aliases] of Object.entries({
@@ -409,12 +409,12 @@ const isCounsellorProfileComplete = (data) => {
     dob.age !== null &&
     hasText(data?.gender) &&
     hasArrayItems(data?.specialization) &&
-    (doctor ? (data?.experience !== null && data?.experience !== undefined && data?.experience !== "" && Number.isFinite(Number(data.experience)) && Number(data.experience) >= 0) : Number(data?.experience) > 0) &&
+    (data?.experience !== null && data?.experience !== undefined && data?.experience !== "" && Number.isFinite(Number(data.experience)) && Number(data.experience) >= 0) &&
     (hasText(data?.qualification) || hasText(data?.education)) &&
     hasText(data?.aboutMe) &&
     hasArrayItems(data?.languages) &&
     hasArrayItems(data?.consultationMode) &&
-    (doctor ? (hasCompleteAddress(data.permanentAddress) && /^\d{12}$/.test(data.aadhaarNumber || "") && /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(data.panNumber || "")) : hasCompleteAddress(address)) &&
+    (doctor ? ((typeof data.permanentAddress === "string" ? hasText(data.permanentAddress) : hasCompleteAddress(data.permanentAddress)) && /^\d{12}$/.test(data.aadhaarNumber || "") && /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(data.panNumber || "")) : hasCompleteAddress(address)) &&
     hasCertification(data?.certifications)
   );
 };
@@ -695,7 +695,7 @@ export const updateUserById = async (req, res) => {
       updates.profilePhoto = null;
     }
 
-    if (["counsellor", "doctor"].includes(currentUser.role)) {
+    if (["counsellor", "counselor", "counsellour", "consultant", "doctor"].includes(currentUser.role)) {
       const prescriptionAssetFields = [
         ["prescriptionSignature", "prescriptionSignatureUrl"],
         ["prescriptionSeal", "prescriptionSealUrl"],
@@ -3495,14 +3495,14 @@ export const getMySessions = async (req, res) => {
 };
 
 // ================= GET ALL COUNSELLORS =================
-// Keep directory eligibility identical for list/detail. The user-facing
-// consultant menu should show active professionals even when older accounts
-// have not recalculated the newer profileCompleted flag yet.
+// Keep directory eligibility identical for list/detail and appointment booking.
 const professionalDirectoryRoles = ["consultant", "counsellor", "counselor", "counsellour", "doctor"];
 const professionalDirectoryFilter = () => ({
   $or: [
-    { role: { $in: professionalDirectoryRoles } },
-    { accountType: { $in: ["doctor", "consultant"] } },
+    { role: "doctor" },
+    { accountType: "doctor" },
+    { role: { $in: ["consultant", "counsellor", "counselor", "counsellour"] }, profileCompleted: true },
+    { accountType: "consultant", profileCompleted: true },
   ],
   isActive: true,
 });
@@ -3640,7 +3640,7 @@ export const getMyProfile = async (req, res) => {
   try {
     const userId = req.userId || req.user?._id;
     const user = await User.findById(userId).select(
-      "-password -emailOTP -phoneOTP",
+      "+password -emailOTP -phoneOTP",
     );
 
     if (!user) {
@@ -3662,6 +3662,8 @@ export const getMyProfile = async (req, res) => {
       age: ageFromDateOfBirth.age ?? user.age,
       gender: user.gender,
       role: user.role,
+      authProvider: user.authProvider,
+      hasPassword: Boolean(user.password),
       assignedDoctor: user.assignedDoctor ?? null,
       ...(staffRoles.includes(user.role) ? {
         clinic_id: user.clinic_id ?? null,
@@ -4712,7 +4714,7 @@ export const getUsers = async (req, res) => {
         const appointments = await Appointment.find({ counselor: req.userId || req.user._id }).select('patient').lean();
         filter = { _id: { $in: appointments.map(row => row.patient) } };
       }
-    } else if (professionalDirectoryRoles.includes(role)) filter = { role, isActive: true };
+    } else if (professionalDirectoryRoles.includes(role)) filter = { ...professionalDirectoryFilter(), role };
     const users = await User.find(filter).select('fullName role accountType acceptedPaymentMethods consultationFee consultationCurrency address.country profilePhoto qualification education specialization experience location aboutMe profileCompleted isActive languages consultationMode rating ratingCount totalSessions activeClients lastSeen').lean();
     const ratedUsers = await attachDoctorRatings(users);
     return res.json({ success: true, count: ratedUsers.length, data: ratedUsers, users: ratedUsers });
