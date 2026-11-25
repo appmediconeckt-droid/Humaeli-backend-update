@@ -1,6 +1,7 @@
 import Appointment from '../src/models/appointmentModel.js';
 import { expect } from 'chai';
 import sinon from 'sinon';
+import { Query } from 'mingo';
 import User from '../src/models/userModel.js';
 import { updateUserById, getMyProfile, getProfileById, getUsers } from '../src/controllers/authController.js';
 
@@ -116,6 +117,20 @@ describe('Doctor profile details and completion', () => {
     expect(res.json.firstCall.args[0].user).to.include({ aadhaarNumber: '123456789012', panNumber: 'ABCDE1234F', about: 'About doctor' });
     expect(res.json.firstCall.args[0].user.permanentAddress).to.deep.equal(address);
     expect(user.toJSON()).not.to.have.any.keys('aadhaarNumber', 'panNumber', 'permanentAddress');
+  });
+  it('uses an exclusion-only own-profile projection and never returns the password', async () => {
+    const user = complete(); user.password = 'private-hash';
+    const select = sinon.stub().callsFake(projection => {
+      const fields = Object.fromEntries(projection.split(/\s+/).filter(Boolean).map(field => [field.replace(/^-/, ''), field.startsWith('-') ? 0 : 1]));
+      new Query({}).find([user.toObject()], fields).all();
+      return Promise.resolve(user);
+    });
+    sinon.stub(User, 'findById').returns({ select });
+    const res = response();
+    await getMyProfile({ userId: user._id }, res);
+    expect(res.status.calledWith(200)).to.equal(true);
+    expect(res.json.firstCall.args[0].user).to.include({ hasPassword: true });
+    expect(res.json.firstCall.args[0].user).not.to.have.property('password');
   });
   it('lists active professionals including legacy incomplete profiles', async () => {
     const find = sinon.stub(User, 'find').returns({ select: () => ({ lean: async () => [] }) });

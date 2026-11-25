@@ -3640,7 +3640,7 @@ export const getMyProfile = async (req, res) => {
   try {
     const userId = req.userId || req.user?._id;
     const user = await User.findById(userId).select(
-      "+password -emailOTP -phoneOTP",
+      "-emailOTP -phoneOTP",
     );
 
     if (!user) {
