@@ -14,13 +14,20 @@ import RatingStatus from "../models/RatingStatus.js";
 import RegistrationOTP from "../models/registrationOtpModel.js";
 import Session from "../models/sessionModel.js";
 import AIChat from "../models/chatModel.js";
+import WalkinAppointment from "../models/walkinAppointmentModel.js";
+import Prescription from "../models/Prescription.js";
+import { FollowUp, Medication } from "../models/clinicModels.js";
+import AppointmentPayment from "../models/appointmentPaymentModel.js";
+import Transaction from "../models/transactionModel.js";
+import CounselorEarning from "../models/CounselorEarning.js";
+import CounselorOnlineSubscription from "../models/CounselorOnlineSubscription.js";
 
 const toObjectId = (value) => {
   if (!mongoose.Types.ObjectId.isValid(value)) return null;
   return new mongoose.Types.ObjectId(value);
 };
 
-export const cleanupAccountData = async ({ userId, email } = {}) => {
+export const cleanupAccountData = async ({ userId, email, role, accountType } = {}) => {
   const objectId = toObjectId(userId);
   if (!objectId) {
     throw new Error("A valid userId is required for account cleanup");
@@ -65,6 +72,20 @@ export const cleanupAccountData = async ({ userId, email } = {}) => {
     }),
   ];
 
+  const isProvider = ["doctor", "counsellor", "counselor", "counsellour", "consultant"].includes(String(role || "").toLowerCase()) || ["doctor", "consultant"].includes(String(accountType || "").toLowerCase());
+  if (isProvider) {
+    cleanupTasks.push(
+      WalkinAppointment.deleteMany({ doctor_id: objectId }),
+      Prescription.deleteMany({ psychiatristId: objectId }),
+      FollowUp.deleteMany({ doctor_id: objectId }),
+      Medication.deleteMany({ doctor_id: objectId }),
+      AppointmentPayment.deleteMany({ providerId: objectId }),
+      Transaction.deleteMany({ $or: [{ counselorId: objectId }, { userId: objectId }] }),
+      CounselorEarning.deleteMany({ counselorId: objectId }),
+      CounselorOnlineSubscription.deleteMany({ counselorId: objectId }),
+    );
+  }
+
   if (messageChatIds.length) {
     cleanupTasks.push(
       Message.deleteMany({
@@ -105,7 +126,7 @@ export const cleanupAccountData = async ({ userId, email } = {}) => {
   return {
     ...summary,
     chatCount: chatObjectIds.length,
-    paymentHistoryPreserved: true,
+    paymentHistoryPreserved: !isProvider,
   };
 };
 
