@@ -212,6 +212,7 @@ describe('Staff temporary password email', () => {
     let exists = true;
     const list = sinon.stub(User, 'find').callsFake(async () => exists ? [staff] : []);
     sinon.stub(Clinic, 'find').resolves([]);
+    sinon.stub(Session, 'find').returns({ select: () => ({ lean: async () => [] }) });
     sinon.stub(User, 'findOne').resolves(staff);
     const deletion = sinon.stub(User, 'deleteOne').callsFake(async () => {
       exists = false; return { deletedCount: 1 };
@@ -228,6 +229,21 @@ describe('Staff temporary password email', () => {
     expect(refreshed.body.data).to.deep.equal([]);
     expect(list.lastCall.args[0]).to.include({ assignedDoctor: 'doctor-1', isActive: true });
     expect(sessions.firstCall.args[0]).to.deep.equal({ userId: staff._id, isActive: true });
+  });
+
+  it('returns the latest login session for each owned staff member', async () => {
+    const staff = new User({ fullName: 'Receptionist', role: 'receptionist', isActive: true });
+    const neverLoggedIn = new User({ fullName: 'New Staff', role: 'nurse', isActive: true });
+    sinon.stub(User, 'find').resolves([staff, neverLoggedIn]);
+    sinon.stub(Clinic, 'find').resolves([]);
+    const findSessions = sinon.stub(Session, 'find').returns({ select: () => ({ lean: async () => [
+      { userId: staff._id, createdAt: new Date('2026-01-02T10:00:00Z') },
+      { userId: staff._id, createdAt: new Date('2026-01-01T10:00:00Z') },
+    ] }) });
+    const res = response(); await listStaff(request(), res);
+    expect(res.body.data[0].lastLogin.toISOString()).to.equal('2026-01-02T10:00:00.000Z');
+    expect(res.body.data[1].lastLogin).to.equal(null);
+    expect(findSessions.firstCall.args[0].userId.$in.map(String)).to.deep.equal([String(staff._id), String(neverLoggedIn._id)]);
   });
 
   it('does not delete missing staff or staff belonging to another doctor', async () => {

@@ -431,6 +431,7 @@ const normalizeAppointmentTime = (value) => {
   return null;
 };
 
+
 // Get end of day in IST
 const getEndOfDayIST = (date) => {
   const istDate = toIST(date);

@@ -88,7 +88,16 @@ export const listStaff = handle(async (req, res) => {
   const users = await User.find({ assignedDoctor: doctorId, role: { $in: staffRoles }, isActive: true });
   const clinics = await Clinic.find({ doctor_id: doctorId });
   const names = new Map(clinics.map(clinic => [String(clinic._id || clinic.id), clinic.clinic_name]));
-  res.json({ success: true, data: users.map(user => ({ ...safe(user), clinic_name: names.get(String(user.clinic_id || '')) || null })) });
+  const sessions = users.length ? await Session.find({ userId: { $in: users.map(user => user._id) } }).select('userId createdAt').lean() : [];
+  const lastLogins = new Map();
+  for (const session of sessions) {
+    if (!session.createdAt) continue;
+    const time = new Date(session.createdAt).getTime();
+    const id = String(session.userId);
+    if (Number.isFinite(time) && (!lastLogins.has(id) || time > lastLogins.get(id))) lastLogins.set(id, time);
+  }
+  res.json({ success: true, data: users.map(user => ({ ...safe(user), clinic_name: names.get(String(user.clinic_id || '')) || null,
+    lastLogin: lastLogins.has(String(user._id)) ? new Date(lastLogins.get(String(user._id))) : null })) });
 });
 export const updateStaff = handle(async (req, res) => {
   if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
