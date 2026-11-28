@@ -309,39 +309,26 @@ export const stopTimedChatUsage = async (chat, { endedAt = Date.now() } = {}) =>
   const commissionRate = getPaidSessionConfig().commissionRate;
   const commission = Number((charge * commissionRate / 100).toFixed(2));
   const earningAmount = Number((charge - commission).toFixed(2));
-  const existingEarning = await CounselorEarning.findOne({ sessionId: session._id });
-  if (!existingEarning) {
-    await CounselorEarning.create({
-      counselorId: session.counselorId,
-      userId: session.userId,
-      sessionId: session._id,
-      transactionId: transaction._id,
-      chatId: session.chatId,
-      sessionType: "chat",
-      totalAmount: charge,
-      commission,
-      earningAmount,
-      earningStatus: "completed",
-      payoutStatus: "pending",
-    });
-    await User.findByIdAndUpdate(session.counselorId, {
-      $inc: { walletBalance: earningAmount },
-    });
-  } else {
-    existingEarning.totalAmount = Number(
-      ((existingEarning.totalAmount || 0) + charge).toFixed(2),
-    );
-    existingEarning.commission = Number(
-      ((existingEarning.commission || 0) + commission).toFixed(2),
-    );
-    existingEarning.earningAmount = Number(
-      ((existingEarning.earningAmount || 0) + earningAmount).toFixed(2),
-    );
-    await existingEarning.save();
-    await User.findByIdAndUpdate(session.counselorId, {
-      $inc: { walletBalance: earningAmount },
-    });
-  }
+  await CounselorEarning.create({
+    counselorId: session.counselorId,
+    userId: session.userId,
+    // Some installations have a legacy unique sessionId index. As for call
+    // earnings, use the transaction as the unique segment key and retain the
+    // actual chat session in metadata.
+    sessionId: transaction._id,
+    transactionId: transaction._id,
+    metadata: { paidSessionId: session._id },
+    chatId: session.chatId,
+    sessionType: "chat",
+    totalAmount: charge,
+    commission,
+    earningAmount,
+    earningStatus: "completed",
+    payoutStatus: "pending",
+  });
+  await User.findByIdAndUpdate(session.counselorId, {
+    $inc: { walletBalance: earningAmount },
+  });
 
   await Promise.all([
     createNotificationSafely({
@@ -744,7 +731,10 @@ export const completePaidSession = async (chat) => {
   );
   const counselorEarning = Number((session.amount - commissionAmount).toFixed(2));
 
-  let earning = await CounselorEarning.findOne({ sessionId: session._id });
+  let earning = await CounselorEarning.findOne({ $or: [
+    { sessionId: session._id },
+    { "metadata.paidSessionId": session._id },
+  ] });
   if (!earning) {
     earning = await CounselorEarning.create({
       counselorId: session.counselorId,
